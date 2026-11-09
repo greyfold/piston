@@ -35,7 +35,9 @@
       </div>
     </div>
   </header>
-  <section class="corps-salle" id="entretien" aria-labelledby="entretien-titre">
+  {# Pas d'id « entretien » ici : l'adresse revient en #entretien après une réponse, et le navigateur sauterait
+     au début du fil au lieu de rester en bas. #}
+  <section class="corps-salle" id="fil-entretien" aria-labelledby="entretien-titre">
     <div class="dedans-salle">{{ fil_entretien(entretien.echanges, lien_base=true) }}</div>
   </section>
   <div class="pied-salle">
@@ -320,8 +322,14 @@
       return "/parcours?ok=1" + (m ? "&msg=" + encodeURIComponent(m.trim()) : "") + "#entretien";
     }, "", document.querySelector(".corps-salle .fil"));
     if (location.hash === "#entretien") rep.querySelector("textarea").focus({preventScroll: true});
-    // Comme une conversation : la page s'ouvre sur le dernier échange, juste au-dessus de la saisie.
-    window.scrollTo(0, document.documentElement.scrollHeight);
+    // Comme une conversation : la page s'ouvre tout en bas, sur le dernier échange au-dessus de la saisie.
+    // Encore une fois une fois la police et la page chargées, qui changent la hauteur du fil.
+    // Au rechargement (après une réponse), le navigateur remettrait l'ancienne position : c'est nous qui la fixons.
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+    var enBas = function () { window.scrollTo(0, document.documentElement.scrollHeight); };
+    enBas();
+    window.addEventListener("load", enBas);
+    if (document.fonts) document.fonts.ready.then(enBas);
   }
   var volet = document.getElementById("volet-base");
   if (volet) {
