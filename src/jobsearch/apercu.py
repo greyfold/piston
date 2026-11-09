@@ -1,16 +1,14 @@
 """Aperçu des documents d'un dossier dans le tableau de bord.
 
 Un PDF s'affiche tel quel dans le navigateur. Un Word est converti en HTML
-(mammoth) avec les styles des modèles du coffre (Title, Body Text, Compact) et
+(mammoth) avec les styles des modèles livrés (Title, Body Text, Compact) et
 présenté comme une page A4 aux couleurs sobres de l'application : c'est un aperçu
-fidèle au contenu et à la structure, pas au pixel près. Pour le rendu exact,
-le PDF (produit si LibreOffice est installé) fait foi.
+fidèle au contenu et à la structure, pas au pixel près. Le PDF est imprimé par le
+Chrome de la machine virtuelle à partir de ce même HTML.
 """
 
 import html
 import re
-import shutil
-import subprocess
 from pathlib import Path
 
 CORRESPONDANCE_STYLES = """
@@ -66,41 +64,20 @@ def docx_en_html(chemin, langue="fr"):
     return PAGE.format(langue=html.escape(langue or "fr"), titre=html.escape(Path(chemin).stem), contenu=contenu)
 
 
-def soffice():
-    """LibreOffice, s'il est installé (pour produire les PDF)."""
-    return shutil.which("soffice") or next(
-        (p for p in ("/Applications/LibreOffice.app/Contents/MacOS/soffice",) if Path(p).exists()), None)
-
-
 def en_pdf_chrome(docx, langue="fr"):
-    """PDF A4 à partir du Word, imprimé par Chrome (déjà installé) via la conversion HTML.
-    Mise en page de l'aperçu : une colonne, couleurs sobres."""
-    from playwright.sync_api import sync_playwright
+    """PDF A4 à partir du Word, imprimé par le Chrome de la machine virtuelle via la conversion
+    HTML. Mise en page de l'aperçu : une colonne, couleurs sobres."""
+    from .travailleur import client as travailleur
     docx = Path(docx)
     pdf = docx.with_suffix(".pdf")
-    with sync_playwright() as p:
-        navigateur = p.chromium.launch(channel="chrome", headless=True)
-        try:
-            page = navigateur.new_page()
-            page.set_content(docx_en_html(docx, langue), wait_until="networkidle", timeout=30000)
-            page.pdf(path=str(pdf), format="A4", print_background=True, prefer_css_page_size=True)
-        finally:
-            navigateur.close()
-    return pdf if pdf.exists() else None
+    pdf.write_bytes(travailleur.Distant.depuis_reglages().pdf(docx_en_html(docx, langue)))
+    return pdf if pdf.exists() and pdf.stat().st_size else None
 
 
 def en_pdf(docx, langue="fr"):
-    """PDF à côté du Word : LibreOffice s'il est installé (rendu exact du Word), sinon Chrome."""
-    s = soffice()
-    if not s:
-        try:
-            return en_pdf_chrome(docx, langue)
-        except Exception:
-            return None
-    docx = Path(docx)
-    subprocess.run([s, "--headless", "--convert-to", "pdf", "--outdir", str(docx.parent), str(docx)],
-                   capture_output=True, timeout=120)
-    for verrou in docx.parent.glob(".~lock.*"):
-        verrou.unlink(missing_ok=True)                                # rien de temporaire ne reste (CQ-15)
-    pdf = docx.with_suffix(".pdf")
-    return pdf if pdf.exists() else None
+    """PDF à côté du Word, par le Chrome de la machine virtuelle ; None si elle ne répond pas
+    (le Word reste, le PDF se refait au prochain rendu)."""
+    try:
+        return en_pdf_chrome(docx, langue)
+    except Exception:
+        return None

@@ -4,8 +4,9 @@
 // lit sur le tableau de bord (GET /api/etat), les actions sont des commandes `jobsearch` (passage,
 // vm, connexion). L'application ne touche jamais la base elle-même.
 //
-// Tout tourne dans l'application, rien à côté : son dossier de données (base, profil, dossiers),
-// son tableau de bord sur son propre port, sa propre connexion à Claude, et le passage du matin,
+// Tout tourne dans l'application, rien à côté : son dossier de données (base, profil, dossiers,
+// réservé au compte), son tableau de bord sur son propre port, la machine virtuelle (Lima embarqué)
+// où tournent Claude Code et Chrome, et le passage du matin,
 // l'alerte et la surveillance, lancés toutes les cinq minutes par `jobsearch echeances` (ce qui
 // est dû part, le reste attend). « Ouvrir à la connexion » la lance à l'ouverture de session.
 
@@ -41,10 +42,13 @@ final class Etat: ObservableObject {
 
     /// « Se connecter à Claude… » du menu : la page ouvre sa modale de connexion dès qu'elle est prête.
     @Published var connexionDemandee = false
+    /// Une page du tableau de bord à montrer dans la fenêtre (« navigateur » : l'écran de la VM).
+    @Published var pageDemandee: String?
     @Published var ouvertureAuto = SMAppService.mainApp.status == .enabled
 
     let racine: String                    // le code embarqué : src, config, pyproject.toml
     let python: String                    // le Python embarqué
+    let limactl: String                   // Lima embarqué (machine virtuelle)
     let donnees: String
     let port = 8775
     let base: URL
@@ -58,10 +62,14 @@ final class Etat: ObservableObject {
         let ressources = Bundle.main.resourcePath ?? ""
         racine = ressources + "/racine"
         python = ressources + "/python/bin/python3"
+        limactl = ressources + "/lima/bin/limactl"
         let maison = FileManager.default.homeDirectoryForCurrentUser.path
         donnees = maison + "/Library/Application Support/Recherche emploi"
         base = URL(string: "http://localhost:\(port)/")!
-        try? FileManager.default.createDirectory(atPath: donnees, withIntermediateDirectories: true)
+        // Coordonnées, recherche, dossiers : le dossier n'est ouvert qu'au compte de la personne.
+        try? FileManager.default.createDirectory(atPath: donnees, withIntermediateDirectories: true,
+                                                 attributes: [.posixPermissions: 0o700])
+        try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: donnees)
     }
 
     private var environnement: [String: String] {
@@ -72,11 +80,11 @@ final class Etat: ObservableObject {
         env["JOBSEARCH_HOME"] = racine
         env["JOBSEARCH_DATA"] = donnees
         env["JOBSEARCH_PORT"] = String(port)
-        env["JOBSEARCH_DEFAUTS"] = "neutres"
-        env["CLAUDE_CONFIG_DIR"] = donnees + "/claude"         // sa propre connexion à Claude
+        env["JOBSEARCH_LIMACTL"] = limactl                     // Claude Code et Chrome : dans la VM
         env["PYTHONNOUSERSITE"] = "1"                          // rien du Python de l'utilisateur
         env["PYTHONDONTWRITEBYTECODE"] = "1"                   // l'application signée reste intacte
-        for cle in ["JOBSEARCH_DB", "JOBSEARCH_PROFIL", "PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV"] {
+        for cle in ["JOBSEARCH_DB", "JOBSEARCH_PROFIL", "JOBSEARCH_DEFAUTS", "PYTHONPATH", "PYTHONHOME",
+                    "VIRTUAL_ENV", "LIMA_HOME", "CLAUDE_CONFIG_DIR", "ANTHROPIC_API_KEY"] {
             env.removeValue(forKey: cle)
         }
         return env

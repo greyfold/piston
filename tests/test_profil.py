@@ -25,7 +25,7 @@ def test_consigne_de_notation_inchangee():
 
 def test_consigne_du_dossier_ne_change_qu_aux_endroits_voulus():
     pieces = dossier.pieces_a_ecrire()
-    # 09.11 : la base Parcours de l'application (éléments E-n) s'ajoute aux preuves P-xx du coffre.
+    # 09.11 : la base Parcours de l'application (éléments E-n) s'ajoute aux preuves P-xx.
     parcours = [("preuve P-xx ou poste", "preuve P-xx, élément E-n du parcours ou poste"),
                 ("Tu peux citer P-xx ici", "Tu peux citer P-xx et E-n ici"),
                 ("depuis le CV maître pour l'angle", "depuis le CV maître (ou les réalisations de la base Parcours) pour l'angle"),
@@ -187,17 +187,14 @@ def test_familles_aller_retour():
     assert prefilter._compiler(profil.familles_en_motif(mots)).pattern == prefilter._compiler(motif).pattern
 
 
-def test_coffre_et_objectifs(profil_de_test, tmp_path):
-    profil.enregistrer("coffre", {"coffre": str(tmp_path), "objectifs.semaine_min": "0",
-                                  "objectifs.mois_min": "", "courrier.comptes": "iCloud"})
+def test_objectifs_et_courrier(profil_de_test):
+    profil.enregistrer("objectifs", {"objectifs.semaine_min": "0", "objectifs.mois_min": "",
+                                     "courrier.comptes": "iCloud"})
     r = config.reglages()
-    assert r["coffre"] == tmp_path and r["objectifs"]["semaine_min"] == 0
+    assert r["objectifs"]["semaine_min"] == 0
     assert r["objectifs"]["mois_min"] == 0                       # facultatif : vide, pas d'objectif
     assert r["courrier"]["comptes"] == ["iCloud"]
-    (tmp_path / evaluation.PROFIL).mkdir(parents=True)
-    (tmp_path / evaluation.PROFIL / "Preuves.md").write_text("P-01", encoding="utf-8")
-    docs = {role: present for role, _, present in profil.documents_coffre()}
-    assert docs["Profil : Preuves"] and not docs["Profil : Compétences"]
+    assert "coffre" not in r and not [c for e in profil.etapes() for c in e["champs"] if c["cle"] == "coffre"]
 
 
 # --- Validation ---------------------------------------------------------------------
@@ -207,7 +204,7 @@ def test_coffre_et_objectifs(profil_de_test, tmp_path):
     ("recherche", "recherche.cantons", "Vaud", "abréviation de canton"),
     ("identite", "identite.email", "pas-une-adresse", "adresse invalide"),
     ("identite", "identite.prenom", "  ", "obligatoire"),
-    ("coffre", "objectifs.semaine_min", "deux", "nombre entier"),
+    ("objectifs", "objectifs.semaine_min", "deux", "nombre entier"),
     ("identite", "identite.date_naissance", "31.02.1980", "jj.mm.aaaa"),
 ])
 def test_saisie_refusee_sans_rien_ecrire(profil_de_test, etape, cle, valeur, message):
@@ -309,7 +306,7 @@ def test_page_pre_tri_et_cases_postees(web, profil_de_test):
 
 def test_recapitulatif_et_bandeau(web, profil_de_test):
     page = web.get("/profil/fin").text
-    assert "Profil complet" in page and "Fournisseur d'IA" in page and "Clés d'accès" in page and "Documents du coffre" in page
+    assert "Profil complet" in page and "Fournisseur d'IA" in page and "Clés d'accès" in page and "coffre" not in page.lower()
     assert "<b>Claude</b>" in page and "Connecté au compte Claude" in page and "API Claude" not in page
     p = _lire(profil_de_test)
     p["identite"]["prenom"] = ""

@@ -4,9 +4,6 @@
 # vit dans data/jeton (créé au premier lancement), la clé Apify dans le
 # trousseau macOS. Claude n'a pas de clé : Claude Code est connecté au compte.
 
-# Coffre Obsidian : lu seulement par `jobsearch importer`, jamais écrit.
-coffre: "~/Documents/Coffre-exemple"
-
 web:
   # 0.0.0.0 = joignable depuis le téléphone sur le Wi-Fi de la maison (ou Tailscale).
   # Jeton exigé pour toute connexion qui ne vient pas du Mac lui-même.
@@ -20,7 +17,7 @@ passage:
   pause_requetes_s: 0.8     # rythme humain entre deux requêtes
   duree_max_etape_s: 900    # une étape qui dépasse est arrêtée, les suivantes tournent
   evaluations_par_passage: 30 # notes d'adéquation par passage (Claude Code, abonnement)
-  originaux_par_passage: 25 # textes originaux rechargés par passage (annonces actives résumées par l'ancienne chaîne)
+  originaux_par_passage: 25 # textes originaux rechargés par passage (annonces actives dont seul un extrait a été lu)
 
 surveillance:
   alerte_apres_heures: 26   # aucun passage complet depuis 26 h : alerte
@@ -47,7 +44,7 @@ travailleur:
   # distant : les tâches Claude et les sources confiées passent par le travailleur,
   # dans la machine virtuelle (`jobsearch vm demarrer`), joint sur ce port du Mac.
   mode: local
-  adresse: "http://127.0.0.1:8766"
+  adresse: "http://127.0.0.1:8776"
   sources: [indeed]
 
 vm:
@@ -57,7 +54,7 @@ vm:
   cpus: 2
   memoire: "3GiB"
   disque: "20GiB"
-  port: 8766
+  port: 8776
 
 jobs_ch:
   actif: true               # jobs.ch, même route que jobup, mêmes requêtes et mêmes lieux

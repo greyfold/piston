@@ -1,14 +1,26 @@
-"""Le jeton partagé entre le Mac et le travailleur : un fichier du seul compte, dans
-le dossier de l'utilisateur (le seul que la machine virtuelle voit)."""
+"""Le jeton partagé entre le Mac et le travailleur : un fichier du seul compte, dans le
+dossier partagé avec la machine virtuelle.
+
+La VM ne voit qu'un sous-dossier des données, `partage-vm/` (monté sur /donnees) : le jeton,
+les journaux et le cache du travailleur. Ni le profil, ni la base, ni les sauvegardes, ni les
+dossiers de candidature, ni la connexion Claude du Mac n'y sont."""
 
 import os
 import secrets
 
 from ..config import DATA
 
+PARTAGE = "partage-vm"
+
+
+def partage():
+    """Le dossier vu par la VM : DATA/partage-vm sur le Mac ; dans la VM (JOBSEARCH_VM=1),
+    le dossier monté lui-même."""
+    return DATA if os.environ.get("JOBSEARCH_VM") else DATA / PARTAGE
+
 
 def chemin():
-    return DATA / "travailleur.jeton"
+    return partage() / "travailleur.jeton"
 
 
 def lire(creer=True):

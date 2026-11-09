@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block titre %}Navigateur · Recherche d'emploi{% endblock %}
+{% block contenu %}
+<div class="navigateur-vm">
+  <h1>Navigateur</h1>
+  <p class="intro">Le Chrome de la machine virtuelle : celui où Claude remplit les formulaires et saisit les preuves Job-Room.
+    Connecte-toi ici aux sites qui le demandent : la connexion reste dans la machine virtuelle, ton mot de passe reste à toi.</p>
+  {% if adresse %}
+  <iframe class="ecran-vm" src="{{ adresse }}" title="Écran de la machine virtuelle" allow="clipboard-read; clipboard-write"></iframe>
+  {% else %}
+  <div class="carte"><p>{{ erreur or "La machine virtuelle n'est pas démarrée." }}</p>
+    <p class="petit muet">Démarre-la depuis la barre des menus de l'application (« Démarrer la machine virtuelle »).</p></div>
+  {% endif %}
+</div>
+<style>
+  .navigateur-vm .ecran-vm { width: 100%; height: calc(100vh - 220px); min-height: 520px; border: 1px solid var(--bord, #ddd); border-radius: 10px; background: #111; }
+</style>
+{% endblock %}

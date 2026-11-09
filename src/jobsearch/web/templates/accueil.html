@@ -112,7 +112,7 @@
       <div class="meta">
         {% if d and d.etat == "en_cours" %}<span data-suivi-dossier="{{ f.empreinte }}">{{ libelle_dossier(d) }}</span>
         {% elif d and d.etat == "interrompu" %}{{ libelle_dossier(d) }} · <a href="/dossier/{{ f.empreinte }}">le refaire</a>
-        {% elif d and d.etat in ("pret", "a_revoir") %}<a href="/dossier/{{ f.empreinte }}">Ouvrir le dossier →</a>{% if d.couverture is not none %} · couverture {{ d.couverture }} %{% endif %}{% if d.origine == "coffre" %} · ancienne chaîne{% endif %}
+        {% elif d and d.etat in ("pret", "a_revoir") %}<a href="/dossier/{{ f.empreinte }}">Ouvrir le dossier →</a>{% if d.couverture is not none %} · couverture {{ d.couverture }} %{% endif %}
         {% elif d and d.etat == "echec" %}Dossier en échec : {{ (d.erreur or "")[:120] }} · <a href="/dossier/{{ f.empreinte }}">détails</a>
         {% else %}Dossier pas encore produit{% endif %}
       </div>

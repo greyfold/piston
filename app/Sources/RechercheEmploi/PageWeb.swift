@@ -29,6 +29,12 @@ struct PageWeb: NSViewRepresentable {
     func updateNSView(_ vue: WKWebView, context: Context) {
         // Hors de la mise à jour de la vue : changer un @Published ici est interdit.
         if etat.connexionDemandee, !vue.isLoading { DispatchQueue.main.async { context.coordinator.ouvrirConnexion(vue) } }
+        if let page = etat.pageDemandee {
+            DispatchQueue.main.async {
+                etat.pageDemandee = nil
+                vue.load(URLRequest(url: url.appendingPathComponent(page)))
+            }
+        }
     }
 
     final class Coordinateur: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
@@ -55,7 +61,9 @@ struct PageWeb: NSViewRepresentable {
         // Liens vers les annonces, les employeurs… : dans le navigateur de l'utilisateur.
         func webView(_ vue: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
-            if let url = action.request.url, !interne(url), ["http", "https", "mailto"].contains(url.scheme ?? "") {
+            // Un cadre de la page (l'écran de la machine virtuelle, servi sur 127.0.0.1) reste dans la page.
+            let cadre = action.targetFrame.map { !$0.isMainFrame } ?? false
+            if let url = action.request.url, !cadre, !interne(url), ["http", "https", "mailto"].contains(url.scheme ?? "") {
                 NSWorkspace.shared.open(url)
                 decisionHandler(.cancel)
                 return

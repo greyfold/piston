@@ -18,7 +18,6 @@ FluxFaux = FauxMoteur          # rend les pièces dans l'ordre, garde (tâche, m
 @pytest.fixture
 def isole(tmp_path, monkeypatch):
     monkeypatch.setattr(dossier, "DATA", tmp_path)
-    monkeypatch.setattr("jobsearch.config.coffre_actif", lambda chemin=None: None)  # modèles et mesure de l'application
     monkeypatch.setattr(dossier, "contexte_fixe", lambda: "Preuves : 300 employés formés.")
     monkeypatch.setattr("jobsearch.apercu.en_pdf", lambda docx, langue="fr": None)   # Chrome : test à part
     return tmp_path
@@ -228,15 +227,3 @@ def test_lettre_datee_du_jour_puis_figee_a_l_envoi(reg, isole):
     assert dossier.mettre_a_date(reg, e) == dt.date(2026, 10, 20)
     assert date_du_docx(docx) == "Lausanne, le 20 octobre 2026"
     assert dossier.mettre_a_date(reg, e) == dt.date(2026, 10, 20)        # figée : ne bouge plus
-
-
-def test_lettre_du_coffre_copie_datee(reg, isole):
-    import datetime as dt
-    from jobsearch.lettre import date_du_docx
-    source = isole / "coffre-lettre"
-    source.mkdir()
-    dossier.rendre_docx("Lausanne, 12 October 2026\n\nDear Hiring Team,\n", source / "Camille-Exemple-Cover-Letter-X.docx", "cv")
-    f = {"statut": "retenue", "langue": "en"}
-    copie = dossier.lettre_coffre_datee(f, source, "Camille-Exemple-Cover-Letter-X.docx")
-    assert date_du_docx(copie) == "Lausanne, %d %s %d" % (dt.date.today().day, dt.date.today().strftime("%B"), dt.date.today().year)
-    assert date_du_docx(source / "Camille-Exemple-Cover-Letter-X.docx") == "Lausanne, 12 October 2026"   # l'original reste

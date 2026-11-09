@@ -1,8 +1,6 @@
-"""Couverture des mots-clés d'un CV face à une annonce, sans coffre.
+"""Couverture des mots-clés d'un CV face à une annonce (appelée par `motscles.py`).
 
-Même interface et même mesure que `4 - Tools/bin/ats.py` du coffre (qui garde la
-priorité quand il est là, voir `motscles.py`), avec des mots vides en français,
-en anglais et en allemand, les trois langues des annonces suisses :
+Mots vides en français, en anglais et en allemand, les trois langues des annonces suisses :
 
 1. Couverture lexicale : les termes de l'annonce (groupes de un à trois mots,
    sans mots vides) sont cherchés dans le CV, à la racine près (« facilitated »

@@ -56,6 +56,12 @@ def _langue_de(ligne, defaut="fr"):
 
 
 def ligne_date(lieu, date, langue="fr"):
+    """« <lieu>, le 9 novembre 2026 » ; sans lieu connu, la date seule (« Le 9 novembre 2026 »)."""
+    ligne = _ligne_date(lieu or "", date, langue)
+    return ligne if lieu else ligne.lstrip(", ")[:1].upper() + ligne.lstrip(", ")[1:]
+
+
+def _ligne_date(lieu, date, langue="fr"):
     mois = MOIS.get(langue, MOIS["fr"])[date.month - 1]
     if langue == "en":
         return "%s, %d %s %d" % (lieu, date.day, mois, date.year)
@@ -68,15 +74,21 @@ def est_ligne_date(texte):
     return bool(_LIGNE.match((texte or "").strip()))
 
 
+def lieu_du_profil():
+    """La ville de la personne (identite.ville du profil), en tête de ses lettres."""
+    from . import profil
+    return str(profil.lire(profil.charger(), "identite.ville") or "").strip()
+
+
 def nouvelle_ligne(ancienne, date, langue_lettre="fr"):
     m = _LIGNE.match(ancienne.strip())
-    lieu = (m.group("lieu") or m.group("lieu2")).strip() if m else "Lausanne"
+    lieu = (m.group("lieu") or m.group("lieu2")).strip() if m else lieu_du_profil()
     return ligne_date(lieu, date, _langue_de(ancienne, langue_lettre))
 
 
 def dater_markdown(texte, date, langue="fr"):
     """Réécrit la ligne de date de la lettre (après la note de travail). Ajoute
-    « Lausanne, le … » en tête de la lettre s'il n'y en a pas."""
+    « <ville du profil>, le … » en tête de la lettre s'il n'y en a pas."""
     note, sep, lettre = texte.partition("\n---")
     if not sep:
         note, lettre = "", texte
@@ -87,7 +99,7 @@ def dater_markdown(texte, date, langue="fr"):
             break
     else:
         debut = 1 if lignes and lignes[0].strip() == "" else 0
-        lignes.insert(debut, ligne_date("Lausanne", date, langue))
+        lignes.insert(debut, ligne_date(lieu_du_profil(), date, langue))
         lignes.insert(debut + 1, "")
     lettre = "\n".join(lignes)
     return note + sep + lettre if sep else lettre

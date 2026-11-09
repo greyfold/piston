@@ -19,7 +19,7 @@
     <p class="demo balises">{{ entete_masque or "{NOM_COMPLET} · {ADRESSE} · {TELEPHONE} · {EMAIL}" }}</p>
   </div>
 </div>
-<p class="petit muet">À chaque tâche (note d'une annonce, CV, lettre, fiche d'envoi), avant l'envoi. Que l'IA tourne sur ce Mac ou dans la machine virtuelle, elle ne reçoit que les balises.</p>
+<p class="petit muet">À chaque tâche (note d'une annonce, CV, lettre, fiche d'envoi), avant l'envoi : la machine virtuelle où tourne l'IA ne reçoit que les balises.</p>
 
 <div class="cartes deux">
   <div class="carte">
@@ -30,7 +30,8 @@
       <li>Date de naissance et numéro AVS</li>
       <li>Les coordonnées des personnes citées dans tes preuves{% if tiers %} ({{ tiers }} dans ton profil){% endif %}</li>
       <li>Ton inscription au chômage : la réponse « assignation ORP » et la rubrique Job-Room de la fiche d'envoi s'écrivent sans l'IA</li>
-      <li>Tes montants : la section « Conditions matérielles » de tes critères n'est jamais envoyée</li>
+      <li>Tes montants : retirés de tes critères avant d'être gardés ou envoyés</li>
+      <li>Ta base, tes sauvegardes, tes dossiers de candidature : dans un dossier réservé à ton compte, que la machine virtuelle ne voit pas</li>
     </ul>
   </div>
   <div class="carte">
@@ -52,7 +53,7 @@
     <li><b>Avec ton abonnement Claude</b>, sans clé API ni intermédiaire.{% if moteur and moteur.connecte %} <span class="puce B">connecté</span>{% endif %}</li>
     <li><b>Sans aucun outil</b> pour noter les annonces et écrire les dossiers : ni fichiers, ni Internet, ni tes réglages, extensions ou connecteurs Claude.</li>
     <li><b>Consigne dans un fichier temporaire</b> lisible de ton seul compte, effacé après la tâche : rien de ton profil n'apparaît dans la liste des processus.</li>
-    <li><b>Dans la machine virtuelle</b>, si tu l'actives : l'IA ne voit ni ton dossier personnel, ni ton trousseau, ni Mail, ni Chrome.</li>
+    <li><b>Dans la machine virtuelle</b>, toujours : Claude Code et son Chrome y tournent, jamais sur ton Mac. Elle ne voit qu'un dossier d'échange (jeton, journaux, ce qu'une tâche lui confie) ; ni ta base, ni ton profil, ni ton dossier personnel, ni ton trousseau, ni Mail, ni ton Chrome à toi.</li>
     <li><b>Rien n'est envoyé à un employeur sans toi</b> : tu relis, tu envoies.</li>
   </ul>
 </div>
@@ -60,7 +61,7 @@
 <h2>Les exceptions, que tu déclenches</h2>
 <div class="carte">
   <ul class="liste-confidentialite">
-    <li><b>Remplir un formulaire</b> ou <b>saisir une preuve Job-Room</b> : Claude in Chrome tape tes vraies coordonnées dans la page de l'employeur ou de Job-Room. Il doit les voir pour les saisir. Il ne le fait que quand tu le lui demandes.</li>
+    <li><b>Remplir un formulaire</b> ou <b>saisir une preuve Job-Room</b> avec Claude : Claude tape tes vraies coordonnées dans la page de l'employeur ou de Job-Room, dans le Chrome de la machine virtuelle. Il doit les voir pour les saisir. Il ne le fait que quand tu le lui demandes ; le pré-remplissage sans Claude, lui, les saisit sans l'IA.</li>
     <li><b>Gmail</b>, s'il est activé : la session Claude qui interroge ta boîte voit les messages liés à tes candidatures. Le tri des réponses se fait ensuite sur ton Mac. Apple Mail, lui, est lu sur ton Mac, sans l'IA.</li>
   </ul>
 </div>

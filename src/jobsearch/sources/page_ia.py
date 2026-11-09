@@ -101,19 +101,11 @@ def _plat(t):
 
 
 def html_rendu(url, attente_ms=5000):
-    """Le HTML d'une page après son JavaScript : Chrome sans fenêtre, sans profil (rien de la
-    personne n'y est chargé)."""
+    """Le HTML d'une page après son JavaScript, rendue par le Chrome de la machine virtuelle,
+    dans un contexte isolé (rien de la personne n'y est chargé)."""
+    from ..travailleur import client as travailleur
     try:
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as p:
-            b = p.chromium.launch(channel="chrome", headless=True)
-            try:
-                page = b.new_page()
-                page.goto(url, timeout=30000, wait_until="domcontentloaded")
-                page.wait_for_timeout(attente_ms)
-                return page.content()
-            finally:
-                b.close()
+        return travailleur.Distant.depuis_reglages().rendre(url, attente_ms=attente_ms)["html"]
     except Exception as e:
         raise RouteCassee("page rendue par Chrome impossible : %s" % str(e)[:150]) from e
 

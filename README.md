@@ -5,9 +5,10 @@ emploi en Suisse : sourcing quotidien (Job-Room, jobup, jobs.ch, pages carrière
 LinkedIn par Apify), registre local, pré-tri, note d'adéquation et dossiers de candidature
 écrits avec Claude, suivi des relances et des preuves Job-Room.
 
-Tout tourne dans l'application. Elle embarque son Python, ses dépendances et son code ; ses
-données vivent dans `~/Library/Application Support/Recherche emploi`. Rien n'est installé à
-côté : pas d'agent launchd, pas de dossier de projet, pas de coffre externe.
+Tout tourne dans l'application. Elle embarque son Python, ses dépendances, son code et Lima ;
+Claude Code et Google Chrome tournent dans sa machine virtuelle, jamais sur le Mac. Ses données
+vivent dans `~/Library/Application Support/Recherche emploi` (dossier réservé au compte). Rien
+n'est installé à côté : pas d'agent launchd, pas de dossier de projet, pas de coffre externe.
 
 ## Construire et lancer
 
@@ -22,13 +23,35 @@ Le script construit `dist/Recherche emploi.app` :
 - un Python autonome (python-build-standalone, installé par uv) dans `Contents/Resources/python`,
   avec les dépendances aux versions de `uv.lock` ;
 - le code dans `Contents/Resources/racine` (`src/`, `config/`, `pyproject.toml`), trouvé par un
-  `.pth` relatif : l'application peut être déplacée.
+  `.pth` relatif : l'application peut être déplacée ;
+- Lima 2.3.0 (`limactl` et l'agent de la VM seulement), somme de contrôle vérifiée, signé avec
+  le droit `com.apple.security.virtualization`.
 
-Signature locale seulement, pas encore de notarisation.
+Signature locale seulement, pas encore de notarisation. Rien à installer sur le Mac.
 
-Prérequis du Mac, hors de l'application : **Claude Code** (`claude`), que l'application connecte
-au compte Claude de la personne (« Se connecter à Claude… », sans terminal), et, pour la machine
-virtuelle facultative, **Lima**.
+## La machine virtuelle : Claude Code et Chrome
+
+`vm.py` crée la VM (Ubuntu, Virtualization.framework d'Apple) au premier démarrage, dans
+`LIMA_HOME` = dossier des données, à part de tout autre Lima. Elle installe depuis leurs sources
+officielles Python, uv, Claude Code, Google Chrome (arm64), Node.js 22 (somme vérifiée) et le
+serveur MCP de Chrome (`chrome-devtools-mcp`, version figée), plus un écran : TigerVNC, Openbox,
+noVNC. Le **travailleur** (`travailleur/`) y répond sur 127.0.0.1:8766 (jeton) ; l'écran sur
+127.0.0.1:8767 (mot de passe), montré par la page **Navigateur** de l'application.
+
+- **Ce que la VM voit** : le seul sous-dossier `partage-vm/` des données (jeton, mot de passe de
+  l'écran, journaux du travailleur, et pour chaque tâche Chrome `taches/<id>/` : ce que le Mac lui
+  confie). Ni la base, ni le profil, ni les sauvegardes, ni les dossiers de candidature.
+- **L'IA** : toutes les tâches du moteur (masquées par `Protege` avant de partir), Indeed, Gmail.
+- **Chrome** : les sessions Claude (preuves Job-Room, formulaires, `agent_claude.py`) et le
+  pré-remplissage sans Claude (`navigateur.py`, `preremplir_vm.py`) utilisent le Chrome de la VM
+  et son profil : la personne s'y connecte une fois aux sites, dans **Navigateur**. Une session n'a
+  que les outils du serveur MCP de Chrome (sans exécution de script ni réseau) et la commande
+  `jobsearch-session` (`session_vm.py`) : elle lit ce que le Mac a préparé et note ses événements ;
+  le Mac les relève (`agent_claude.relever`, à chaque `/api/etat`), les vérifie et les applique.
+- Le rendu des pages en JavaScript et l'impression des PDF passent aussi par ce Chrome
+  (`POST /chrome/rendre`, `/chrome/pdf`), dans un contexte isolé sans les cookies du profil.
+
+« Se connecter à Claude… » lance `claude auth login` dans la VM : les identifiants y restent.
 
 ## Ce que fait l'application
 
@@ -50,16 +73,22 @@ virtuelle facultative, **Lima**.
 
 ## Claude : le moteur IA
 
-Tout ce qui demande Claude passe par Claude Code, connecté au compte Claude de la personne (son
-abonnement, aucune clé API) : `src/jobsearch/moteur/`. Une `Tache` fixe la consigne, le contexte,
-le schéma de la réponse, les outils permis et le délai ; Python valide la réponse avant d'écrire
-quoi que ce soit. L'application a sa propre connexion (`CLAUDE_CONFIG_DIR` dans son dossier).
+Tout ce qui demande Claude passe par Claude Code, dans la VM, connecté au compte Claude de la
+personne (son abonnement, aucune clé API) : `src/jobsearch/moteur/`. Une `Tache` fixe la consigne,
+le contexte, le schéma de la réponse, les outils permis et le délai ; Python valide la réponse
+avant d'écrire quoi que ce soit.
 
 **Confidentialité** : nom, adresse, téléphone, e-mail, date de naissance, numéro AVS sont
 remplacés par des balises avant chaque tâche (`confidentialite.py`) et rétablis sur le Mac.
 
-Les sessions Claude dans Chrome (preuves Job-Room, formulaires) lancent `jobsearch` par le
-Python embarqué (`agent_claude.commande_jobsearch`).
+Exception, que la personne déclenche : pour remplir un formulaire ou une preuve Job-Room, la
+session Claude reçoit les vraies coordonnées (elle doit les taper). Le pré-remplissage sans Claude
+les saisit sans l'IA.
+
+**Sécurité des données** : dossier des données en 0700 et fichiers créés en 0600 (`umask` posé à
+l'import du paquet) ; tableau de bord sur 127.0.0.1, jeton exigé dès que la connexion ou le nom
+d'hôte demandé ne sont pas locaux (protection contre le « DNS rebinding », `web/auth.py`) ;
+l'écran de la VM ne s'ouvre que depuis le Mac.
 
 ## Ce que l'application ne fait pas
 
@@ -88,5 +117,6 @@ d'exemple (`tests/fixtures/config`, valeurs fictives), jamais sur `config/` ni s
 | `src/jobsearch/sources/` | Les sources ; `catalogue.py` construit la liste du passage. |
 | `src/jobsearch/profil.py` | Le profil, qui prime sur `config/`. |
 | `src/jobsearch/parcours.py` | La base d'expérience et ses entretiens. |
-| `src/jobsearch/vm.py`, `travailleur/` | La machine virtuelle (Lima) facultative et son travailleur. |
+| `src/jobsearch/vm.py`, `travailleur/` | La machine virtuelle (Lima embarqué), son écran et son travailleur. |
+| `src/jobsearch/agent_claude.py`, `session_vm.py`, `preremplir_vm.py` | Les tâches dans le Chrome de la VM et leur relève. |
 | `src/jobsearch/web/` | Le tableau de bord (FastAPI, Jinja). |

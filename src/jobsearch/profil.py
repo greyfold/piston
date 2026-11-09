@@ -1,12 +1,11 @@
-"""Le profil de la personne qui cherche : identité, recherche, critères, dossier, coffre.
+"""Le profil de la personne qui cherche : identité, recherche, critères, dossier, objectifs.
 
 Vit dans `data/profil.yaml` (hors git), rempli par l'assistant de la page Profil du
 tableau de bord. C'est ce qui rend la plateforme utilisable par quelqu'un d'autre :
 le nom, la ville, les critères et les angles des consignes Claude viennent d'ici,
 plus du code.
 
-Ce qui existe déjà dans `config/settings.yaml` ou `config/criteres.yaml` (coffre,
-objectifs, listes du sourcing, lieux LinkedIn et Indeed, mots des intitulés) n'est
+Ce qui existe déjà dans `config/settings.yaml` ou `config/criteres.yaml` (objectifs, listes du sourcing, lieux LinkedIn et Indeed, mots des intitulés) n'est
 écrit dans le profil que
 s'il en diffère : les fichiers de config donnent les valeurs par défaut, le profil
 ce qui est propre à la personne, et `config.reglages()` / `config.criteres()`
@@ -22,7 +21,6 @@ import datetime as dt
 import os
 import re
 from functools import lru_cache
-from pathlib import Path
 
 import yaml
 
@@ -111,7 +109,7 @@ ETAPES = [
                aide="Les façons de te présenter, une par ligne : Claude en propose une par annonce."),
      ]},
     {"id": "dossier", "titre": "Dossier",
-     "intro": "Ce que Claude suit en écrivant le CV et la lettre, en plus de la méthode du coffre.",
+     "intro": "Ce que Claude suit en écrivant le CV et la lettre, en plus de la méthode de base.",
      "champs": [
          champ("dossier.differenciateur", "Différenciateur", exemple="IA",
                aide="Le troisième paragraphe de chaque lettre le met en avant."),
@@ -124,11 +122,9 @@ ETAPES = [
          champ("dossier.pages_cv", "Pages du CV au plus", type="nombre", exemple="2",
                aide="Un CV plus long est raccourci par Claude jusqu'à tenir sur ce nombre de pages A4 (2 si vide)."),
      ]},
-    {"id": "coffre", "titre": "Coffre et objectifs",
-     "intro": "Où vivent le CV maître, les preuves et les modèles, et le rythme de postulation à tenir.",
+    {"id": "objectifs", "titre": "Objectifs et courrier",
+     "intro": "Le rythme de postulation à tenir, et les comptes où chercher les réponses des employeurs.",
      "champs": [
-         champ("coffre", "Dossier du coffre", type="chemin",
-               aide="Le coffre Obsidian : lu seulement, jamais écrit.", exemple="~/Documents/Coffre"),
          champ("objectifs.semaine_min", "Objectif par semaine", type="nombre",
                aide="Nombre de postulations, du lundi au dimanche. Facultatif : vide, pas d'objectif."),
          champ("objectifs.mois_min", "Objectif par mois", type="nombre",
@@ -140,7 +136,6 @@ ETAPES = [
 
 # Clé du profil → (fichier de config qu'elle remplace, clé dans ce fichier).
 SUPERPOSES = {
-    "coffre": ("reglages", "coffre"),
     "objectifs.semaine_min": ("reglages", "objectifs.semaine_min"),
     "objectifs.mois_min": ("reglages", "objectifs.mois_min"),
     "courrier.comptes": ("reglages", "courrier.comptes"),
@@ -617,23 +612,6 @@ def nombre_fr(n):
     return NOMBRES[n] if 0 <= n < len(NOMBRES) else str(n)
 
 
-def documents_coffre(coffre=None):
-    """Ce que la plateforme lit dans le coffre, avec ce qui manque : [(rôle, chemin relatif, présent)].
-    Rien dans l'application (installation neuve), qui ne lit aucun coffre."""
-    from . import dossier, evaluation
-    if config.neutre():
-        return []
-    coffre = Path(os.path.expanduser(str(coffre if coffre is not None else config.reglages()["coffre"])))
-    attendus = [("Profil : " + n.removesuffix(".md"), evaluation.PROFIL / n) for n in evaluation.FICHIERS_PROFIL]
-    attendus += [("Méthode des dossiers", dossier.METHODE),
-                 ("Style d'écriture", dossier.SUR_MOI / "Style d'écriture.md"),
-                 ("Forces", dossier.SUR_MOI / "Forces VIA.md"),
-                 ("Modèle Word du CV", dossier.TEMPLATES / "CV-site.docx"),
-                 ("Modèle Word de la lettre", dossier.TEMPLATES / "Lettre-site.docx"),
-                 ("Mesure des mots-clés", dossier.ATS)]
-    return [(role, str(rel), (coffre / rel).exists()) for role, rel in attendus]
-
-
 # --- Écriture -----------------------------------------------------------------------
 
 
@@ -710,21 +688,12 @@ def en_saisie(c, v):
 
 
 def _egal_base(cle, v):
-    b = base(cle)
-    if cle == "coffre":
-        return os.path.expanduser(v or "") == os.path.expanduser(b or "")
-    return v == b
+    return v == base(cle)
 
 
 def etapes():
-    """Les étapes de l'assistant. L'application (installation neuve) est autoportante : pas de
-    coffre à indiquer, son parcours vit dans sa base (`parcours.py`)."""
-    if not config.neutre():
-        return ETAPES
-    return [dict(e, titre="Objectifs et courrier",
-                 intro="Le rythme de postulation à tenir, et les comptes où chercher les réponses des employeurs.",
-                 champs=[c for c in e["champs"] if c["cle"] != "coffre"]) if e["id"] == "coffre" else e
-            for e in ETAPES]
+    """Les étapes de l'assistant (le parcours vit dans la base, `parcours.py`)."""
+    return ETAPES
 
 
 def etape(ident):

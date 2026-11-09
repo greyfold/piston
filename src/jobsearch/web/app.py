@@ -22,7 +22,7 @@ from .. import actions, ajout, cles, courrier, dossier, doublons, entretiens, ev
 from .. import profil as profil_mod
 from .. import repertoire as repertoire_mod
 from ..formatage import annonce_html
-from ..config import CONFIG, DATA, coffre_actif, criteres, neutre, reglages
+from ..config import DATA, criteres, reglages
 from ..db import ENVOYEES, PIPELINE, STATUTS, Registre
 from .auth import COOKIE, autorise, depuis_le_mac, jeton, meme_origine
 
@@ -271,18 +271,8 @@ def courrier_trancher(ident: str, decision: str = Form("ignore"), empreinte: str
 
 
 def infos_dossier(reg, f):
-    """Le dossier d'une annonce : produit par la plateforme (data/dossiers), sinon celui de
-    l'ancienne chaîne dans le coffre (Candidatures/, lu sans jamais y écrire). None sinon."""
-    d = dossier.etat(reg, f["empreinte"])
-    if d:
-        return dict(d, origine="plateforme")
-    if f.get("dossier") and coffre_actif():
-        from ..importer import CANDIDATURES
-        chemin = coffre_actif() / CANDIDATURES / f["dossier"]
-        if chemin.is_dir():
-            return {"empreinte": f["empreinte"], "etat": "pret", "chemin": str(chemin), "couverture": None,
-                    "controles": [], "erreur": None, "debut": None, "origine": "coffre"}
-    return None
+    """Le dossier d'une annonce, produit par la plateforme (data/dossiers). None sinon."""
+    return dossier.etat(reg, f["empreinte"])
 
 
 @app.get("/dossier/{emp}", response_class=HTMLResponse)
@@ -295,8 +285,7 @@ def dossier_page(request: Request, emp: str):
             return HTMLResponse("Dossier introuvable.", status_code=404)
         chemin = Path(d["chemin"])
         from ..lettre import date_cible
-        if d.get("origine") == "plateforme":
-            dossier.mettre_a_date(reg, emp)
+        dossier.mettre_a_date(reg, emp)
         date_lettre = date_cible(f)
         pieces = []
         for nom in ("Analyse.md", "CV.md", "Lettre.md", "Envoi.md"):
@@ -313,13 +302,11 @@ def dossier_page(request: Request, emp: str):
         if (chemin / "motscles.json").exists():
             motscles = json.loads((chemin / "motscles.json").read_text(encoding="utf-8"))
         elif (chemin / "CV.md").exists() and (chemin / "Annonce.md").exists():
-            from ..motscles import analyser         # dossier du coffre : mesuré à la volée, rien n'est écrit
+            from ..motscles import analyser         # mesure absente : faite à la volée, rien n'est écrit
             motscles = analyser((chemin / "CV.md").read_text(encoding="utf-8"),
                                 (chemin / "Annonce.md").read_text(encoding="utf-8"), f.get("entreprise"))
         return page(request, "dossier.html", f=f, d=d, pieces=pieces, fichiers=fichiers, apercu=choix,
-                    motscles=motscles, date_lettre=date_lettre, envoyee=f["statut"] in ENVOYEES,
-                    pdf_lettre_coffre=d.get("origine") == "coffre" and any(
-                        n.endswith(".pdf") and _est_lettre(n) for n in fichiers))
+                    motscles=motscles, date_lettre=date_lettre, envoyee=f["statut"] in ENVOYEES)
     finally:
         reg.fermer()
 
@@ -347,13 +334,11 @@ def _est_lettre(nom):
 
 def _document(f, d, nom):
     """Le fichier à servir. Une lettre est toujours à la bonne date : celle du jour, ou la
-    date d'envoi une fois la candidature partie (copie datée pour un dossier du coffre)."""
+    date d'envoi une fois la candidature partie."""
     chemin = Path(d["chemin"]) / nom
     if not chemin.is_file():
         return None
     if _est_lettre(nom) and nom.endswith(".docx"):
-        if d.get("origine") == "coffre":
-            return dossier.lettre_coffre_datee(f, d["chemin"], nom)
         reg = _reg()
         try:
             dossier.mettre_a_date(reg, f["empreinte"])
@@ -396,8 +381,8 @@ async def dossier_mots_cles(request: Request, emp: str):
         d = infos_dossier(reg, f) if f else None
     finally:
         reg.fermer()
-    if not d or d.get("origine") != "plateforme":
-        msg, ok = "Ce dossier vient de l'ancienne chaîne (coffre, lecture seule) : à réviser dans Obsidian.", False
+    if not d:
+        msg, ok = "Dossier introuvable.", False
     elif not termes:
         msg, ok = "Coche au moins un mot-clé.", False
     else:
@@ -418,7 +403,7 @@ def annonce_preremplir(emp: str, cible: str = Form("employeur"), retour: str = F
         else:
             preremplissage.employeur(reg, emp)
         preremplissage.lancer_en_arriere_plan(emp, cible == "jobroom")
-        msg, ok = ("Chrome s'ouvre sur %s : relis, puis %s toi-même." % (
+        msg, ok = ("Pré-remplissage de %s ouvert dans « Navigateur » (menu de l'application) : relis, puis %s toi-même." % (
             "Job-Room" if cible == "jobroom" else "le formulaire",
             "sauvegarde" if cible == "jobroom" else "envoie")), True
     except preremplissage.PreremplissageImpossible as e:
@@ -682,6 +667,21 @@ def sources_retirer(id: str = Form("")):
         reg.fermer()
 
 
+@app.get("/navigateur", response_class=HTMLResponse)
+def navigateur_vm(request: Request):
+    """L'écran de la machine virtuelle (noVNC), où tourne le Chrome des sessions."""
+    from .. import vm
+    adresse, erreur = None, None
+    if not depuis_le_mac(request):           # le mot de passe de l'écran ne sort pas du Mac
+        return page(request, "navigateur.html", adresse=None, erreur="L'écran de la machine virtuelle ne s'ouvre que sur le Mac.")
+    try:
+        if (vm.instance() or {}).get("status") == "Running":
+            adresse = vm.adresse_ecran()
+    except Exception as e:
+        erreur = "Machine virtuelle injoignable : %s" % e
+    return page(request, "navigateur.html", adresse=adresse, erreur=erreur)
+
+
 @app.get("/api/etat")
 def api_etat():
     """Ce que l'application Mac montre dans la barre des menus : passage, Claude, machine virtuelle."""
@@ -696,6 +696,14 @@ def api_etat():
     distant = travailleur.distant()
     etat_vm = None
     if distant:
+        from .. import agent_claude
+        reg = _reg()
+        try:
+            agent_claude.relever(reg)        # ce que les sessions de la VM ont noté depuis la dernière fois
+        except Exception:
+            pass
+        finally:
+            reg.fermer()
         try:
             e = vm.etat()
             etat_vm = {"existe": e["existe"], "statut": e["statut"]}
@@ -735,7 +743,7 @@ def etat_claude():
         e = dict(travailleur.Distant.depuis_reglages().etat()["moteur"])
         e["message"] += " (machine virtuelle)"
         if not e.get("connecte"):
-            e["message"] = "Claude Code n'est pas connecté dans la machine virtuelle : lancer « jobsearch vm connexion »"
+            e["message"] = "Claude Code n'est pas connecté dans la machine virtuelle : « Se connecter à Claude… » dans le menu de l'application"
         return e
     except Exception as ex:
         return {"installe": False, "connecte": False, "abonnement": None, "message": str(ex)}
@@ -782,7 +790,7 @@ def sante(request: Request):
         sauvegardes = sorted((DATA / "sauvegardes").glob("jobsearch-*.db"))
         return page(request, "sante.html", etat=etat_passage(reg), runs=runs, jours=jours,
                     derniere_sauvegarde=sauvegardes[-1].name if sauvegardes else None,
-                    nb_sauvegardes=len(sauvegardes), import_le=reg.meta("import_coffre_le"),
+                    nb_sauvegardes=len(sauvegardes),
                     depuis_le_mac=depuis_le_mac(request), cles=[cles.etat(n) for n in cles.SERVICES],
                     moteur=etat_claude())
     finally:
@@ -795,7 +803,7 @@ def confidentialite_page(request: Request):
     profil réel, et la table des balises (visible ici seulement, sur l'ordinateur)."""
     from .. import confidentialite
     try:
-        texte = dossier.contexte_fixe()             # méthode et profil du coffre, comme pour un dossier
+        texte = dossier.contexte_fixe()             # méthode et profil, comme pour un dossier
     except Exception:
         texte = ""
     m = confidentialite.construire(documents=texte)
@@ -885,12 +893,10 @@ def _page_profil(request, ident, saisi=None, **ctx):
     i = ids.index(ident)
     resume = [dict(x, valeurs=[(c["libelle"], profil_mod.affiche(c, p)) for c in x["champs"]])
               for x in profil_mod.etapes()] if ident == "fin" else []
-    coffre = saisi.get("coffre") if saisi is not None and ident == "coffre" else profil_mod.effectif("coffre", p)
     for k, v in _ctx_champs().items():
         ctx.setdefault(k, v)
     return page(request, "profil.html", etapes=profil_mod.etapes(), etape=e, ident=ident, champs=champs,
                 precedente=ids[i - 1] if i else None, resume=resume, regles=profil_mod.regles_au_choix() if e else [],
-                documents=profil_mod.documents_coffre(coffre) if ident in ("coffre", "fin") and not neutre() else [],
                 cles=[cles.etat(n) for n in cles.SERVICES] if ident == "fin" else [],
                 moteur=etat_claude() if ident == "fin" else None,
                 manquants=profil_mod.manquants(p), **ctx)
@@ -960,7 +966,7 @@ def bienvenue_recherche(request: Request):
 
 @app.post("/bienvenue/recherche", response_class=HTMLResponse)
 async def bienvenue_recherche_enregistrer(request: Request):
-    from .. import pays, premiere
+    from .. import pays
     form = await request.form()
     try:
         profil_mod.enregistrer_recherche(form.get("objectif"), form.get("poste"), form.getlist("cantons"))

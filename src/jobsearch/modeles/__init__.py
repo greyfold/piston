@@ -1,13 +1,10 @@
-"""Modèles livrés avec l'application : ce que la production du dossier prend quand il n'y a
-pas de coffre (installation neuve de l'application Mac).
+"""Modèles livrés avec l'application, pris par la production du dossier.
 
 - `CV.docx` et `Lettre.docx` : modèles Word neutres (A4, Arial, aucune couleur de marque),
   avec les styles que `dossier.rendre_docx` attend : Title, Heading 1, Heading 2, Compact,
   Body Text. Ils se refont avec `fabriquer()` (`uv run python -m jobsearch.modeles`).
 - `methode.md` : la méthode de base « Candidature ciblée », mise dans le contexte fixe du
-  dossier quand le coffre n'en fournit pas.
-
-Le coffre, s'il est configuré, garde la priorité (modèles, méthode, mesure ATS).
+  dossier.
 """
 
 from pathlib import Path

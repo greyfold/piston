@@ -55,7 +55,7 @@ class AlertesEmail:
         return len(actifs)
 
     def _messages(self, debut):
-        comptes = (reglages().get("courrier") or {}).get("comptes") or ["iCloud", "Google"]
+        comptes = (reglages().get("courrier") or {}).get("comptes") or []
         out = []
         if connecteurs.actif("apple-mail"):
             out += (self.lire or courrier.lire_boite)(MOTS, debut, comptes, limite=40, longueur=20000)

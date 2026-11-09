@@ -56,9 +56,3 @@ def test_claude_deconnecte_arrete_le_lot(reg):
     c = FauxMoteur([MoteurImpossible("Claude Code n'est pas connecté", bloquant=True), _ev(), _ev()])
     bilan = evaluation.evaluer_lot(reg, evaluation.a_evaluer(reg, texte_profil="P"), c=c, texte_profil="P")
     assert bilan["echecs"] == 1 and bilan["evaluees"] == 0 and len(c.appels) == 1
-
-
-def test_montants_retires_du_profil():
-    t = "# Critères\n## Non négociables\n- Trajet\n## Conditions matérielles\n- Plancher : 999'000\n## Lire une annonce\n- Signaux"
-    out = evaluation._sans_conditions_materielles(t)
-    assert "999" not in out and "Trajet" in out and "Signaux" in out

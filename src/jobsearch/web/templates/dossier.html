@@ -9,8 +9,7 @@
   {% if d.etat == "en_cours" %}<span data-suivi-dossier="{{ f.empreinte }}">{{ libelle_dossier(d) }}</span>
   {% else %}<span>{{ {"interrompu": "Interrompu : la tâche s'est arrêtée (tableau de bord redémarré ?). Refaire le dossier.", "pret": "Prêt : relire, puis envoyer par le lien officiel.", "a_revoir": "À revoir avant envoi : voir les contrôles.", "echec": "Échec : " ~ (d.erreur or "")}.get(d.etat) }}
   {% if d.couverture is not none %} · couverture des mots-clés {{ d.couverture }} %{% endif %}</span>{% endif %}
-  {% if d.origine == "coffre" %}<span class="petit muet" style="margin-left:auto">Dossier de l'ancienne chaîne, dans le coffre (lecture seule)</span>
-  {% elif d.etat != "en_cours" %}<form method="post" action="/dossier/{{ f.empreinte }}/refaire" style="margin-left:auto"><button class="discret">Refaire</button></form>{% endif %}
+  {% if d.etat != "en_cours" %}<form method="post" action="/dossier/{{ f.empreinte }}/refaire" style="margin-left:auto"><button class="discret">Refaire</button></form>{% endif %}
 </div>
 
 {% if fichiers %}
@@ -19,7 +18,6 @@
   Lettre datée du <b>{{ date_lettre | date_fr }}</b>
   {% if envoyee %}<span class="muet">· date d'envoi, figée</span>
   {% else %}<span class="muet">· date du jour, mise à jour jusqu'à l'envoi puis figée par « Marquer envoyée »</span>{% endif %}
-  {% if pdf_lettre_coffre %}<br><span class="muet">Les PDF de l'ancienne chaîne gardent la date de leur production : envoie plutôt le Word, daté.</span>{% endif %}
 </p>
 <div class="docs">
   <nav class="onglets-docs" aria-label="Documents">
@@ -43,7 +41,7 @@
       <button class="go">Pré-remplir le formulaire</button></form>
     {% endif %}
   </div>
-  {% if apercu.endswith(".docx") %}<p class="petit muet">Aperçu du contenu et de la structure du Word ; la mise en page exacte se voit dans le PDF{% if not d.origine == "coffre" %} (produit dès que LibreOffice est installé){% endif %}.</p>{% endif %}
+  {% if apercu.endswith(".docx") %}<p class="petit muet">Aperçu du contenu et de la structure du Word ; la mise en page exacte se voit dans le PDF (produit dès que LibreOffice est installé).</p>{% endif %}
   {% endif %}
 </div>
 {% endif %}
@@ -63,13 +61,11 @@
     <div class="tags mots">
       {% for t, n in motscles.absents %}<label{% if f.langue %} lang="{{ f.langue }}"{% endif %}><input type="checkbox" name="termes" value="{{ t }}">{{ t }} <small>×{{ n }}</small></label>{% endfor %}
     </div>
-    {% if d.origine == "plateforme" %}
     <div class="boutons">
       <input class="note" type="text" name="precision" placeholder="Précision facultative (ex. : « machine learning » vu en formation, pas en poste)" aria-label="Précision">
       <button class="go">Intégrer au CV</button>
     </div>
     <p class="petit muet" style="margin:.35rem 0 0">Le CV est réécrit pour placer ces termes là où ils sont justes, sans rien inventer d'autre ; la version précédente est gardée.</p>
-    {% else %}<p class="petit muet">Dossier de l'ancienne chaîne : à réviser dans Obsidian.</p>{% endif %}
   </form>
   {% endif %}
 

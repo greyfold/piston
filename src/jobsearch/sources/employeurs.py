@@ -22,7 +22,6 @@ import datetime as dt
 import html
 import re
 
-from . import jobup
 from .base import Annonce, Client, RouteCassee, code_canton, html_vers_texte
 
 ETIQUETTE = "page carrière"

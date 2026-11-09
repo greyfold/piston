@@ -35,7 +35,7 @@
     <a class="carte lien-dossier" href="/dossier/{{ f.empreinte }}">
       <span><b>Dossier de candidature</b>
         {% if dos.etat == "en_cours" %}<span class="muet petit" data-suivi-dossier="{{ f.empreinte }}">{{ libelle_dossier(dos) }}</span>
-        {% else %}<span class="muet petit">{{ {"pret": "prêt", "a_revoir": "à revoir avant envoi", "echec": "en échec", "interrompu": "interrompu : à refaire"}.get(dos.etat, dos.etat) }}{% if dos.couverture is not none %} · couverture {{ dos.couverture }} %{% endif %}{% if dos.origine == "coffre" %} · ancienne chaîne{% endif %}</span>{% endif %}</span>
+        {% else %}<span class="muet petit">{{ {"pret": "prêt", "a_revoir": "à revoir avant envoi", "echec": "en échec", "interrompu": "interrompu : à refaire"}.get(dos.etat, dos.etat) }}{% if dos.couverture is not none %} · couverture {{ dos.couverture }} %{% endif %}</span>{% endif %}</span>
       <span aria-hidden="true">→</span>
     </a>
     {% endif %}
@@ -87,9 +87,8 @@
     <div class="bandeau attention">
       <span class="point"></span>
       <span>
-        {% if f.texte_origine == "coffre" %}Ce texte est un résumé de l'ancienne chaîne, pas l'annonce originale : ne pas en tirer les mots-clés du CV.
-        {% elif f.texte_origine == "extrait" %}Seul un extrait de l'annonce a été lu.
-        {% elif f.texte_origine == "introuvable" %}L'annonce originale n'est plus en ligne sur les plateformes connues ; le texte ci-dessous est un résumé.
+        {% if f.texte_origine == "extrait" %}Seul un extrait de l'annonce a été lu.
+        {% elif f.texte_origine == "introuvable" %}L'annonce originale n'est plus en ligne sur les plateformes connues ; le texte ci-dessous peut n'en être qu'un extrait.
         {% else %}Texte de l'annonce absent.{% endif %}
         {% if f.texte_origine != "introuvable" and f.ids_source %}
         <form method="post" action="/annonce/{{ f.empreinte }}/original" style="display:inline"><button class="discret">Recharger l'original</button></form>
@@ -104,10 +103,6 @@
         {%- if f.langue %} · {{ langues.get(f.langue, f.langue) }}{% endif %}
         {%- if f.url %} · <a href="{{ f.url }}" target="_blank" rel="noopener noreferrer">voir en ligne ↗</a>{% endif %}</p>
     </div>
-    {% if f.extra and f.extra.resume_coffre %}
-    <details class="carte"><summary class="petit">Résumé de l'ancienne chaîne (pour mémoire)</summary>
-      <div class="texte-annonce" style="border:0;padding:.5rem 0 0">{{ f.extra.resume_coffre | annonce_html }}</div></details>
-    {% endif %}
     {% endif %}
   </div>
 

@@ -1,7 +1,7 @@
-"""Empreinte d'une annonce : copie exacte de `annonces.py` (L148-167).
+"""Empreinte d'une annonce : entreprise et titre normalisés.
 
-Ne pas modifier sans relancer le test de parité sur le registre du coffre :
-une empreinte qui change, c'est une annonce déjà vue qui revient.
+Ne pas modifier à la légère : une empreinte qui change, c'est une annonce déjà vue qui
+revient (la base de la personne garde les empreintes calculées).
 """
 
 import hashlib

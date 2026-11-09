@@ -5,7 +5,7 @@
 d'une source (`tester`, `offres`, `detail`) : le passage ne sait pas où elle tourne.
 
 Réglages `travailleur:` de config/settings.yaml : `mode` (local ou distant),
-`adresse` (http://127.0.0.1:8766, le port que la VM ouvre vers le Mac), `sources`.
+`adresse` (http://127.0.0.1:8776, le port que la VM ouvre vers le Mac), `sources`.
 """
 
 import httpx
@@ -15,7 +15,7 @@ from ..config import reglages
 from ..sources.base import Annonce, RouteCassee
 from . import jeton
 
-ADRESSE = "http://127.0.0.1:8766"
+ADRESSE = "http://127.0.0.1:8776"
 
 
 def reglage():
@@ -65,7 +65,7 @@ class Distant:
         e = self.etat()
         if not (e.get("moteur") or {}).get("connecte"):
             raise moteur.MoteurImpossible("Claude Code n'est pas connecté dans la machine virtuelle : "
-                                          "lancer « jobsearch vm connexion » et se connecter à son compte Claude",
+                                          "« Se connecter à Claude… » dans le menu de l'application",
                                           bloquant=True)
         return self
 
@@ -85,6 +85,23 @@ class Distant:
         from ..courrier import CourrierImpossible
         return self._appel("POST", "/courrier/gmail", delai=900, erreur=CourrierImpossible,
                            json={"mots": list(mots), "depuis": depuis, "limite": limite, "longueur": longueur})
+
+    def session(self, tache, consigne):
+        """Lance une session Claude dans le Chrome de la VM (en arrière-plan)."""
+        return self._appel("POST", "/sessions", delai=60, json={"tache": tache, "consigne": consigne})
+
+    def preremplir(self, tache):
+        """Lance le pré-remplissage sans Claude dans le Chrome de la VM (en arrière-plan)."""
+        return self._appel("POST", "/preremplir", delai=60, json={"tache": tache})
+
+    def rendre(self, url, attente_ms=4000, delai_ms=30000):
+        """{"html", "texte"} d'une page rendue par le Chrome de la VM (contexte isolé, sans profil)."""
+        return self._appel("POST", "/chrome/rendre", delai=(delai_ms + attente_ms) / 1000 + 60,
+                           json={"url": url, "attente_ms": attente_ms, "delai_ms": delai_ms})
+
+    def pdf(self, html):
+        import base64
+        return base64.b64decode(self._appel("POST", "/chrome/pdf", delai=120, json={"html": html})["pdf"])
 
     def source(self, nom, locale, connues=None):
         return SourceDistante(self, nom, locale, connues)

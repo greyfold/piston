@@ -8,11 +8,10 @@
 <div class="calendrier" aria-label="Jours avec un passage">
   {% for j in jours | reverse %}<span class="{{ 'fait' if j.fait }}" title="{{ j.date | date_fr }} : {{ 'passage' if j.fait else 'aucun passage' }}"></span>{% endfor %}
 </div>
-<p class="petit muet">Vert : un passage (ancienne chaîne ou plateforme). Rouge : aucun. Le jour le plus récent est à droite.</p>
+<p class="petit muet">Vert : un passage. Rouge : aucun. Le jour le plus récent est à droite.</p>
 
 <div class="chiffres">
   <div class="chiffre"><b>{{ nb_sauvegardes }}</b><span>sauvegardes{% if derniere_sauvegarde %} · dernière {{ derniere_sauvegarde[10:18] }}{% endif %}</span></div>
-  <div class="chiffre"><b>{{ import_le[:10] | date_fr(True) if import_le else "–" }}</b><span>import du coffre</span></div>
 </div>
 
 <p class="petit muet" id="claude">La connexion à l'IA a sa page : <a href="/ia">Fournisseur d'IA</a>.</p>

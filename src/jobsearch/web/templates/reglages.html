@@ -7,7 +7,7 @@
 <div class="cartes deux reglages">
   <a class="carte lien-dossier" href="/profil">
     <span><b>Ma recherche</b>
-      <span class="muet petit">Coordonnées, postes et cantons, pré-tri, critères, parcours, coffre.</span>
+      <span class="muet petit">Coordonnées, postes et cantons, pré-tri, critères, parcours, objectifs.</span>
       {% if profil_manquants %}<span class="puce retard">à compléter : {{ profil_manquants | map('last') | join(', ') }}</span>
       {% else %}<span class="puce B">complet</span>{% endif %}</span>
     <span aria-hidden="true">→</span>
@@ -49,7 +49,7 @@
 
   <a class="carte lien-dossier" href="/sante">
     <span><b>Système</b>
-      <span class="muet petit">Passages du matin, sauvegardes, import du coffre.</span>
+      <span class="muet petit">Passages du matin, sauvegardes, clés d'accès.</span>
       <span class="puce {{ 'retard' if passage.niveau == 'alerte' else ('nouvelle' if passage.niveau == 'attention' else 'B') }}">{{ passage.texte }}</span></span>
     <span aria-hidden="true">→</span>
   </a>

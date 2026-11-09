@@ -1,48 +1,61 @@
-import subprocess
+"""Sessions Claude dans le Chrome de la machine virtuelle : lancement, file, consignes, relève."""
+
+import json
 
 import pytest
 
 from conftest import annonce
-from jobsearch import actions, agent_claude
+from jobsearch import actions, agent_claude, session_vm
 
 
-def test_lancer_une_seule_session_jobroom(reg):
-    appels = []
-
-    def executer(cmd, **kw):
-        appels.append(cmd)
-        return subprocess.CompletedProcess(cmd, 0, stdout="backgrounded · 1a2b3c4d\n", stderr="")
-    t1 = agent_claude.lancer(reg, "jobroom", executer=executer)
-    t2 = agent_claude.lancer(reg, "jobroom", executer=executer)          # déjà en cours : pas de seconde session
-    assert t1 == t2 and len(appels) == 1
-    cmd = appels[0]
-    assert cmd[0].endswith("claude") and cmd[1] == "--bg" and "--chrome" in cmd and "dontAsk" in cmd
-    consigne = cmd[2]
-    assert "jobroom-attente" in consigne and "tache %d" % t1 in consigne and "mot de passe" in consigne
-    assert "createIfEmpty: true" in consigne and "ton groupe d'onglets" in consigne
-    outils = cmd[cmd.index("--allowedTools") + 1]
-    js = agent_claude.commande_jobsearch()
-    assert js.startswith(("/", "'/")) and "%s tache 1 " % js in consigne and "`uv run" not in consigne
-    assert "mcp__claude-in-chrome" in outils and "Bash(%s jobroom-fait:*)" % js in outils
-    assert "Bash(*)" not in outils
-    assert agent_claude.derniere(reg, "jobroom")["session"] == "1a2b3c4d"
+@pytest.fixture
+def sans_preparation(monkeypatch):
+    """Le dossier de la tâche sans le profil ni les documents (testés à part)."""
+    def preparer(reg, tache, type_, empreinte):
+        d = agent_claude.dossier_tache(tache)
+        d.mkdir(parents=True, exist_ok=True)
+        contenu = ({"type": type_, "preuves": []} if type_ == "jobroom"
+                   else {"type": type_, "empreinte": empreinte, "lien": "https://exemple.ch/postuler", "valeurs": {}})
+        (d / "donnees.json").write_text(json.dumps(contenu), encoding="utf-8")
+        return contenu
+    monkeypatch.setattr(agent_claude, "preparer", preparer)
 
 
-def test_echec_de_lancement_note(reg):
-    def executer(cmd, **kw):
-        return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="Not logged in · Run /login")
-    with pytest.raises(agent_claude.LancementImpossible, match="login"):
-        agent_claude.lancer(reg, "jobroom", executer=executer)
+def _noter_dans_la_vm(tache, *args, monkeypatch):
+    """Ce que la session écrit par `jobsearch-session …`, dans la VM."""
+    monkeypatch.setenv("JOBSEARCH_TACHE", str(tache))
+    monkeypatch.setattr("jobsearch.config.DATA", agent_claude.partage())
+    return session_vm.main(list(args))
+
+
+def test_lancer_une_seule_session_jobroom(reg, sans_preparation):
+    t1 = agent_claude.lancer(reg, "jobroom")
+    t2 = agent_claude.lancer(reg, "jobroom")                  # déjà en cours : pas de seconde session
+    assert t1 == t2 and len(agent_claude.LANCEES) == 1
+    tache, type_, consigne = agent_claude.LANCEES[0]
+    assert tache == t1 and type_ == "jobroom"
+    assert "jobsearch-session jobroom-attente" in consigne and "jobsearch-session tache %d " % t1 in consigne
+    assert "mot de passe" in consigne and "mcp__chrome__" in consigne and "claude-in-chrome" not in consigne
+    assert agent_claude.derniere(reg, "jobroom")["session"] == "vm"
+
+
+def test_echec_de_lancement_note(reg, sans_preparation, monkeypatch):
+    def refus(tache, type_, consigne):
+        raise RuntimeError("travailleur injoignable : la machine virtuelle est-elle démarrée ?")
+    monkeypatch.setattr(agent_claude, "lancer_dans_la_vm", refus)
+    with pytest.raises(agent_claude.LancementImpossible, match="machine virtuelle"):
+        agent_claude.lancer(reg, "jobroom")
     t = agent_claude.derniere(reg, "jobroom")
-    assert t["etat"] == "arret" and "login" in t["message"]
+    assert t["etat"] == "arret" and "machine virtuelle" in t["message"]
 
 
-def test_etats_et_notifications(reg, monkeypatch):
+def test_etats_et_notifications(reg, sans_preparation, monkeypatch):
     vus = []
-    monkeypatch.setattr("jobsearch.notify.notifier", lambda titre, texte, urgent=False: vus.append((titre, urgent)))
+    monkeypatch.setattr("jobsearch.notify.notifier", lambda titre, texte, urgent=False: vus.append((titre, texte, urgent)))
     t = agent_claude.lancer(reg, "jobroom")
     agent_claude.noter(reg, t, "connexion", "Job-Room")
-    assert agent_claude.derniere(reg, "jobroom")["etat"] == "connexion" and vus[-1] == ("Job-Room : connecte-toi", True)
+    assert agent_claude.derniere(reg, "jobroom")["etat"] == "connexion"
+    assert vus[-1][0] == "Job-Room : connecte-toi" and "Navigateur" in vus[-1][1] and vus[-1][2]
     with pytest.raises(ValueError):
         agent_claude.noter(reg, t, "nimporte")
 
@@ -57,74 +70,55 @@ def test_marquer_envoyee_lance_la_preuve(reg, monkeypatch):
     assert agent_claude.apres_envoi(reg, e) is None
 
 
-def test_formulaire_consigne_ne_pas_envoyer(reg):
-    appels = []
-
-    def executer(cmd, **kw):
-        appels.append(cmd)
-        return subprocess.CompletedProcess(cmd, 0, stdout="backgrounded · 9f9f9f9f\n", stderr="")
+def test_formulaire_consigne_ne_pas_envoyer(reg, sans_preparation):
     e = annonce(reg, statut="retenue", entreprise="ACG")
-    agent_claude.lancer(reg, "formulaire", e, executer=executer)
-    consigne = appels[0][2]
-    assert "SANS L'ENVOYER" in consigne and "N'envoie pas" in consigne and "jobsearch envoyee %s" % e in consigne
-    assert "Formulaire · ACG" in appels[0]
+    agent_claude.lancer(reg, "formulaire", e)
+    consigne = agent_claude.LANCEES[0][2]
+    assert "SANS L'ENVOYER" in consigne and "N'envoie pas" in consigne and "jobsearch-session envoyee %s" % e in consigne
+    assert "upload_file" in consigne
 
 
 def test_connecte_lit_auth_status():
+    import subprocess
     oui = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout='{"loggedIn": true}', stderr="")
     non = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout='{"loggedIn": false}', stderr="")
     assert agent_claude.connecte(oui) and not agent_claude.connecte(non)
 
 
-def test_tache_active_puis_perdue(reg):
+def test_tache_active_puis_perdue(reg, sans_preparation):
     t = agent_claude.lire(reg, agent_claude.lancer(reg, "jobroom"))
     assert agent_claude.active(t) and agent_claude.vue(t)["libelle"] == "Claude travaille…"
     assert not agent_claude.active({**t, "etat": "arret"}) and not agent_claude.active(None)
     assert not agent_claude.active({**t, "debut": "2026-01-01 08:00"})          # session perdue : le bouton se libère
 
 
-def test_consigne_formulaire_listes_et_valeurs_par_defaut(reg):
-    appels = []
-    def executer(cmd, **kw):
-        appels.append(cmd)
-        return subprocess.CompletedProcess(cmd, 0, stdout="backgrounded · 1a2b3c4d\n", stderr="")
-    agent_claude.lancer(reg, "formulaire", annonce(reg, statut="retenue"), executer=executer)
-    consigne = appels[0][2]
+def test_consigne_formulaire_listes_et_valeurs_par_defaut(reg, sans_preparation):
+    agent_claude.lancer(reg, "formulaire", annonce(reg, statut="retenue"))
+    consigne = agent_claude.LANCEES[0][2]
     assert "listes déroulantes" in consigne and "civilité n'est pas une question sensible" in consigne
     assert "date par défaut du portail" in consigne
 
 
-def test_une_seule_session_dans_chrome_les_autres_en_file(reg, monkeypatch):
-    lances = []
-
-    def executer(cmd, **kw):
-        lances.append(cmd[cmd.index("--name") + 1])
-        return subprocess.CompletedProcess(cmd, 0, stdout="backgrounded · 1a2b3c4d\n", stderr="")
+def test_une_seule_session_dans_chrome_les_autres_en_file(reg, sans_preparation):
     e = annonce(reg, statut="retenue")
-    monkeypatch.setattr(agent_claude, "EXECUTER", executer)
     f = agent_claude.lancer(reg, "formulaire", e)
     agent_claude.noter(reg, f, "a_envoyer", "relis")                  # le formulaire attend Camille : Chrome reste tenu
     j = agent_claude.lancer(reg, "jobroom")
-    assert agent_claude.lire(reg, j)["etat"] == "en_file" and len(lances) == 1
+    assert agent_claude.lire(reg, j)["etat"] == "en_file" and len(agent_claude.LANCEES) == 1
     assert agent_claude.lancer(reg, "jobroom") == j                    # pas deux fois dans la file
     assert agent_claude.active(agent_claude.lire(reg, j))
     agent_claude.noter(reg, f, "fait")                                 # Chrome se libère : la preuve part
-    assert agent_claude.lire(reg, j)["etat"] == "en_cours" and lances[-1] == "Job-Room · preuves"
+    assert agent_claude.lire(reg, j)["etat"] == "en_cours" and agent_claude.LANCEES[-1][1] == "jobroom"
 
 
-def test_consigne_un_seul_onglet(reg):
-    appels = []
-    def executer(cmd, **kw):
-        appels.append(cmd)
-        return subprocess.CompletedProcess(cmd, 0, stdout="backgrounded · 1a2b3c4d\n", stderr="")
-    agent_claude.lancer(reg, "jobroom", executer=executer)
-    c = appels[0][2]
-    assert "UN SEUL onglet" in c and "c'est dans cet onglet vide que tu travailles" in c
-    assert "ne laisse jamais d'onglet vide" in c and "toujours dans ce même onglet" in c
+def test_consigne_un_seul_onglet(reg, sans_preparation):
+    agent_claude.lancer(reg, "jobroom")
+    c = agent_claude.LANCEES[0][2]
+    assert "UN SEUL onglet" in c and "new_page" in c and "toujours dans ce même onglet" in c
     assert "toutes les minutes" in c and "RECHARGE la page" in c and "en_cours`, et reprends" in c
 
 
-def test_file_relancee_si_l_occupante_a_disparu(reg, monkeypatch):
+def test_file_relancee_si_l_occupante_a_disparu(reg, sans_preparation):
     e = annonce(reg, statut="retenue")
     f = agent_claude.lancer(reg, "formulaire", e)
     j = agent_claude.lancer(reg, "jobroom")
@@ -134,16 +128,62 @@ def test_file_relancee_si_l_occupante_a_disparu(reg, monkeypatch):
     assert agent_claude.lancer(reg, "jobroom") == j and agent_claude.lire(reg, j)["etat"] == "en_cours"
 
 
-def test_uv_trouve_meme_avec_le_path_minimal_des_sessions(monkeypatch):
-    monkeypatch.setenv("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")        # celui du démon des sessions Claude
-    assert agent_claude.uv().endswith("/uv")
+# --- Le dossier partagé : ce que la session lit, ce qu'elle note, ce que le Mac applique ----------
+
+def test_preparer_formulaire_copie_les_documents_et_rien_d_autre(reg, monkeypatch, tmp_path):
+    cv = tmp_path / "Camille-Exemple-CV.pdf"
+    cv.write_bytes(b"%PDF-1.4")
+    monkeypatch.setattr("jobsearch.preremplissage.employeur",
+                        lambda reg, emp: ("https://exemple.ch/postuler", {"prenom": "Camille"}, {"cv": {"pdf": cv}}))
+    c = agent_claude.preparer(reg, 7, "formulaire", "emp1")
+    d = agent_claude.dossier_tache(7)
+    assert d == agent_claude.partage() / "taches" / "7"
+    assert (d / "documents" / "cv.pdf").read_bytes() == b"%PDF-1.4"
+    assert c["documents"] == {"cv": {"pdf": "/donnees/taches/7/documents/cv.pdf"}}
+    assert sorted(p.name for p in d.iterdir()) == ["documents", "donnees.json"]
 
 
-def test_dans_l_application_la_session_lance_le_python_embarque(monkeypatch, tmp_path):
-    """Sans .venv à la racine (le code embarqué dans l'application) : le Python qui tourne,
-    par son chemin complet, entre guillemets s'il contient une espace."""
-    monkeypatch.setattr(agent_claude, "RACINE", tmp_path)
-    monkeypatch.setattr("sys.executable", "/Applications/Recherche emploi.app/Contents/Resources/python/bin/python3")
-    js = agent_claude.commande_jobsearch()
-    assert js == "'/Applications/Recherche emploi.app/Contents/Resources/python/bin/python3' -m jobsearch"
-    assert "Bash(%s formulaire:*)" % js in agent_claude.outils(js)
+def test_la_session_lit_sa_tache_et_note_ses_evenements(reg, sans_preparation, monkeypatch, capsys):
+    e = annonce(reg, statut="retenue")
+    t = agent_claude.lancer(reg, "formulaire", e)
+    assert _noter_dans_la_vm(t, "formulaire", e, monkeypatch=monkeypatch) == 0
+    assert json.loads(capsys.readouterr().out)["lien"] == "https://exemple.ch/postuler"
+    assert _noter_dans_la_vm(t, "formulaire", "autre", monkeypatch=monkeypatch) == 1      # pas une autre annonce
+    assert _noter_dans_la_vm(t, "tache", str(t + 5), "fait", monkeypatch=monkeypatch) == 1     # pas une autre tâche
+    assert _noter_dans_la_vm(t, "tache", str(t), "a_envoyer", "--message", "relis", monkeypatch=monkeypatch) == 0
+    assert _noter_dans_la_vm(t, "envoyee", "autre", monkeypatch=monkeypatch) == 1
+    lignes = (agent_claude.dossier_tache(t) / "evenements.jsonl").read_text().splitlines()
+    assert [json.loads(x)["type"] for x in lignes] == ["etat"]
+
+
+def test_releve_applique_et_verifie(reg, sans_preparation, monkeypatch):
+    envois = []
+    monkeypatch.setattr("jobsearch.preremplissage.noter_envoi", lambda emp, url: envois.append((emp, url)))
+    e = annonce(reg, statut="retenue")
+    t = agent_claude.lancer(reg, "formulaire", e)
+    f = agent_claude.dossier_tache(t) / "evenements.jsonl"
+    lignes = [{"type": "etat", "etat": "a_envoyer", "message": "relis"},
+              {"type": "etat", "etat": "pirate"},                                   # état inconnu : ignoré
+              {"type": "envoyee", "empreinte": "une-autre-annonce", "url": "x"},    # hors de la tâche : ignoré
+              {"type": "jobroom_fait", "empreinte": e},                             # pas une tâche Job-Room : ignoré
+              {"type": "envoyee", "empreinte": e, "url": "https://exemple.ch/merci"}]
+    f.write_text("\n".join(json.dumps(x) for x in lignes) + "\npas du json\n", encoding="utf-8")
+    assert agent_claude.relever(reg) == 2
+    assert agent_claude.lire(reg, t)["etat"] == "a_envoyer" and envois == [(e, "https://exemple.ch/merci")]
+    assert agent_claude.relever(reg) == 0                                           # déjà relevé
+    with open(f, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"type": "etat", "etat": "fait"}) + "\n")
+    assert agent_claude.relever(reg) == 1 and agent_claude.lire(reg, t)["etat"] == "fait"
+
+
+def test_preremplissage_sans_claude_passe_par_la_vm(reg, sans_preparation, monkeypatch):
+    from jobsearch import preremplissage
+    from jobsearch.db import Registre
+    chemin = reg.cx.execute("PRAGMA database_list").fetchone()[2]          # la même base de test
+    monkeypatch.setattr("jobsearch.db.Registre", lambda *a, **k: Registre(chemin))
+    e = annonce(reg, statut="retenue")
+    t = preremplissage.lancer_en_arriere_plan(e)
+    assert agent_claude.LANCEES[-1][:2] == (t, "pre-formulaire")
+    assert agent_claude.vue(agent_claude.lire(reg, t))["libelle"].startswith("Pré-remplissage ouvert")
+    with pytest.raises(preremplissage.PreremplissageImpossible, match="occupé"):
+        preremplissage.lancer_en_arriere_plan(e, jobroom_=True)

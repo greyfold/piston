@@ -27,7 +27,7 @@ def distant(jeton_):
 
 
 def test_jeton_du_seul_compte_et_exige(jeton_, tmp_path):
-    assert (tmp_path / "travailleur.jeton").stat().st_mode & 0o777 == 0o600 and jeton.lire() == jeton_
+    assert (tmp_path / "partage-vm" / "travailleur.jeton").stat().st_mode & 0o777 == 0o600 and jeton.lire() == jeton_
     web = TestClient(serveur.app)
     assert web.get("/etat").status_code == 401
     assert web.get("/etat", headers={"Authorization": "Bearer faux"}).status_code == 401

@@ -109,15 +109,14 @@ def test_texte_remplace_seulement_si_nettement_plus_long(reg):
     assert len(reg.get(e)["texte"]) > 1500
 
 
-def test_texte_complet_de_plateforme_remplace_un_resume_plus_long(reg):
-    e = annonce(reg, statut="B", texte="Résumé très détaillé " * 200, texte_origine="coffre",
+def test_texte_complet_de_plateforme_remplace_un_extrait_plus_long(reg):
+    e = annonce(reg, statut="B", texte="Extrait très détaillé " * 200, texte_origine="extrait",
                 ids_source=["jobup:x1"])
     ingerer(reg, [_a(texte="extrait court")])                        # extrait de recherche : ignoré
-    assert reg.get(e)["texte_origine"] == "coffre"
+    assert reg.get(e)["texte"].startswith("Extrait très détaillé")
     ingerer(reg, [_a(texte="Original job ad in English. " * 10, detail_charge=True)])
     f = reg.get(e)
     assert f["texte"].startswith("Original job ad") and f["texte_origine"] == "plateforme"
-    assert f["extra"]["resume_coffre"].startswith("Résumé")
 
 
 def test_jobroom_garde_la_premiere_description():

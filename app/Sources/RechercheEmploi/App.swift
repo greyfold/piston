@@ -73,6 +73,11 @@ struct Menu_: View {
             ouvrir(id: "tableau")
             NSApp.activate(ignoringOtherApps: true)
         }
+        Button("Navigateur de la machine virtuelle") {
+            etat.pageDemandee = "navigateur"
+            ouvrir(id: "tableau")
+            NSApp.activate(ignoringOtherApps: true)
+        }
         Button("Lancer un passage") { etat.lancerPassage() }
             .disabled(etat.occupe != nil)
         Button(etat.claudeConnecte ? "Se reconnecter à Claude…" : "Se connecter à Claude…") {

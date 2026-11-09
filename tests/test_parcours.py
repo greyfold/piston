@@ -115,19 +115,16 @@ def test_echec_de_l_ia_ne_garde_rien(base):
     assert parcours.etat_entretien(base)["echanges"][-1]["reponse"] is None
 
 
-def test_document_pour_l_ia_et_profil_sans_coffre(base, monkeypatch):
+def test_document_pour_l_ia_et_profil(base):
     assert parcours.document(base) == ""
     parcours.importer_cv(base, CV, c=moteur.FauxMoteur([_import()]))
     doc = parcours.document(base)
     assert doc.startswith('<document nom="Parcours">') and "## Expérience" in doc and "## CV d'origine" in doc
     assert "12 000 utilisateurs" in doc and "Langues" in doc
-    monkeypatch.setattr("jobsearch.config.coffre_actif", lambda chemin=None: None)     # application autoportante
-    texte = evaluation.profil()
-    assert "Lead UX Designer" in texte and "Critères de recherches.md" not in texte
+    assert "Lead UX Designer" in evaluation.profil()
 
 
-def test_profil_vide_sans_coffre(base, monkeypatch):
-    monkeypatch.setattr("jobsearch.config.coffre_actif", lambda chemin=None: None)
+def test_profil_vide(base):
     with pytest.raises(FileNotFoundError, match="Ton parcours"):
         evaluation.profil()
 

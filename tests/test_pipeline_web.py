@@ -222,10 +222,10 @@ def test_source_adresse_et_acces_verifies(reg):
         repertoire.ajouter(reg, "X", acces="automatique")
 
 
-def test_original_remplace_le_resume_du_coffre(reg):
+def test_original_remplace_l_extrait(reg):
     from jobsearch import originaux
-    e = annonce(reg, statut="A", texte="Résumé en français écrit par l'ancienne chaîne.",
-                texte_origine="coffre", ids_source=["job-room:1"])
+    e = annonce(reg, statut="A", texte="Extrait en français lu dans la recherche.",
+                texte_origine="extrait", ids_source=["job-room:1"])
     src = FausseSource("job-room")
     src.detail = lambda a: (setattr(a, "texte", "We are looking for a Product Owner. " * 20),
                             setattr(a, "detail_charge", True))
@@ -233,13 +233,13 @@ def test_original_remplace_le_resume_du_coffre(reg):
     assert originaux.recharger(reg, reg.get(e), {"job-room": src})
     f = reg.get(e)
     assert f["texte"].startswith("We are looking") and f["texte_origine"] == "plateforme"
-    assert f["langue"] == "en" and f["extra"]["resume_coffre"].startswith("Résumé")
+    assert f["langue"] == "en"
     assert originaux.a_recharger(reg) == []
 
 
 def test_original_introuvable_n_est_pas_retente(reg):
     from jobsearch import originaux
-    e = annonce(reg, statut="B", texte="résumé", texte_origine="coffre", ids_source=["jobup:9"])
+    e = annonce(reg, statut="B", texte="résumé", texte_origine="extrait", ids_source=["jobup:9"])
     src = FausseSource("jobup")
     def retiree(a):
         raise RouteCassee("GET → HTTP 404")
@@ -301,27 +301,6 @@ def test_carte_affiche_delai_et_publication(web, reg):
     page = web.get("/").text
     assert "Postuler avant le" in page and "· 5 j" in page and "Publiée le 20 oct." in page
     assert web.get("/?tri=note").status_code == 200 and web.get("/?tri=nimporte").status_code == 200
-
-
-def test_lien_vers_le_dossier_du_coffre(web, reg, tmp_path, monkeypatch):
-    from jobsearch.web import app as appmod
-    from jobsearch.importer import CANDIDATURES
-    coffre = tmp_path / "coffre"
-    d = coffre / CANDIDATURES / "2026-10-20 - Exemple - Product Manager"
-    d.mkdir(parents=True)
-    (d / "CV.md").write_text("# Camille Exemple\n## Product Manager\n", encoding="utf-8")
-    (d / "Camille-Exemple-CV-Exemple.pdf").write_bytes(b"%PDF-1.4")
-    (d / ".~lock.x#").write_text("verrou")
-    monkeypatch.setattr(appmod, "reglages", lambda: {"coffre": coffre, "surveillance": {}})
-    monkeypatch.setattr(appmod, "coffre_actif", lambda chemin=None: coffre)
-    e = annonce(reg, statut="retenue", texte=FR, dossier=d.name)
-    assert 'href="/dossier/%s"' % e in web.get("/annonce/" + e).text
-    assert 'href="/dossier/%s"' % e in web.get("/").text
-    page = web.get("/dossier/" + e).text
-    assert "Camille-Exemple-CV-Exemple.pdf" in page and ".~lock" not in page and "ancienne chaîne" in page
-    r = web.get("/dossier/%s/fichier/Camille-Exemple-CV-Exemple.pdf" % e)
-    assert r.status_code == 200 and r.content == b"%PDF-1.4"
-    assert web.get("/dossier/%s/fichier/..%%2Fsecret.pdf" % e).status_code == 404
 
 
 def test_apercu_et_mots_cles_dans_la_page(web, reg, tmp_path, monkeypatch):
@@ -420,7 +399,7 @@ def test_marquer_envoyee_depuis_le_tableau_de_bord_lance_claude(web, reg):
                  follow_redirects=False)
     assert "Claude" in r.headers["location"] or "Claude" in __import__("urllib.parse").parse.unquote(r.headers["location"])
     reg.cx.rollback()
-    assert agent_claude.derniere(reg, "jobroom")["session"] == "abc12345"
+    assert agent_claude.derniere(reg, "jobroom")["session"] == "vm"
 
 
 def test_entretien_onglet_et_accueil(web, reg, tmp_path):

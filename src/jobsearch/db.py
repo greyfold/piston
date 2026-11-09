@@ -132,12 +132,11 @@ class Registre:
         """Colonnes ajoutées après la première version de la base."""
         existantes = {r[1] for r in self.cx.execute("PRAGMA table_info(annonces)")}
         if "texte_origine" not in existantes:
-            # Base d'avant le 24.10 au soir : texte importé du coffre (souvent un résumé)
-            # ou texte lu sur la plateforme (complet si assez long, sinon extrait).
+            # Base d'avant le 24.10 au soir : texte lu sur la plateforme (complet si assez
+            # long, sinon extrait).
             self.cx.execute("ALTER TABLE annonces ADD COLUMN texte_origine TEXT")
             self.cx.execute("UPDATE annonces SET texte_origine = CASE "
                             "WHEN COALESCE(texte,'') = '' THEN NULL "
-                            "WHEN extra LIKE '%note_coffre%' THEN 'coffre' "
                             "WHEN LENGTH(texte) >= 600 THEN 'plateforme' ELSE 'extrait' END")
             from .prefilter import langue
             for emp, texte in self.cx.execute(

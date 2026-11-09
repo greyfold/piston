@@ -8,8 +8,8 @@
 # Rien n'est installé à côté : ni agent launchd, ni dossier de projet. Ses données vivent dans
 # ~/Library/Application Support/Recherche emploi ; le passage du matin, l'alerte et la
 # surveillance sont lancés par l'application elle-même (`jobsearch echeances`).
-# Restent des prérequis du Mac : Claude Code (`claude`, connecté depuis l'application), et pour
-# la machine virtuelle facultative, Lima.
+# Claude Code, Google Chrome et l'écran tournent dans la machine virtuelle (Lima, embarqué ici,
+# version figée et vérifiée) : rien à installer sur le Mac.
 set -e
 RACINE="${0:A:h:h}"
 OUVRIR=
@@ -24,6 +24,7 @@ RES="$APP/Contents/Resources"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+LIMA_VERSION=2.3.0
 # Version de Python exigée par le projet (requires-python = ">=3.14").
 VERSION_PY="$(sed -nE 's/^requires-python *= *">= *([0-9]+\.[0-9]+).*/\1/p' "$RACINE/pyproject.toml")"
 
@@ -56,6 +57,26 @@ print -r -- "../../../../racine/src" > "$SITE/jobsearch.pth"
 "$PY" -c 'import jobsearch.cli, jobsearch.web.app' 2>/dev/null || { print -u2 "Le code embarqué ne se charge pas."; exit 1; }
 "$PY" -m compileall -q "$RES/racine/src" "$SITE" >/dev/null || true
 
+# 4. Lima (machine virtuelle), depuis ses publications officielles, somme de contrôle vérifiée.
+CACHE="$RACINE/.cache/lima-$LIMA_VERSION"
+ARCHIVE="lima-$LIMA_VERSION-Darwin-arm64.tar.gz"
+if [[ ! -f "$CACHE/$ARCHIVE" ]]; then
+  mkdir -p "$CACHE"
+  curl -fsSL -o "$CACHE/$ARCHIVE" "https://github.com/lima-vm/lima/releases/download/v$LIMA_VERSION/$ARCHIVE"
+  curl -fsSL -o "$CACHE/SHA256SUMS" "https://github.com/lima-vm/lima/releases/download/v$LIMA_VERSION/SHA256SUMS"
+fi
+(cd "$CACHE" && grep " $ARCHIVE\$" SHA256SUMS | shasum -a 256 -c - >/dev/null) || { print -u2 "Lima : somme de contrôle fausse."; exit 1; }
+mkdir -p "$RES/lima"
+# Seulement limactl (pilote Virtualization.framework compris) et l'agent de la VM Linux arm64.
+tar -xzf "$CACHE/$ARCHIVE" -C "$RES/lima" ./bin/limactl ./share/lima/lima-guestagent.Linux-aarch64.gz
+# limactl doit garder le droit d'utiliser Virtualization.framework.
+cat > "$TMP/vz.entitlements" <<'ENT'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>com.apple.security.virtualization</key><true/></dict></plist>
+ENT
+codesign --force --sign - --entitlements "$TMP/vz.entitlements" "$RES/lima/bin/limactl"
+
 swift "$RACINE/app/icone.swift" "$TMP/Icone.iconset"
 iconutil -c icns "$TMP/Icone.iconset" -o "$RES/Icone.icns"
 
@@ -81,7 +102,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict></plist>
 PLIST
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
-codesign --force --deep --sign - "$APP"
+codesign --force --sign - "$APP"          # sans --deep : limactl garde ses droits
 print "Application construite : $APP ($(du -sh "$APP" | cut -f1))"
 if [[ -n "$OUVRIR" ]]; then
   osascript -e 'quit app "Recherche emploi"' 2>/dev/null || true

@@ -89,10 +89,10 @@ def valeurs_formulaire(f, envoi_md, lettre_texte=""):
     return {k: x for k, x in v.items() if x}
 
 
-def documents(dossier_chemin, f, est_coffre=False):
+def documents(dossier_chemin, f):
     """{"cv": {"docx": …, "pdf": …}, "lettre": {...}} : le Word d'abord (mieux lu par les logiciels
     de tri), le PDF pour les champs qui n'acceptent que ce format."""
-    cv, lettre = _documents_pdf(dossier_chemin, f, est_coffre)
+    cv, lettre = _documents_pdf(dossier_chemin, f)
     d = Path(dossier_chemin)
     formats = {}
     for genre, pdf, motifs in (("cv", cv, ("-CV-",)), ("lettre", lettre, ("Cover-Letter", "Lettre", "Letter"))):
@@ -105,11 +105,10 @@ def documents(dossier_chemin, f, est_coffre=False):
     return formats
 
 
-def _documents_pdf(dossier_chemin, f, est_coffre=False):
+def _documents_pdf(dossier_chemin, f):
     """(CV, lettre) en PDF : la plupart des portails n'acceptent que ce format (jobup
     ignore un Word sans le dire). Le PDF est produit s'il manque ; la lettre est datée
     (date du jour, ou date d'envoi)."""
-    from . import dossier as dmod
     from .apercu import en_pdf
     d = Path(dossier_chemin)
     langue = f.get("langue") or "fr"
@@ -120,8 +119,6 @@ def _documents_pdf(dossier_chemin, f, est_coffre=False):
     lettres = sorted(p for p in d.iterdir() if p.suffix == ".docx"
                      and any(m in p.name for m in ("Cover-Letter", "Lettre", "Letter")))
     lettre = lettres[0] if lettres else None
-    if lettre and est_coffre:
-        lettre = dmod.lettre_coffre_datee(f, d, lettre.name)
     if lettre:
         pdf = lettre.with_suffix(".pdf")
         if not pdf.exists() or pdf.stat().st_mtime < lettre.stat().st_mtime:

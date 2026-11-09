@@ -6,9 +6,7 @@ critère non négociable, et les signaux d'une entreprise malsaine ou de
 conditions très contraignantes, cités mot pour mot dans l'annonce.
 
 Le profil vient de la base Parcours de l'application (`parcours.py` : postes, projets,
-réalisations, CV d'origine) et, s'il est configuré, du coffre en lecture seule : critères
-(sans la section des conditions matérielles, qui contient les montants), compétences,
-preuves, CV maître, parcours. Il passe en contexte de la tâche, identique pour toutes
+réalisations, CV d'origine). Il passe en contexte de la tâche, identique pour toutes
 les annonces d'un passage : Claude Code le garde en cache. Les exigences et les extraits restent dans la langue
 de l'annonce : ce sont les mots-clés du CV et de la lettre.
 
@@ -17,21 +15,15 @@ La note est une aide à la décision : elle ne change jamais un statut.
 
 import hashlib
 import json
-import re
-from pathlib import Path
 
 from pydantic import BaseModel, Field, create_model
 
 from . import moteur
 from . import profil as profil_mod
-from .config import reglages
 from .db import maintenant
 
 MODELE = moteur.MODELE
 VERSION = "2"            # à incrémenter quand la consigne change : les notes seront recalculées
-PROFIL = Path("2 - Casquettes") / "Recherche de poste"
-FICHIERS_PROFIL = ["Critères de recherches.md", "Compétences.md", "Preuves.md",
-                   "CV maître.md", "Parcours professionnel.md"]
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS evaluations (
@@ -134,32 +126,13 @@ Règles :
 # --- Entrées ----------------------------------------------------------------------
 
 
-def _sans_conditions_materielles(texte):
-    """Retire la section des montants de salaire : inutile pour noter, et ils ne
-    doivent pas circuler."""
-    return re.sub(r"(?ms)^## Conditions matérielles.*?(?=^## |\Z)", "", texte)
-
-
-def profil(coffre=None):
-    """Le profil envoyé à Claude : les fichiers du coffre s'il y en a un, puis la base Parcours."""
+def profil():
+    """Le profil envoyé à Claude : la base Parcours de l'application."""
     from . import parcours
-    from .config import coffre_actif
-    coffre = coffre_actif(coffre)
-    morceaux = []
-    for nom in FICHIERS_PROFIL if coffre else []:
-        chemin = coffre / PROFIL / nom
-        if not chemin.exists():
-            continue
-        t = chemin.read_text(encoding="utf-8")
-        if nom.startswith("Critères"):
-            t = _sans_conditions_materielles(t)
-        morceaux.append("<document nom=\"%s\">\n%s\n</document>" % (nom, t.strip()))
     base = parcours.document()
-    if base:
-        morceaux.append(base)
-    if not morceaux:
+    if not base:
         raise FileNotFoundError("profil vide : importer son CV et faire l'entretien « Ton parcours »")
-    return "\n\n".join(morceaux)
+    return base
 
 
 def _decisions_recentes(reg, n=30):

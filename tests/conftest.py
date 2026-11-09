@@ -19,7 +19,6 @@ def configuration_de_test(monkeypatch):
     pas sur le config/ livré, qui est neutre (voir test_installation)."""
     from jobsearch import config, profil
     monkeypatch.setattr(config, "CONFIG", FIXTURES / "config")
-    monkeypatch.setenv("JOBSEARCH_DEFAUTS", "projet")
     profil.oublier()
     yield
     profil.oublier()
@@ -35,14 +34,14 @@ def jamais_de_vraie_notification(monkeypatch, tmp_path):
 
 
 @pytest.fixture(autouse=True)
-def jamais_de_vraie_session_claude(monkeypatch):
-    """Aucun test ne lance `claude` : le lanceur reçoit un faux exécuteur par défaut."""
-    import subprocess
+def jamais_de_vraie_session_claude(monkeypatch, tmp_path):
+    """Aucun test ne lance de session dans la machine virtuelle : le lanceur est un faux qui
+    garde les appels (agent_claude.LANCEES), et le dossier partagé est un dossier de test."""
     from jobsearch import agent_claude
-
-    def faux_executer(cmd, **kw):
-        return subprocess.CompletedProcess(cmd, 0, stdout="backgrounded · abc12345\n", stderr="")
-    monkeypatch.setattr(agent_claude, "EXECUTER", faux_executer)
+    lancees = []
+    monkeypatch.setattr(agent_claude, "LANCEES", lancees, raising=False)
+    monkeypatch.setattr(agent_claude, "lancer_dans_la_vm", lambda tache, type_, consigne: lancees.append((tache, type_, consigne)))
+    monkeypatch.setattr("jobsearch.travailleur.jeton.DATA", tmp_path / "donnees")
 
 
 @pytest.fixture(autouse=True)

@@ -7,7 +7,12 @@ Les routes, toutes derrière le jeton partagé :
 - POST /sources/{nom}/offres     ses offres, avec les annonces déjà connues du Mac ;
 - POST /sources/{nom}/detail     le texte complet d'une annonce ;
 - POST /connecteurs/{nom}/tester état d'un connecteur du compte Claude (Gmail, Indeed) ;
-- POST /courrier/gmail           le courrier lu dans Gmail.
+- POST /courrier/gmail           le courrier lu dans Gmail ;
+- POST /sessions                 une session Claude dans le Chrome de la VM (preuves Job-Room,
+                                 formulaire), lancée en arrière-plan ; elle note son avancement
+                                 dans le dossier partagé (session_vm.py) ;
+- POST /chrome/rendre            le HTML d'une page, rendue par le Chrome de la VM ;
+- POST /chrome/pdf               un PDF imprimé par le Chrome de la VM à partir d'un HTML.
 
 Le travailleur n'a pas la base : ce qu'il doit savoir du registre (annonces déjà
 connues) lui est envoyé, et il ne rend que des données. Rien n'est écrit ici,
@@ -144,3 +149,125 @@ async def detail(nom: str, request: Request):
         return asdict(_source(nom).detail(a))
     except Exception as e:
         return _refus(e)
+
+
+# --- Chrome de la VM --------------------------------------------------------------------
+
+PORT_DEVTOOLS = 9222
+# Outils du serveur MCP de Chrome refusés aux sessions : rien qui exécute du code dans la page,
+# installe quelque chose ou lit au-delà de la page (le reste suffit pour lire, cliquer, remplir).
+OUTILS_REFUSES = ["evaluate_script", "install_extension", "install_pwa", "launch_pwa", "execute_webmcp_tool",
+                  "get_network_request", "list_network_requests", "get_console_message", "list_console_messages",
+                  "lighthouse_audit", "performance_start_trace", "performance_stop_trace", "take_heapsnapshot"]
+
+
+def commande_session(consigne):
+    """`claude -p` avec le seul serveur MCP de Chrome (celui de la VM) et la commande
+    `jobsearch-session`, sans réglages de l'utilisateur."""
+    import json as _json
+    mcp = {"mcpServers": {"chrome": {"command": "/opt/node/bin/chrome-devtools-mcp",
+                                     "args": ["--browserUrl", "http://127.0.0.1:%d" % PORT_DEVTOOLS]}}}
+    return [moteur.executable(), "-p", consigne, "--mcp-config", _json.dumps(mcp), "--strict-mcp-config",
+            "--allowedTools", "mcp__chrome,Bash(jobsearch-session:*)",
+            "--disallowedTools", ",".join("mcp__chrome__" + o for o in OUTILS_REFUSES),
+            "--permission-mode", "dontAsk", "--output-format", "stream-json", "--verbose"]
+
+
+@app.post("/sessions")
+async def session(request: Request):
+    import os
+    import subprocess
+    from ..config import DATA
+    d = await request.json()
+    tache = str(d.get("tache") or "")
+    if not tache.isdigit() or not d.get("consigne"):
+        return _refus("tâche ou consigne manquante")
+    dossier = DATA / "taches" / tache
+    dossier.mkdir(parents=True, exist_ok=True)
+    env = dict(moteur.environnement(), JOBSEARCH_TACHE=tache, DISPLAY=":1")
+    env["PATH"] = os.path.expanduser("~/.local/bin") + ":/opt/node/bin:" + env.get("PATH", "/usr/bin:/bin")
+    try:
+        with open(dossier / "journal.jsonl", "a", encoding="utf-8") as journal:
+            p = subprocess.Popen(commande_session(d["consigne"]), cwd=str(dossier), env=env, stdin=subprocess.DEVNULL,
+                                 stdout=journal, stderr=subprocess.STDOUT, start_new_session=True)
+    except OSError as e:
+        return _refus(e)
+    return {"ok": True, "pid": p.pid}
+
+
+@app.post("/preremplir")
+async def preremplir(request: Request):
+    """Le pré-remplissage sans Claude (preremplir_vm.py), dans le Chrome de la VM, en arrière-plan."""
+    import os
+    import subprocess
+    import sys
+    from ..config import DATA
+    tache = str((await request.json()).get("tache") or "")
+    if not tache.isdigit():
+        return _refus("tâche manquante")
+    dossier = DATA / "taches" / tache
+    dossier.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ, JOBSEARCH_TACHE=tache, DISPLAY=":1")
+    try:
+        with open(dossier / "journal.txt", "a", encoding="utf-8") as journal:
+            p = subprocess.Popen([sys.executable, "-m", "jobsearch.preremplir_vm"], cwd=str(dossier), env=env,
+                                 stdin=subprocess.DEVNULL, stdout=journal, stderr=subprocess.STDOUT,
+                                 start_new_session=True)
+    except OSError as e:
+        return _refus(e)
+    return {"ok": True, "pid": p.pid}
+
+
+def _chrome():
+    from playwright.sync_api import sync_playwright
+    p = sync_playwright().start()
+    try:
+        return p, p.chromium.connect_over_cdp("http://127.0.0.1:%d" % PORT_DEVTOOLS)
+    except Exception:
+        p.stop()
+        raise
+
+
+@app.post("/chrome/rendre")
+def rendre(corps: dict):
+    """Le HTML d'une page, rendue dans un contexte isolé (sans les cookies du profil)."""
+    url = str(corps.get("url") or "")
+    if not url.startswith(("http://", "https://")):
+        return _refus("adresse refusée")
+    try:
+        p, b = _chrome()
+    except Exception as e:
+        return _refus("Chrome de la VM injoignable : %s" % e)
+    try:
+        ctx = b.new_context()
+        page = ctx.new_page()
+        page.goto(url, wait_until="domcontentloaded", timeout=int(corps.get("delai_ms", 30000)))
+        page.wait_for_timeout(int(corps.get("attente_ms", 4000)))
+        html, texte = page.content(), page.inner_text("body")
+        ctx.close()
+        return {"html": html, "texte": texte}
+    except Exception as e:
+        return _refus(e)
+    finally:
+        p.stop()
+
+
+@app.post("/chrome/pdf")
+def pdf(corps: dict):
+    """Un PDF A4 imprimé à partir du HTML fourni (aperçu des dossiers)."""
+    import base64
+    try:
+        p, b = _chrome()
+    except Exception as e:
+        return _refus("Chrome de la VM injoignable : %s" % e)
+    try:
+        ctx = b.new_context()
+        page = ctx.new_page()
+        page.set_content(str(corps.get("html") or ""), wait_until="networkidle")
+        donnees = page.pdf(format="A4", print_background=True, prefer_css_page_size=True)
+        ctx.close()
+        return {"pdf": base64.b64encode(donnees).decode()}
+    except Exception as e:
+        return _refus(e)
+    finally:
+        p.stop()

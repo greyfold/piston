@@ -3,8 +3,7 @@
 Trois formes coexistent au registre :
 - le texte des plateformes, une ligne par paragraphe, puces « - » ou « • »,
   intertitres seuls sur leur ligne (« Responsibilities », « **Profil** ») ;
-- les résumés écrits par l'ancienne chaîne : un seul paragraphe, des
-  rubriques en capitales (« ROLE : … ; … ; … ») ;
+- les résumés en un seul paragraphe, avec des rubriques en capitales (« ROLE : … ; … ; … ») ;
 - un mélange des deux.
 
 On en tire des blocs (intertitre, paragraphe, liste), puis du HTML échappé.

@@ -33,18 +33,6 @@ def _stats(reg):
     print()
 
 
-def cmd_importer(a):
-    from .importer import CoffreInterdit, importer
-    reg = Registre()
-    try:
-        bilan = importer(reg, a.coffre or reglages()["coffre"], rafraichir=a.rafraichir, essai=a.essai)
-    except CoffreInterdit as e:
-        raise SystemExit("Import impossible : %s." % e)
-    print(("Essai (rien écrit) : " if a.essai else "Import : ") + json.dumps(bilan, ensure_ascii=False))
-    if not a.essai:
-        _stats(reg)
-
-
 def cmd_passage(a):
     from .pipeline import Passage
     reg = Registre()
@@ -281,7 +269,7 @@ def cmd_courrier(a):
             return
         r = reglages().get("courrier") or {}
         debut = courrier.depuis(reg)
-        messages = courrier.lire_boite(courrier.mots_recherche(reg), debut, r.get("comptes") or ["iCloud", "Google"])
+        messages = courrier.lire_boite(courrier.mots_recherche(reg), debut, r.get("comptes") or [])
         ouvertes = reg.liste(["candidature", "entretien", "offre"])
         lies = 0
         for m in messages:
@@ -397,11 +385,6 @@ def cmd_jeton(a):
 def main(argv=None):
     p = argparse.ArgumentParser(prog="jobsearch", description="Plateforme locale de recherche d'emploi.")
     sp = p.add_subparsers(dest="cmd", required=True)
-    s = sp.add_parser("importer", help="importe le registre du coffre (lecture seule)")
-    s.add_argument("--coffre")
-    s.add_argument("--rafraichir", action="store_true", help="le coffre gagne pour les annonces connues")
-    s.add_argument("--essai", action="store_true", help="n'écrit rien, montre le bilan")
-    s.set_defaults(f=cmd_importer)
     s = sp.add_parser("passage", help="lance le passage du matin")
     s.add_argument("--declencheur", default="manuel")
     s.add_argument("--sans-notification", action="store_true")
@@ -427,7 +410,7 @@ def main(argv=None):
     sp.add_parser("jeton", help="affiche le jeton d'accès du tableau de bord").set_defaults(f=cmd_jeton)
     s = sp.add_parser("travailleur", help="lance le travailleur (dans la machine virtuelle)")
     s.add_argument("--hote", default="0.0.0.0")
-    s.add_argument("--port", type=int, default=8766)
+    s.add_argument("--port", type=int, default=8776)
     s.set_defaults(f=cmd_travailleur)
     sp.add_parser("connexion", help="connecte Claude Code au compte Claude (VM ou ce Mac)").set_defaults(f=cmd_connexion)
     s = sp.add_parser("vm", help="machine virtuelle : creer, demarrer, arreter, etat, connexion, supprimer")

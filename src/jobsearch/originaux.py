@@ -1,10 +1,9 @@
 """Le texte original des annonces, dans leur langue d'origine.
 
 Les mots-clés du CV et de la lettre se prennent sur l'annonce telle que
-l'employeur l'a écrite. Or le coffre ne garde souvent qu'un résumé de
-l'ancienne chaîne, parfois traduit (SICPA : annonce en anglais, résumé en
-français). Ce module va rechercher l'original sur la plateforme d'où vient
-l'annonce ; le résumé reste dans `extra.resume_coffre`.
+l'employeur l'a écrite. Or une recherche ne sert souvent qu'un extrait de
+l'annonce. Ce module va rechercher l'original sur la plateforme d'où vient
+l'annonce.
 """
 
 import datetime as dt
@@ -41,14 +40,11 @@ def recharger(reg, f, sources):
         except RouteCassee:
             continue                      # annonce retirée de cette plateforme : on essaie la suivante
         if a.texte and a.detail_charge:
-            extra = dict(f.get("extra") or {})
-            if f.get("texte") and f.get("texte_origine") == "coffre":
-                extra["resume_coffre"] = f["texte"]
             pub = f.get("publiee_le")
             ref = dt.date.fromisoformat(pub[:10]) if pub and len(pub) >= 10 else None
             reg.maj(f["empreinte"], delai_postulation=delai_postulation(a.texte, ref) or f.get("delai_postulation"),
                     fin_publication=fin_publication(a.fin_publication, pub) or f.get("fin_publication"))
-            reg.maj(f["empreinte"], texte=a.texte, texte_origine="plateforme", langue=langue(a.texte), extra=extra,
+            reg.maj(f["empreinte"], texte=a.texte, texte_origine="plateforme", langue=langue(a.texte),
                     url_postuler=f.get("url_postuler") or a.url_postuler or None)
             reg.noter(f["empreinte"], "texte original rechargé depuis %s (%d caractères)" % (src, len(a.texte)))
             reg.commit()

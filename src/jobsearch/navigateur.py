@@ -1,10 +1,12 @@
 """Pré-remplissage dans Chrome : formulaire de l'employeur, preuve Job-Room.
 
-Chrome s'ouvre avec un profil dédié (`data/navigateur/`) : la personne s'y connecte
-une fois à Job-Room et aux portails des employeurs, les sessions restent. La
-plateforme remplit ce qu'elle reconnaît et affiche en haut de la page ce qui
-est fait et ce qui reste. Elle continue à remplir au fil des étapes (portails
-en plusieurs pages) jusqu'à ce que la personne ferme la fenêtre.
+Tourne dans la machine virtuelle (preremplir_vm.py), dans son Chrome, celui que la personne
+voit dans la fenêtre « Navigateur » de l'application : elle s'y connecte une fois à Job-Room
+et aux portails des employeurs, les sessions restent dans le profil de la VM (le même que
+celui des sessions Claude). La plateforme ouvre son propre onglet, remplit ce qu'elle
+reconnaît et affiche en haut de la page ce qui est fait et ce qui reste. Elle continue à
+remplir au fil des étapes (portails en plusieurs pages) jusqu'à ce que la personne ferme
+l'onglet.
 
 Ce qu'elle ne fait jamais : cliquer Envoyer, Soumettre, Postuler ou
 Sauvegarder ; cocher un consentement ou une case ; toucher un champ de mot de
@@ -23,7 +25,7 @@ from pathlib import Path
 
 from .config import DATA
 
-PROFIL = DATA / "navigateur"
+PORT_DEVTOOLS = 9222                # le Chrome de la VM (vm.py), sur 127.0.0.1 de la VM
 DUREE_MAX_S = 45 * 60
 JOBROOM = "https://www.job-room.ch/"
 
@@ -163,7 +165,7 @@ class NavigateurOccupe(Exception):
 
 
 def _verrou():
-    PROFIL.mkdir(parents=True, exist_ok=True)
+    DATA.mkdir(parents=True, exist_ok=True)
     v = open(DATA / "navigateur.lock", "w")
     try:
         fcntl.flock(v, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -181,10 +183,42 @@ def occupe():
         return True
 
 
+class Onglets:
+    """Les onglets de ce pré-remplissage dans le Chrome partagé de la VM : celui qu'il ouvre et
+    ceux que ses pages ouvrent. Fermer ces onglets termine le pré-remplissage ; Chrome reste."""
+
+    def __init__(self, ctx):
+        self.ctx, self._pages = ctx, []
+        ctx.on("page", self._nouvelle)
+
+    def _nouvelle(self, page):
+        try:
+            if page.opener() in self._pages:
+                self._pages.append(page)
+        except Exception:
+            pass
+
+    @property
+    def pages(self):
+        return [pg for pg in self._pages if not pg.is_closed()]
+
+    def new_page(self):
+        pg = self.ctx.new_page()
+        self._pages.append(pg)
+        return pg
+
+    def close(self):
+        for pg in self.pages:
+            try:
+                pg.close()
+            except Exception:
+                pass
+
+
 def _ouvrir(p):
-    return p.chromium.launch_persistent_context(
-        str(PROFIL), channel="chrome", headless=False, viewport=None, accept_downloads=False,
-        args=["--no-first-run", "--no-default-browser-check"])
+    """Le contexte du profil de Chrome de la VM (ses connexions aux sites), par DevTools."""
+    b = p.chromium.connect_over_cdp("http://127.0.0.1:%d" % PORT_DEVTOOLS)
+    return Onglets(b.contexts[0] if b.contexts else b.new_context())
 
 
 def _refuser_cookies(page):

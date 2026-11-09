@@ -9,6 +9,9 @@ Lire `README.md` pour l'architecture. Écrire en français.
   propre à la personne vient du profil (`profil.py`). `tests/test_echeances.py` le vérifie.
 - Tout tourne dans l'application : pas d'agent launchd, pas de dépendance à un dossier extérieur.
   Une tâche planifiée passe par `echeances.py`, lancé par l'application.
+- Claude Code et Chrome ne tournent que dans la machine virtuelle. Le Mac ne lance jamais `claude`
+  ni Chrome ; la VM ne voit que `partage-vm/`. Une tâche Chrome reçoit ce qu'elle doit savoir dans
+  `taches/<id>/` et ne rend que des événements, que le Mac vérifie avant de toucher la base.
 - Rien n'est envoyé, aucun formulaire n'est soumis, aucun compte LinkedIn personnel n'est utilisé.
 - Aucun montant de salaire plancher nulle part : ni code, ni configuration, ni journaux, ni ce qui
   part vers Claude.

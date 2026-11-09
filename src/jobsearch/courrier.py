@@ -491,11 +491,13 @@ def relever(reg, lire=None, lire_gmail_=None):
     `lire` et `lire_gmail_` sont remplaçables pour les tests."""
     from . import connecteurs
     r = reglages().get("courrier") or {}
-    comptes = r.get("comptes") or ["iCloud", "Google"]
+    comptes = r.get("comptes") or []                 # choisis dans le profil ; aucun par défaut
     debut = depuis(reg)
     mots = mots_recherche(reg)
     messages, pannes, lus = [], [], []
-    if connecteurs.actif("apple-mail"):
+    if connecteurs.actif("apple-mail") and not comptes:
+        pannes.append("Apple Mail : aucun compte choisi dans le profil")
+    elif connecteurs.actif("apple-mail"):
         try:
             messages += (lire or lire_boite)(mots, debut, comptes)
             lus.append("Apple Mail")
@@ -596,7 +598,7 @@ def completer_motifs(reg, lire=None, essai=False, sauf=()):
     par_id = {c["id"]: c for c in vieux.values()}
     mots = list(MOTS_OBJET) + sorted({j for c in vieux.values() for j in jetons_employeur(c["entreprise"])[:1]
                                       if j not in _FOURNISSEURS})
-    comptes = (reglages().get("courrier") or {}).get("comptes") or ["iCloud", "Google"]
+    comptes = (reglages().get("courrier") or {}).get("comptes") or []
     debut = min(c["recu_le"] for c in vieux.values())
     messages = {_ident(m): m for m in lire(mots, debut, comptes)}
     faits = []

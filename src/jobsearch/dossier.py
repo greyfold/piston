@@ -1,6 +1,6 @@
 """Dossier de candidature, produit dès le clic sur Go.
 
-Reprend la méthode de « Candidature ciblée.md » du coffre : analyse (angle
+Suit la méthode « Candidature ciblée » livrée avec l'application : analyse (angle
 proposé en tête, exigences, écarts), CV adapté (titre exact de l'annonce,
 puces du CV maître), lettre (langue de l'annonce, quatre paragraphes, au plus
 une anecdote, prête à envoyer), fiche d'envoi. Rien d'inventé : un chiffre
@@ -8,13 +8,12 @@ vient de Preuves.md ou n'existe pas.
 
 Quatre tâches du moteur IA (Claude Code, abonnement de l'utilisateur), profil
 et méthode en contexte fixe, donc en cache. Le dossier est écrit
-dans `data/dossiers/` (le coffre reste en lecture seule), mesuré (couverture des
+dans `data/dossiers/`, mesuré (couverture des
 mots-clés, `motscles.py`), contrôlé (CQ), puis rendu en Word. Un contrôle qui
 échoue ne bloque rien : le dossier passe « à revoir » avec la liste des points.
 
-Autoportant : sans coffre (application Mac), la méthode, les modèles Word et la
-mesure sont ceux livrés avec l'application (`modeles/`, `ats.py`). Avec un coffre,
-les siens (méthode, style, forces, modèles, `ats.py`) gardent la priorité.
+La méthode, les modèles Word et la mesure sont ceux livrés avec l'application
+(`modeles/`, `ats.py`) ; le profil vient de la base Parcours (`parcours.py`).
 """
 
 import datetime as dt
@@ -42,10 +41,7 @@ INTERROMPU_MIN = 30      # un dossier « en cours » plus vieux : sa tâche est 
 FICHIERS = (("analyse", "Analyse.md"), ("cv", "CV.md"), ("lettre", "Lettre.md"), ("envoi", "Envoi.md"))
 ETAPES = {"analyse": "analyse de l'annonce", "cv": "CV adapté", "lettre": "lettre", "envoi": "fiche d'envoi",
           "finition": "Word, PDF et contrôles"}
-SUR_MOI = Path("2 - Casquettes") / "Sur moi"
-METHODE = Path("4 - Tools") / "Skills" / "Candidature ciblée.md"
-TEMPLATES = Path("4 - Tools") / "Templates"
-ATS = Path("4 - Tools") / "bin" / "ats.py"
+NOM_METHODE = "Candidature ciblée.md"      # nom du document de la méthode, dans le contexte de Claude
 
 CONSIGNE = """Tu prépares le dossier de candidature de %(nom)s pour une annonce à laquelle %(prenom)s a dit Go. Tu suis la méthode « Candidature ciblée » fournie, et ces règles absolues :
 - Rien d'inventé : ni chiffre, ni nom, ni date, ni anecdote. Un chiffre vient des preuves ou du parcours (Preuves.md, base Parcours) ou n'existe pas. Un mot-clé absent ne se comble que s'il correspond à quelque chose de vrai ; sinon c'est un écart, traité honnêtement dans la lettre.
@@ -186,31 +182,17 @@ def _etape(reg, emp, cle):
     reg.commit()
 
 
-def _coffre():
-    """Le coffre s'il est configuré et présent, sinon None (l'application se suffit)."""
-    from .config import coffre_actif
-    return coffre_actif()
-
-
 def contexte_fixe():
-    """Méthode + style + forces + profil : identique pour tous les dossiers (mis en cache).
-    Sans coffre, la méthode est celle des consignes et le profil la base Parcours."""
-    from .config import coffre_actif
-    c = coffre_actif()
-    morceaux = []
-    for chemin in ((c / METHODE, c / SUR_MOI / "Style d'écriture.md", c / SUR_MOI / "Forces VIA.md") if c else ()):
-        if chemin.exists():
-            morceaux.append("<document nom=\"%s\">\n%s\n</document>" % (chemin.name, chemin.read_text(encoding="utf-8").strip()))
-    if not (c and (c / METHODE).exists()):
-        morceaux.insert(0, methode_de_base())
-    return "\n\n".join(morceaux) + "\n\n" + evaluation.profil(c)
+    """Méthode (style et forces par défaut compris) + profil (base Parcours) : identique pour
+    tous les dossiers (mis en cache)."""
+    return methode_de_base() + "\n\n" + evaluation.profil()
 
 
 def methode_de_base():
     """La méthode « Candidature ciblée » livrée avec l'application (style et forces par défaut
-    compris), pour qui n'a pas de coffre."""
+    compris)."""
     from . import modeles
-    return "<document nom=\"%s\">\n%s\n</document>" % (METHODE.name, modeles.methode())
+    return "<document nom=\"%s\">\n%s\n</document>" % (NOM_METHODE, modeles.methode())
 
 
 def nom_dossier(f):
@@ -383,7 +365,7 @@ def _finaliser(reg, f, dossier, pieces, fixe, c=None):
     def rendre(piece):
         docx = dossier / nom_fichier(f, piece)
         rendre_docx(pieces[piece], docx, piece)
-        return en_pdf(docx, f.get("langue") or "fr")   # PDF à côté du Word (LibreOffice, sinon Chrome)
+        return en_pdf(docx, f.get("langue") or "fr")   # PDF à côté du Word (Chrome de la machine virtuelle)
 
     rendre("lettre")
     pdf = rendre("cv")
@@ -492,14 +474,6 @@ def mettre_a_date(reg, emp):
     return cible
 
 
-def lettre_coffre_datee(f, chemin_coffre, nom):
-    """Dossier de l'ancienne chaîne : copie datée du Word de la lettre, hors du coffre."""
-    from .lettre import date_cible, dater_docx
-    copie = DATA / "dossiers" / "_coffre" / Path(chemin_coffre).name / nom
-    dater_docx(Path(chemin_coffre) / nom, copie, date_cible(f), f.get("langue") or "fr")
-    return copie
-
-
 def prevenir(reg, emp, suite="", fin=None):
     """Notification de fin de dossier : prêt, à revoir (quels contrôles) ou en échec (pourquoi).
     Un clic ouvre la page du dossier. Ne lève jamais : une notification ratée ne casse rien.
@@ -556,7 +530,7 @@ def produire_en_tache(emp, reg=None):
 
 
 def mesurer(dossier, entreprise=""):
-    """Couverture des mots-clés (ats.py du coffre, sinon la mesure de l'application). Le détail
+    """Couverture des mots-clés (mesure de l'application, `ats.py`). Le détail
     (présents, absents, format) est gardé dans motscles.json pour la page du dossier."""
     from .motscles import analyser
     cv, annonce = dossier / "CV.md", dossier / "Annonce.md"
@@ -627,11 +601,9 @@ def controler(f, dossier, pieces, couverture, fixe, pages=None):
 
 
 def modele_word(piece):
-    """Le modèle Word de la pièce : celui du coffre s'il existe, sinon celui de l'application."""
+    """Le modèle Word de la pièce, livré avec l'application."""
     from . import modeles
-    c = _coffre()
-    du_coffre = c / TEMPLATES / ("CV-site.docx" if piece == "cv" else "Lettre-site.docx") if c else None
-    return du_coffre if du_coffre and du_coffre.exists() else modeles.chemin(piece)
+    return modeles.chemin(piece)
 
 
 def rendre_docx(markdown, cible, piece):

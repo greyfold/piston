@@ -1,6 +1,6 @@
 """Ton parcours : la base d'expérience de la personne, construite avec l'IA et gardée ici.
 
-L'application est autoportante : ni coffre ni fichier extérieur. Le parcours vit dans la base
+L'application est autoportante : aucun fichier extérieur. Le parcours vit dans la base
 (`data/jobsearch.db`, tables `parcours*`) et c'est lui que l'IA reçoit pour noter les annonces
 et écrire les dossiers, en entier, à chaque tâche (`document()`).
 

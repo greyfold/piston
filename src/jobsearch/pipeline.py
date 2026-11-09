@@ -260,7 +260,7 @@ class Passage:
 
         with self.etape("originaux") as n:
             # Texte original (langue d'origine) pour les annonces actives qui n'ont
-            # qu'un résumé du coffre : quelques-unes par passage, les retenues d'abord.
+            # qu'un extrait : quelques-unes par passage, les retenues d'abord.
             sources_ok = {k: v for k, v in self.sources().items() if k in routes_ok}
             lot = originaux.a_recharger(self.reg)[:int(self.p.get("originaux_par_passage", 25))]
             n["a_recharger"], n["recharges"], n["introuvables"] = len(lot), 0, 0
@@ -352,7 +352,6 @@ class Passage:
         if dbl.get("fusionnees") or dbl.get("a_verifier"):
             lignes.append("Doublons entre plateformes : %d fusionnés, %d à vérifier."
                           % (dbl.get("fusionnees", 0), dbl.get("a_verifier", 0)))
-        from . import profil
         if profil.option("jobroom"):
             lignes.append("%d relances dues, %d preuves Job-Room à saisir%s."
                           % (ech.get("relances_dues", 0), ech.get("jobroom_a_saisir", 0),

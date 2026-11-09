@@ -103,19 +103,11 @@ def dans_le_texte(texte, origine="texte de l'annonce"):
 
 
 def _texte_rendu(url):
-    """Le texte d'une page tel que le navigateur l'affiche (pages construites en JavaScript).
-    Chrome sans fenêtre et sans profil : rien de la personne n'y est chargé. Vide si ça échoue."""
+    """Le texte d'une page tel que le navigateur l'affiche (pages construites en JavaScript),
+    rendue par le Chrome de la machine virtuelle dans un contexte isolé. Vide si ça échoue."""
+    from .travailleur import client as travailleur
     try:
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as p:
-            b = p.chromium.launch(channel="chrome", headless=True)
-            try:
-                page = b.new_page()
-                page.goto(url, timeout=30000, wait_until="domcontentloaded")
-                page.wait_for_timeout(4000)
-                return page.inner_text("body")
-            finally:
-                b.close()
+        return travailleur.Distant.depuis_reglages().rendre(url, attente_ms=4000)["texte"]
     except Exception:
         return ""
 

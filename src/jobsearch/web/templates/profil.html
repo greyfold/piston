@@ -5,15 +5,6 @@
 {% set ids_manquants = manquants | map('first') | list %}
 
 
-{% macro documents_coffre(documents) %}
-  <ul class="verifs">
-  {% for role, chemin, present in documents %}
-    <li class="{{ 'ok' if present else 'ko' }}"><span class="marque-verif" aria-label="{{ 'présent' if present else 'absent' }}">{{ '✓' if present else '✗' }}</span>
-      <span><b>{{ role }}</b> <code>{{ chemin }}</code></span></li>
-  {% endfor %}
-  </ul>
-{% endmacro %}
-
 <h1>Profil</h1>
 <p class="muet">Ce que la plateforme sait de toi pour chercher, trier et écrire tes dossiers. Gardé sur ton ordinateur seulement. <a href="/interface">Personnaliser l'interface</a></p>
 
@@ -34,12 +25,6 @@
   <div class="grille-champs">
   {% include "_champs_profil.html" %}
   </div>
-
-  {% if ident == 'coffre' and documents %}
-  <h3 class="sous-titre">Ce que la plateforme lit dans le coffre</h3>
-  <p class="muet petit">Sans ces fichiers, la note des annonces et les dossiers ne peuvent pas se faire. Les chemins sont relatifs au dossier du coffre.</p>
-  {{ documents_coffre(documents) }}
-  {% endif %}
 
   <div class="boutons pied">
     {% if precedente %}<a class="bouton" href="/profil/{{ precedente }}">Précédent</a>{% endif %}
@@ -66,12 +51,6 @@
     </dl>
   </section>
 {% endfor %}
-  {% if documents %}
-  <section class="carte">
-    <div class="tete"><h3>Documents du coffre</h3><a class="petit" href="/profil/coffre">Modifier</a></div>
-    {{ documents_coffre(documents) }}
-  </section>
-  {% endif %}
   <section class="carte">
     <div class="tete"><h3>Fournisseur d'IA</h3><a class="petit" href="/ia">Voir</a></div>
     <ul class="verifs">
@@ -87,7 +66,7 @@
     </ul>
   </section>
 </div>
-<div class="boutons pied"><a class="bouton" href="/profil/coffre">Précédent</a>
+<div class="boutons pied">{% if precedente %}<a class="bouton" href="/profil/{{ precedente }}">Précédent</a>{% endif %}
   <a class="bouton go" href="/">Aller au tableau de bord</a></div>
 {% endif %}
 {% endblock %}

@@ -4,9 +4,6 @@
 # Le jeton du tableau de bord vit dans le dossier de données, la clé Apify dans le
 # trousseau macOS. Claude n'a pas de clé : Claude Code est connecté au compte.
 
-# L'application est autoportante : aucun coffre externe.
-coffre: ""
-
 web:
   # 127.0.0.1 = ce Mac seulement. 0.0.0.0 le rend joignable depuis le téléphone, sur le
   # réseau local ; le jeton est alors exigé pour toute connexion qui ne vient pas du Mac.
@@ -20,7 +17,7 @@ passage:
   pause_requetes_s: 0.8     # rythme humain entre deux requêtes
   duree_max_etape_s: 900    # une étape qui dépasse est arrêtée, les suivantes tournent
   evaluations_par_passage: 30 # notes d'adéquation par passage (Claude Code, abonnement)
-  originaux_par_passage: 25 # textes originaux rechargés par passage (annonces actives résumées par l'ancienne chaîne)
+  originaux_par_passage: 25 # textes originaux rechargés par passage (annonces actives dont seul un extrait a été lu)
 
 surveillance:
   alerte_apres_heures: 26   # aucun passage complet depuis 26 h : alerte
@@ -43,21 +40,22 @@ moteur:
   # claude: "~/.local/bin/claude"   # chemin de la commande, si elle n'est pas trouvée seule
 
 travailleur:
-  # local : Claude Code et toutes les sources tournent sur ce Mac (comme avant).
-  # distant : les tâches Claude et les sources confiées passent par le travailleur,
-  # dans la machine virtuelle (`jobsearch vm demarrer`), joint sur ce port du Mac.
-  mode: local
-  adresse: "http://127.0.0.1:8766"
+  # Claude Code et Chrome tournent dans la machine virtuelle de l'application (Lima embarqué),
+  # jamais sur le Mac : le Mac lui confie les tâches de l'IA, les sources qui passent par Claude
+  # (Indeed, Gmail), le rendu des pages et les sessions dans Chrome. Joint sur ce port du Mac.
+  mode: distant
+  adresse: "http://127.0.0.1:8776"
   sources: [indeed]
 
 vm:
-  # Machine virtuelle Lima (Virtualization.framework d'Apple) : Ubuntu, Python, uv,
-  # Claude Code, Chromium. Elle ne voit que le dossier des données et le code (lecture seule).
-  nom: jobsearch
+  # Ubuntu, Python, uv, Claude Code, Google Chrome, Node.js et le serveur MCP de Chrome, avec un
+  # écran (VNC, montré dans l'application). Elle ne voit que le dossier partage-vm des données.
+  nom: emploi
   cpus: 2
-  memoire: "3GiB"
+  memoire: "4GiB"
   disque: "20GiB"
-  port: 8766
+  port: 8776
+  port_ecran: 8777
 
 jobs_ch:
   actif: true               # jobs.ch, même route que jobup, mêmes requêtes et mêmes lieux

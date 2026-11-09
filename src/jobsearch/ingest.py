@@ -94,13 +94,11 @@ def ingerer(reg, annonces):
                 if emp not in bilan["enrichies"] and emp not in bilan["nouvelles"]:
                     bilan["enrichies"].append(emp)
         ancien, neuf = f.get("texte") or "", b.get("texte") or ""
-        # Un résumé du coffre cède devant le texte original lu en entier, quelle que
-        # soit sa longueur. Sinon, seul un texte nettement plus long remplace l'ancien
+        # Un extrait cède devant le texte original lu en entier, quelle que soit sa
+        # longueur. Sinon, seul un texte nettement plus long remplace l'ancien
         # (la recherche ne sert souvent qu'un extrait).
         original = b.get("detail_charge") and neuf and f.get("texte_origine") != "plateforme"
         if original or len(neuf) > max(len(ancien) * 2, len(ancien) + 500):
-            if original and ancien:
-                f.setdefault("extra", {})["resume_coffre"] = ancien
             f["texte"] = neuf
             f["texte_origine"] = "plateforme" if b.get("detail_charge") else "extrait"
             f["langue"] = None

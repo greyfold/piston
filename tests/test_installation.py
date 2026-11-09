@@ -1,27 +1,37 @@
-"""Installation neuve (l'application Mac) : rien de personnel n'est hérité de config/."""
+"""Installation neuve (l'application Mac) : le config/ livré, sans profil. Rien de personnel."""
 
 import pytest
 
 from jobsearch import config, prefilter, profil, repertoire
 
+# Ce qui serait propre à une personne : vide dans le config/ livré, rempli par le profil.
+PERSONNELS = {
+    "settings.yaml": {"objectifs.semaine_min": 0, "objectifs.mois_min": 0, "courrier.comptes": [],
+                      "indeed.lieux": [], "notifications.ntfy_sujet": ""},
+    "criteres.yaml": {"sourcing.cantons": [], "sourcing.jobup_lieux": [], "sourcing.requetes": [],
+                      "sourcing.entreprises": [], "sourcing.linkedin_requetes": [],
+                      "sourcing.linkedin_lieu": "", "familles_cibles": ""},
+}
+SOURCES_DE_BASE = {"job-room", "jobup", "linkedin", "mails"}
+
 
 @pytest.fixture
 def neuve(monkeypatch, tmp_path):
-    monkeypatch.setenv("JOBSEARCH_DEFAUTS", "neutres")
+    monkeypatch.setattr(config, "CONFIG", config.RACINE / "config")                   # le config/ livré
+    monkeypatch.setattr("jobsearch.travailleur.client.distant", lambda: False)      # pas de vraie VM dans les tests
     monkeypatch.setenv("JOBSEARCH_PROFIL", str(tmp_path / "neuf" / "profil.yaml"))     # pas encore de profil
     profil.oublier()
     yield
-    monkeypatch.delenv("JOBSEARCH_DEFAUTS")
     profil.oublier()
 
 
-def test_valeurs_personnelles_remises_a_zero(neuve):
+def test_valeurs_personnelles_vides(neuve):
     s, c = config.reglages(), config.criteres()
-    for cle, v in config.PERSONNELS["settings.yaml"].items():
-        if cle != "coffre":
-            assert profil.lire(s, cle) == v
-    for cle, v in config.PERSONNELS["criteres.yaml"].items():
+    for cle, v in PERSONNELS["settings.yaml"].items():
+        assert profil.lire(s, cle) == v
+    for cle, v in PERSONNELS["criteres.yaml"].items():
         assert profil.lire(c, cle) == v
+    assert "coffre" not in s
     assert profil.effectif("recherche.cantons") == [] and profil.effectif("recherche.requetes") == []
     # Le reste des réglages (passage, moteur, sources de base) est gardé.
     assert s["passage"] and s["moteur"]
@@ -29,7 +39,7 @@ def test_valeurs_personnelles_remises_a_zero(neuve):
 
 def test_pre_tri_sans_metiers_exclus_ni_cantons(neuve):
     regles = config.criteres()["regles"]
-    assert not [r for r in regles if r["motif"].startswith(config.METIERS_EXCLUS)]
+    assert not [r for r in regles if r["motif"].startswith("Métier exclu")]
     canton = next(r for r in regles if r["id"] == "canton")
     assert not prefilter._compiler(canton["regex"]).search("VD")
     assert prefilter.familles().search("n'importe quel intitulé")
@@ -43,12 +53,7 @@ def test_cantons_du_profil_appliques(neuve, tmp_path):
 
 
 def test_repertoire_de_base(neuve):
-    assert set(repertoire.du_fichier()) == set(config.SOURCES_DE_BASE)
-
-
-def test_installation_du_projet_inchangee():
-    assert config.lire_yaml("settings.yaml")["coffre"]
-    assert len(repertoire.du_fichier()) > len(config.SOURCES_DE_BASE)
+    assert set(repertoire.du_fichier()) == SOURCES_DE_BASE
 
 
 def test_port_propre_a_l_application(monkeypatch):
@@ -278,47 +283,3 @@ def test_interface_qui_s_ouvre_et_options(neuve, monkeypatch, reg):
 
 
 from urllib.parse import unquote  # noqa: E402
-
-
-def _coffre_complet(racine):
-    """Un coffre où tout ce que la plateforme sait lire est présent."""
-    from jobsearch import dossier, evaluation, modeles, motscles
-    for rel in [evaluation.PROFIL / n for n in evaluation.FICHIERS_PROFIL] + [
-            dossier.METHODE, dossier.SUR_MOI / "Style d'écriture.md", dossier.SUR_MOI / "Forces VIA.md", motscles.ATS]:
-        (racine / rel).parent.mkdir(parents=True, exist_ok=True)
-        (racine / rel).write_text("Contenu du coffre.", encoding="utf-8")
-    (racine / dossier.TEMPLATES).mkdir(parents=True, exist_ok=True)
-    for n in ("CV-site.docx", "Lettre-site.docx"):
-        (racine / dossier.TEMPLATES / n).write_bytes(modeles.chemin("cv").read_bytes())
-    return racine
-
-
-def test_l_application_ne_se_connecte_a_aucun_coffre(neuve, tmp_path, monkeypatch, reg):
-    """Même avec un vrai coffre désigné dans le profil, l'installation neuve n'en lit rien :
-    modèles, méthode et mesure sont ceux de l'application, l'import refuse."""
-    from jobsearch import dossier, evaluation, importer, modeles, motscles
-    coffre = _coffre_complet(tmp_path / "coffre")
-    chemin = config.chemin_profil()
-    chemin.parent.mkdir(parents=True, exist_ok=True)
-    chemin.write_text("coffre: %s\n" % coffre, encoding="utf-8")         # un coffre désigné quand même
-    profil.oublier()
-    assert profil.lire(profil.charger(), "coffre") == str(coffre)
-    assert config.coffre_actif() is None and config.coffre_actif(coffre) is None
-    assert str(config.reglages()["coffre"]) == "."
-    assert dossier.modele_word("cv") == modeles.chemin("cv") and dossier.modele_word("lettre") == modeles.chemin("lettre")
-    monkeypatch.setattr("jobsearch.parcours.document", lambda *a, **k: "Parcours local.")
-    fixe = dossier.contexte_fixe()
-    assert "Contenu du coffre." not in fixe and "méthode de base" in fixe and "Parcours local." in fixe
-    assert "Contenu du coffre." not in evaluation.profil(coffre)
-    assert motscles.analyser("# X", "# Y — Z\n\nTexte texte", "Y")["mesure"] == "application"
-    assert profil.documents_coffre(coffre) == []
-    with pytest.raises(importer.CoffreInterdit):
-        importer.importer(reg, coffre)
-
-
-def test_l_installation_de_developpement_garde_son_coffre(tmp_path, monkeypatch):
-    from jobsearch import dossier
-    coffre = _coffre_complet(tmp_path / "coffre")
-    assert not config.neutre() and config.coffre_actif(coffre) == coffre
-    monkeypatch.setattr(config, "coffre_actif", lambda chemin=None: coffre)
-    assert dossier.modele_word("cv") == coffre / dossier.TEMPLATES / "CV-site.docx"

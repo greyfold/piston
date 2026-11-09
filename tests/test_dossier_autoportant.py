@@ -1,16 +1,14 @@
-"""Le dossier de candidature se produit sans coffre (application Mac, installation neuve) :
-méthode, modèles Word et mesure des mots-clés livrés avec l'application. Avec un coffre,
-les siens gardent la priorité."""
+"""Le dossier de candidature se produit avec ce que livre l'application : méthode, modèles Word
+et mesure des mots-clés."""
 
 import json
-import shutil
 from pathlib import Path
 
 import pytest
 from docx import Document
 
 from conftest import annonce
-from jobsearch import ats, dossier, evaluation, modeles, motscles
+from jobsearch import ats, dossier, evaluation, modeles
 from jobsearch.moteur import FauxMoteur
 
 PROFIL = "<document nom=\"Parcours\">\nAlex Exemple. Chef de produit. A formé 300 employés à l'IA.\n</document>"
@@ -40,19 +38,14 @@ ENVOI = ("## 0. Avant d'envoyer\n## 1. Formulaire\n## 2. Pièces\n## 3. Réponse
 
 
 @pytest.fixture
-def sans_coffre(tmp_path, monkeypatch):
+def isole(tmp_path, monkeypatch):
     monkeypatch.setattr(dossier, "DATA", tmp_path)
-    monkeypatch.setattr("jobsearch.config.coffre_actif", lambda chemin=None: None)
-    monkeypatch.setattr(evaluation, "profil", lambda coffre=None: PROFIL)       # base Parcours (parcours.py)
+    monkeypatch.setattr(evaluation, "profil", lambda: PROFIL)       # base Parcours (parcours.py)
     monkeypatch.setattr("jobsearch.apercu.en_pdf", lambda docx, langue="fr": None)
     return tmp_path
 
 
-def _coffre_actif(monkeypatch, coffre):
-    monkeypatch.setattr("jobsearch.config.coffre_actif", lambda chemin=None: coffre)
-
-
-def test_dossier_de_bout_en_bout_sans_coffre(reg, sans_coffre):
+def test_dossier_de_bout_en_bout(reg, isole):
     e = annonce(reg, entreprise="Exemple SA", titre="Product Manager", statut="retenue", texte=TEXTE, langue="fr")
     c = FauxMoteur([ANALYSE, CV, LETTRE, ENVOI])
     fin = dossier.produire(reg, e, c=c)
@@ -64,7 +57,7 @@ def test_dossier_de_bout_en_bout_sans_coffre(reg, sans_coffre):
     d = dossier.etat(reg, e)
     chemin = Path(d["chemin"])
     mots = json.loads((chemin / "motscles.json").read_text(encoding="utf-8"))
-    assert mots["mesure"] == "application" and d["couverture"] == mots["taux"] and d["couverture"] >= 80
+    assert d["couverture"] == mots["taux"] and d["couverture"] >= 80
     assert "roadmap produit" in {t for t, _ in mots["presents"]}
     cq06 = next(x for x in d["controles"] if x["cq"].startswith("CQ-06"))
     assert cq06["ok"] and cq06["detail"] != "non mesurée"
@@ -101,33 +94,12 @@ def test_modeles_refaits_identiques(tmp_path):
         assert neuf.sections[0].left_margin == livre.sections[0].left_margin
 
 
-def test_le_coffre_garde_la_priorite(tmp_path, monkeypatch):
-    coffre = tmp_path / "coffre"
-    (coffre / dossier.TEMPLATES).mkdir(parents=True)
-    shutil.copy(modeles.chemin("cv"), coffre / dossier.TEMPLATES / "CV-site.docx")
-    (coffre / dossier.METHODE).parent.mkdir(parents=True)
-    (coffre / dossier.METHODE).write_text("Méthode personnelle.", encoding="utf-8")
-    monkeypatch.setattr(evaluation, "profil", lambda c=None: PROFIL)
-    _coffre_actif(monkeypatch, coffre)
-    assert dossier.modele_word("cv") == coffre / dossier.TEMPLATES / "CV-site.docx"
-    assert dossier.modele_word("lettre") == modeles.chemin("lettre")              # absent du coffre : celui livré
+def test_modeles_et_methode_de_l_application(monkeypatch):
+    monkeypatch.setattr(evaluation, "profil", lambda: PROFIL)
+    assert dossier.modele_word("cv") == modeles.chemin("cv") and dossier.modele_word("lettre") == modeles.chemin("lettre")
     fixe = dossier.contexte_fixe()
-    assert "Méthode personnelle." in fixe and "méthode de base" not in fixe
-    _coffre_actif(monkeypatch, None)
-    assert dossier.modele_word("cv") == modeles.chemin("cv")
-    assert "méthode de base" in dossier.contexte_fixe()
-
-
-def test_mesure_du_coffre_sinon_de_l_application(tmp_path, monkeypatch):
-    _coffre_actif(monkeypatch, None)
-    assert motscles.analyser(CV, TEXTE, "Exemple SA")["mesure"] == "application"
-    coffre = tmp_path / "coffre"
-    (coffre / motscles.ATS).parent.mkdir(parents=True)
-    shutil.copy(Path(ats.__file__), coffre / motscles.ATS)
-    _coffre_actif(monkeypatch, coffre)
-    r = motscles.analyser(CV, TEXTE, "Exemple SA")
-    assert r["mesure"] == "coffre" and r["taux"] is not None
-    assert not list((coffre / motscles.ATS).parent.glob("__pycache__"))           # rien d'écrit dans le coffre
+    assert fixe.startswith("<document nom=\"Candidature ciblée.md\">") and "méthode de base" in fixe
+    assert fixe.endswith(PROFIL)
 
 
 def test_mesure_integree_francais_allemand_anglais():

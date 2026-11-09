@@ -31,13 +31,44 @@ def lima(monkeypatch, tmp_path):
     return etat, commandes
 
 
-def test_la_vm_ne_voit_que_les_donnees(tmp_path):
-    c = vm.configuration(tmp_path / "donnees")
+def test_la_vm_ne_voit_que_le_dossier_partage(tmp_path, monkeypatch):
+    monkeypatch.setattr("jobsearch.travailleur.jeton.DATA", tmp_path)
+    c = vm.configuration()
     assert c["vmType"] == "vz" and c["mounts"] == [
-        {"location": str(tmp_path / "donnees"), "mountPoint": "/donnees", "writable": True}]
-    assert c["portForwards"][0] == {"guestPort": 8766, "hostIP": "127.0.0.1", "hostPort": 8766}
-    assert c["portForwards"][1]["ignore"] is True                     # aucun autre port vers le Mac
+        {"location": str(tmp_path / "partage-vm"), "mountPoint": "/donnees", "writable": True}]
+    assert (tmp_path / "partage-vm").stat().st_mode & 0o777 == 0o700
+    assert c["portForwards"][0] == {"guestPort": 8776, "hostIP": "127.0.0.1", "hostPort": 8776}
+    assert c["portForwards"][1] == {"guestPort": 8777, "hostIP": "127.0.0.1", "hostPort": 8777}   # l'écran
+    assert c["portForwards"][2]["ignore"] is True and c["portForwards"][3]["ignore"] is True   # aucun autre port
     assert "claude.ai/install.sh" in c["provision"][1]["script"] and "astral.sh/uv" in c["provision"][1]["script"]
+    systeme = c["provision"][0]["script"]
+    assert "dl.google.com/linux/direct/google-chrome-stable_current_arm64.deb" in systeme
+    assert "sha256sum -c" in systeme and vm.MCP_CHROME in systeme
+
+
+def test_lancer_ecran_et_chrome_sur_la_seule_boucle_locale():
+    s = vm.LANCER % {"donnees": "/donnees", "code": "c", "port": 8776, "ecran": 8777, "vnc": 5901, "devtools": 9222,
+                     "politique": __import__("json").dumps(vm.POLITIQUE_CHROME)}
+    assert '"PasswordManagerEnabled": false' in s and '"BrowserSignin": 0' in s
+    assert "-localhost yes" in s and "-rfbauth" in s                  # VNC : boucle locale de la VM, mot de passe
+    assert "--remote-debugging-address=127.0.0.1" in s               # DevTools jamais exposé
+    assert "JOBSEARCH_VM=1" in s
+
+
+def test_lima_embarque_et_rangé_dans_les_donnees(monkeypatch, tmp_path):
+    exe = tmp_path / "limactl"
+    exe.write_text("")
+    monkeypatch.setenv("JOBSEARCH_LIMACTL", str(exe))
+    monkeypatch.setattr(vm, "DATA", tmp_path)
+    assert vm.limactl() == str(exe) and vm.environnement_lima()["LIMA_HOME"] == str(tmp_path / "lima")
+
+
+def test_mot_de_passe_de_l_ecran(monkeypatch, tmp_path):
+    monkeypatch.setattr("jobsearch.travailleur.jeton.DATA", tmp_path)
+    m = vm.ecran_motdepasse()
+    f = tmp_path / "partage-vm" / "ecran.motdepasse"
+    assert len(m) == 8 and f.stat().st_mode & 0o777 == 0o600 and vm.ecran_motdepasse() == m
+    assert vm.adresse_ecran().startswith("http://127.0.0.1:8777/vnc.html?") and "password=" + m in vm.adresse_ecran()
 
 
 def test_demarrer_cree_installe_et_lance(lima, monkeypatch, tmp_path):
@@ -46,7 +77,7 @@ def test_demarrer_cree_installe_et_lance(lima, monkeypatch, tmp_path):
     assert vm.demarrer(attente_s=1)["version"] == "1"
     verbes = [c[0] for c in commandes]
     assert verbes.index("create") < verbes.index("start") < verbes.index("copy")
-    assert (tmp_path / "travailleur.jeton").exists() and (tmp_path / "vm" / "jobsearch.yaml").exists()
+    assert (tmp_path / "partage-vm" / "travailleur.jeton").exists() and (tmp_path / "vm" / "jobsearch.yaml").exists()
     scripts = " ".join(c[-1] for c in commandes if c[0] == "shell")
     assert "uv pip install" in scripts and "jobsearch\" travailleur" in scripts and "JOBSEARCH_DATA=/donnees" in scripts
     copie = next(c for c in commandes if c[0] == "copy")

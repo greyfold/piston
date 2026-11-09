@@ -12,7 +12,6 @@ civil, face aux objectifs que la personne s'est fixés : chacun est facultatif
 
 import datetime as dt
 
-from .config import reglages
 from .db import ENVOYEES, PIPELINE, plus_jours
 
 RELANCE_1 = 10

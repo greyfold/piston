@@ -5,15 +5,11 @@ reste ouverte tant que la personne en a besoin), ou en ligne de commande :
 `jobsearch preremplir <empreinte> [--jobroom]`.
 """
 
-import subprocess
-import sys
 from pathlib import Path
 
 from . import dossier as dmod
-from .config import DATA, RACINE
 from .coordonnees import documents, valeurs_formulaire
 from .db import ENVOYEES
-from .importer import CANDIDATURES
 
 
 class PreremplissageImpossible(Exception):
@@ -21,15 +17,11 @@ class PreremplissageImpossible(Exception):
 
 
 def _dossier(reg, f):
-    from .config import coffre_actif
+    """Le dossier produit par la plateforme, s'il est prêt ; None sinon."""
     d = dmod.etat(reg, f["empreinte"])
     if d and d["etat"] in ("pret", "a_revoir"):
-        return Path(d["chemin"]), False
-    if f.get("dossier") and coffre_actif():
-        chemin = coffre_actif() / CANDIDATURES / f["dossier"]
-        if chemin.is_dir():
-            return chemin, True
-    return None, False
+        return Path(d["chemin"])
+    return None
 
 
 def _lire(chemin, nom):
@@ -47,14 +39,13 @@ def employeur(reg, emp):
     url = f.get("url_postuler") or f.get("url")
     if not url:
         raise PreremplissageImpossible("aucun lien de postulation connu")
-    chemin, coffre = _dossier(reg, f)
+    chemin = _dossier(reg, f)
     if not chemin:
         raise PreremplissageImpossible("le dossier n'est pas prêt")
-    if not coffre:
-        dmod.mettre_a_date(reg, emp)            # lettre à la date du jour
+    dmod.mettre_a_date(reg, emp)                # lettre à la date du jour
     lettre_md = _lire(chemin, "Lettre.md").split("\n---", 1)[-1]
     valeurs = valeurs_formulaire(f, _lire(chemin, "Envoi.md"), lettre_md)
-    return url, valeurs, documents(chemin, f, est_coffre=coffre)
+    return url, valeurs, documents(chemin, f)
 
 
 def noter_preuve(emp):
@@ -134,19 +125,24 @@ def jobroom(reg, emp):
         from . import adresses
         if adresses.renseigner(reg, emp):
             f = reg.get(emp)
-    chemin, _ = _dossier(reg, f)
+    chemin = _dossier(reg, f)
     v = valeurs_jobroom(f, _lire(chemin, "Envoi.md") if chemin else "")
     jetons = jetons_employeur(f["entreprise"])[:2] or [f["entreprise"].lower()]
     return v, jetons
 
 
 def lancer_en_arriere_plan(emp, jobroom_=False):
-    """Ouvre la fenêtre dans un processus détaché (la page du tableau de bord répond tout de suite)."""
-    from .navigateur import occupe
-    if occupe():
-        raise PreremplissageImpossible("une fenêtre de pré-remplissage est déjà ouverte : ferme-la d'abord")
-    journal = DATA / "logs" / "navigateur.log"
-    journal.parent.mkdir(parents=True, exist_ok=True)
-    args = [sys.executable, "-m", "jobsearch.cli", "preremplir", emp] + (["--jobroom"] if jobroom_ else [])
-    with open(journal, "a") as sortie:
-        subprocess.Popen(args, cwd=str(RACINE), stdout=sortie, stderr=sortie, start_new_session=True)
+    """Ouvre le pré-remplissage dans le Chrome de la machine virtuelle (la page du tableau de bord
+    répond tout de suite) ; la personne le voit dans « Navigateur ». Un seul à la fois, comme les
+    sessions Claude : Chrome n'est tenu que par une tâche."""
+    from . import agent_claude
+    from .db import Registre
+    reg = Registre()
+    try:
+        if agent_claude.occupante(reg):
+            raise PreremplissageImpossible("Chrome est occupé par une autre tâche : attends qu'elle finisse")
+        return agent_claude.lancer(reg, "pre-jobroom" if jobroom_ else "pre-formulaire", emp)
+    except agent_claude.LancementImpossible as e:
+        raise PreremplissageImpossible(str(e)) from e
+    finally:
+        reg.fermer()

@@ -5,7 +5,7 @@
    "identite.civilite": "honorific-prefix", "identite.date_naissance": "bday"} %}
 {% set clavier = {"email": "email", "tel": "tel", "url": "url", "nombre": "numeric", "date": "numeric"} %}
   {% for c in champs %}
-    <div class="champ{{ ' large' if c.type in ('liste', 'chemin', 'regles') }}">
+    <div class="champ{{ ' large' if c.type in ('liste', 'regles') }}">
       {% if c.type == 'regles' %}
       {% set cochees = c.valeur.split('\n') %}
       <fieldset class="cases"{% if c.aide %} aria-describedby="{{ c.cle }}-aide"{% endif %}>
@@ -83,7 +83,7 @@
         {% if c.exemple %}placeholder="{{ c.exemple }}"{% endif %}
         {% if c.type in clavier and c.type != 'date' %}inputmode="{{ clavier[c.type] }}"{% endif %}
         {% if c.cle in autocomplete %}autocomplete="{{ autocomplete[c.cle] }}"{% endif %}
-        {% if c.type in ('email', 'url', 'chemin', 'nombre') %}spellcheck="false" autocapitalize="off"{% endif %}
+        {% if c.type in ('email', 'url', 'nombre') %}spellcheck="false" autocapitalize="off"{% endif %}
         {% if c.requis %}required{% endif %}
         {% if c.aide %}aria-describedby="{{ c.cle }}-aide"{% endif %}>
       {% endif %}
