@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block titre %}Sources · Recherche d'emploi{% endblock %}
+{% block contenu %}
+<h1>Répertoire des sources</h1>
+<p class="muet">La plateforme interroge chaque matin les sources en accès « automatique » : Job-Room, jobup, jobs.ch, Indeed (page Connecteurs), les pages carrière branchées, et les alertes e-mail si elles sont actives. Pour qu'une page carrière soit lue chaque matin, colle son adresse ci-dessous : la plateforme reconnaît son logiciel ou, à défaut, la fait lire par Claude, et te montre ce qu'elle y trouve avant d'enregistrer.</p>
+
+<section class="carte" id="brancher" style="margin-bottom:1rem">
+  <b>Brancher une page carrière</b>
+  <form method="post" action="/sources/essayer" class="pile" style="margin-top:.75rem">
+    <div class="boutons">
+      <input type="text" name="entreprise" placeholder="Employeur (ex. Nexthink SA)" aria-label="Employeur" required style="flex:1 1 200px"
+        value="{{ essai.entreprise if essai else '' }}">
+      <input type="text" name="url" placeholder="Adresse de la page des offres (https://…)" aria-label="Adresse de la page" inputmode="url" required spellcheck="false" style="flex:2 1 260px"
+        value="{{ essai.url if essai else '' }}">
+      <button class="go">Essayer</button>
+    </div>
+    <div class="petit muet">Workday, Greenhouse, Lever, SmartRecruiters, Recruitee et Personio sont lus directement. Toute autre page est lue par Claude (une tâche sur ton abonnement, seulement quand la page change). L'employeur s'écrit comme sur Job-Room : une même offre vue par deux sources ne fait qu'une annonce.</div>
+  </form>
+  {% if essai %}
+  <div class="carte" style="margin-top:.75rem" id="essai">
+    {% if essai.ok %}
+    <div><b>{{ essai.n }} offre{{ 's' if essai.n != 1 }} en Suisse</b> · {{ essai.libelle }}</div>
+    {% if essai.exemples %}<ul class="petit">{% for t, lieu, u in essai.exemples %}<li><a href="{{ u }}" target="_blank" rel="noopener noreferrer">{{ t }}</a>{% if lieu %} · {{ lieu }}{% endif %}</li>{% endfor %}</ul>{% endif %}
+    <form method="post" action="/sources/brancher" class="boutons" style="margin-top:.5rem">
+      <input type="hidden" name="url" value="{{ essai.url }}"><input type="hidden" name="entreprise" value="{{ essai.entreprise }}">
+      {% if essai.connecteur.rendu %}<input type="hidden" name="rendu" value="1">{% endif %}
+      <button class="go">Brancher cette page</button>
+    </form>
+    {% else %}
+    <div class="bandeau attention"><span class="point"></span><span>Rien de lisible ({{ essai.libelle }}) : {{ essai.erreur }}</span></div>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+
+<details class="carte" id="ajouter" style="margin-bottom:1rem">
+  <summary><b>Noter une source sans la brancher</b></summary>
+  <form method="post" action="/sources/ajouter" class="pile" style="margin-top:.75rem">
+    <div class="boutons">
+      <input type="text" name="nom" placeholder="Nom (ex. Page carrière Nexthink)" aria-label="Nom" required style="flex:1 1 220px">
+      <input type="text" name="url" placeholder="https://…" aria-label="Adresse" inputmode="url" style="flex:1 1 220px">
+    </div>
+    <div class="boutons">
+      <input type="text" name="nature" placeholder="Nature (page carrière, site d'annonces, réseau…)" aria-label="Nature" style="flex:1 1 220px">
+      <select name="acces" aria-label="Accès">{% for a in acces %}<option value="{{ a }}">{{ a }}</option>{% endfor %}</select>
+    </div>
+    <div class="boutons">
+      <input type="text" name="remarques" placeholder="Remarques (facultatif)" aria-label="Remarques" style="flex:1">
+      <button class="go">Ajouter</button>
+    </div>
+  </form>
+</details>
+<div class="tableau"><table>
+  <thead><tr><th>Source</th><th>Accès</th><th>État de la route</th><th class="nb">Vues</th><th class="nb">A/B</th><th class="nb">Go</th><th class="nb">Envoyées</th><th class="nb">Entretiens</th><th class="nb">Refus</th></tr></thead>
+  <tbody>
+  {% for s in lignes %}
+    <tr>
+      <td><b>{% if s.url %}<a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.nom }}</a>{% else %}{{ s.nom }}{% endif %}</b>
+        {% if s.manuelle %} <span class="puce">ajoutée le {{ s.ajoutee_le[:10] | date_fr(True) }}</span>{% endif %}
+        <div class="muet petit">{{ s.nature or "" }}</div>{% if s.remarques %}<div class="petit">{{ s.remarques }}</div>{% endif %}
+        <div class="boutons">
+        {% if s.branchee %}<form method="post" action="/sources/{{ s.id }}/{{ 'desactiver' if s.actif else 'activer' }}"><button class="discret petit">{{ "Désactiver" if s.actif else "Réactiver" }}</button></form>{% endif %}
+        {% if s.manuelle %}<form method="post" action="/sources/retirer" onsubmit="return confirm('Retirer cette source du répertoire ?')"><input type="hidden" name="id" value="{{ s.id }}"><button class="discret petit">Retirer</button></form>{% endif %}
+        </div></td>
+      <td class="petit">{{ s.acces }}</td>
+      <td class="petit">
+        {% if s.etat %}<span class="puce {{ '' if s.etat.dernier_test_ok else 'retard' }}">{{ s.etat.etat }}</span>
+          <div class="muet">testée {{ s.etat.dernier_test_le[:10] | date_fr(True) }}{% if s.etat.derniere_reussite_le %} · dernière réussite {{ s.etat.derniere_reussite_le[:10] | date_fr(True) }}{% endif %}</div>
+          {% if s.etat.remarques and not s.etat.dernier_test_ok %}<div class="petit">{{ s.etat.remarques }}</div>{% endif %}
+        {% else %}<span class="muet">–</span>{% endif %}
+      </td>
+      <td class="nb">{{ s.n.vues or 0 }}</td><td class="nb">{{ s.n.ab or 0 }}</td><td class="nb">{{ s.n.go or 0 }}</td>
+      <td class="nb">{{ s.n.envoyees or 0 }}</td><td class="nb">{{ s.n.entretiens or 0 }}</td><td class="nb">{{ s.n.refus or 0 }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+<p class="petit muet">Une annonce peut venir de plusieurs sources : les totaux par source dépassent le total du registre.</p>
+
+{% macro fiche(f) %}
+  <div><a href="/annonce/{{ f.empreinte }}"><b>{{ f.entreprise }}</b> — {{ f.titre }}</a></div>
+  <div class="meta"><span class="puce {{ f.statut }}">{{ f.statut }}</span>
+    {{ (f.sources or []) | join(", ") }}{% if f.lieu %} · {{ f.lieu }}{% endif %}{% if f.publiee_le %} · publiée le {{ f.publiee_le[:10] | date_fr(True) }}{% endif %}</div>
+{% endmacro %}
+
+<h2 id="doublons">Doublons entre plateformes</h2>
+<p class="muet">La même offre écrite autrement selon la plateforme (« Nexthink » et « Nexthink SA », « R&amp;D », « via ictjobs »…). Les doublons sûrs sont fusionnés à chaque passage ; ceux-ci attendent ton avis. Fusionner ne supprime rien : la fiche la plus avancée reste, l'autre passe en « doublon ».</p>
+{% if a_verifier %}
+<div class="cartes">
+{% for p, s, raison in a_verifier %}
+  <div class="carte">
+    {{ fiche(p) }}
+    <div style="margin-top:.5rem">{{ fiche(s) }}</div>
+    <div class="petit muet" style="margin-top:.4rem">{{ raison }}</div>
+    <div class="boutons">
+      <form method="post" action="/doublons/fusionner"><input type="hidden" name="a" value="{{ p.empreinte }}"><input type="hidden" name="b" value="{{ s.empreinte }}"><button class="go">Même offre</button></form>
+      <form method="post" action="/doublons/differentes"><input type="hidden" name="a" value="{{ p.empreinte }}"><input type="hidden" name="b" value="{{ s.empreinte }}"><button>Deux offres</button></form>
+    </div>
+  </div>
+{% endfor %}
+</div>
+{% else %}
+<p class="petit">Aucune paire à vérifier.</p>
+{% endif %}
+
+{% if fusions %}
+<details class="carte" style="margin-top:1rem">
+  <summary><b>Dernières fusions</b> ({{ fusions | length }})</summary>
+  {% for s, p in fusions %}
+  <div style="margin-top:.75rem">
+    {{ fiche(s) }}
+    <div class="petit muet">doublon de {% if p %}<a href="/annonce/{{ p.empreinte }}">{{ p.entreprise }} — {{ p.titre }}</a>{% else %}{{ s.extra.doublon_de }}{% endif %}
+      · fusion {{ s.extra.fusion }}{% if s.extra.raison_doublon %} ({{ s.extra.raison_doublon }}){% endif %}</div>
+    <form method="post" action="/doublons/separer"><input type="hidden" name="a" value="{{ s.empreinte }}"><button class="discret petit">Séparer</button></form>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
+{% endblock %}

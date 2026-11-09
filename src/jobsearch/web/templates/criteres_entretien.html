@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icone, fil_entretien, compositeur %}
+{% block titre %}Ce qui compte pour toi · Recherche d'emploi{% endblock %}
+{% block contenu %}
+{# Ce qui compte pour toi : l'IA pose quelques questions et propose critères, intérêt, angles et
+   différenciateur ; la personne relit et enregistre (parcours.repondre_criteres). #}
+<div class="parcours-page">
+  <a class="retour" href="/#premiers-pas">{{ icone("precedent") }} Tableau de bord</a>
+  <div class="titre-etape tete-parcours">
+    <span class="pastille">{{ icone("criteres") }}</span>
+    <div>
+      {% if rang is not none %}<p class="surtitre">Bien démarrer · {{ rang + 1 }} sur {{ total }}</p>{% endif %}
+      <h1>Ce qui compte pour toi</h1>
+      <p class="intro">Quelques questions, et l'IA en tire ce qu'elle vérifiera dans chaque annonce. Tu relis, tu corriges,
+        tu enregistres. Aucun montant de salaire : le minimum que tu vises n'est écrit nulle part.</p>
+    </div>
+  </div>
+
+  {% if not ia %}
+  <div class="bandeau attention"><span class="point"></span>
+    <span>L'entretien demande ton IA.
+      <button type="button" class="lien-neutre" data-connexion-ia="claude" data-nom="Claude">Connecter Claude</button>
+      Tu peux aussi remplir la proposition à la main.</span></div>
+  {% elif parcours_vide %}
+  <div class="bandeau info"><span class="point"></span>
+    <span>Ton parcours est encore vide : <a href="/premiers-pas/dossier">importe ton CV</a> d'abord, l'IA en tirera tes angles.</span></div>
+  {% endif %}
+
+  <div class="parcours-grille">
+    <section class="carte-accueil entretien" id="entretien" aria-labelledby="entretien-titre">
+      <p class="surtitre">Entretien</p>
+      <h2 id="entretien-titre">{{ "Quelque chose à ajouter ?" if etat.termine else "Parle-moi de ton prochain poste" }}</h2>
+      {{ fil_entretien(etat.echanges) }}
+      {% if etat.termine %}
+      <div class="etat-tache ok">{{ icone("fin") }}
+        <div><p class="fort">L'IA a ce qu'il lui faut</p><p>Relis la proposition, corrige-la si besoin, puis enregistre.</p></div></div>
+      {% endif %}
+      <form data-repondre>
+        {{ compositeur("Ajoute ce qui manque, si tu veux." if etat.termine else "Réponds avec tes mots.",
+                       "L'IA met la proposition à jour…", desactive=not ia, rows=4,
+                       avert="L'IA peut se tromper. Relis la proposition avant d'enregistrer.") }}
+        <p class="flash ko" data-erreur hidden role="alert"></p>
+        {% if etat.echanges | length > 1 %}
+        <div class="actions-entretien">
+          <button type="submit" form="recommencer" class="lien-neutre" data-confirmer="Effacer cet entretien et recommencer ?">Recommencer</button>
+        </div>
+        {% endif %}
+      </form>
+      <form id="recommencer" method="post" action="/criteres/recommencer"></form>
+    </section>
+
+    <section class="carte-accueil proposition" aria-labelledby="proposition-titre">
+      <h2 id="proposition-titre">{{ "Ce que l'IA a compris" if etat.proposition else "Ta proposition" }}</h2>
+      <form method="post" action="/premiers-pas/criteres" class="edition">
+        <input type="hidden" name="entretien" value="1">
+        <div class="champ"><label for="p-criteres">Critères non négociables <span class="requis">*</span></label>
+          <textarea id="p-criteres" name="evaluation.criteres" rows="6" required>{{ valeurs.criteres }}</textarea>
+          <span class="aide">Un par ligne ; une précision facultative après « : ». Une annonce qui en viole un clairement est notée 40 au plus.</span></div>
+        <div class="champ"><label for="p-interet">Ce qui rend un poste intéressant</label>
+          <input type="text" id="p-interet" name="evaluation.interet" value="{{ valeurs.interet }}"></div>
+        <div class="champ"><label for="p-angles">Angles de candidature</label>
+          <textarea id="p-angles" name="evaluation.angles" rows="4">{{ valeurs.angles }}</textarea>
+          <span class="aide">Les façons de te présenter, une par ligne : l'IA en propose une par annonce.</span></div>
+        <div class="champ"><label for="p-diff">Différenciateur</label>
+          <input type="text" id="p-diff" name="dossier.differenciateur" value="{{ valeurs.differenciateur }}">
+          <span class="aide">Le troisième paragraphe de chaque lettre le met en avant.</span></div>
+        <div class="actions-accueil">
+          <a class="lien-neutre" href="/#premiers-pas">Plus tard</a>
+          <button class="go grand">Enregistrer</button>
+        </div>
+      </form>
+    </section>
+  </div>
+</div>
+<script>
+(function () {
+  var form = document.querySelector("[data-repondre]");
+  if (!form) return;
+  var attente = form.querySelector("[data-attente]"), erreur = form.querySelector("[data-erreur]");
+  var zone = form.querySelector("textarea");
+  form.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var corps = new FormData(form);
+    erreur.hidden = true; attente.hidden = false;
+    form.querySelectorAll("button, textarea").forEach(function (b) { b.disabled = true; });
+    fetch("/criteres/repondre", {method: "POST", credentials: "same-origin", body: corps})
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) throw new Error(d.erreur || "échec");
+        location.href = "/premiers-pas/criteres#entretien";
+        location.reload();
+      })
+      .catch(function (e) {
+        attente.hidden = true; erreur.hidden = false;
+        erreur.textContent = "Ça n'a pas abouti : " + e.message + ". Ta réponse est toujours là : réessaie.";
+        form.querySelectorAll("button, textarea").forEach(function (b) { b.disabled = false; });
+      });
+  });
+  document.querySelectorAll("[data-confirmer]").forEach(function (b) {
+    b.addEventListener("click", function (ev) { if (!confirm(b.dataset.confirmer)) ev.preventDefault(); });
+  });
+  if (location.hash === "#entretien") zone.focus();
+})();
+</script>
+{% endblock %}

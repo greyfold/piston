@@ -1,0 +1,321 @@
+[
+ {
+  "jobAdvertisement": {
+   "id": "8d6d4974-ddaa-4d83-80e3-016debfe186f",
+   "createdTime": "2026-10-23T02:18:28.081",
+   "updatedTime": "2026-10-24T02:58:05.383",
+   "status": "PUBLISHED_PUBLIC",
+   "sourceSystem": "EXTERN",
+   "externalReference": null,
+   "stellennummerEgov": null,
+   "stellennummerAvam": null,
+   "fingerprint": "p7e009395b718c01b4c270218157ab281aeefb8e76ba949ad0dd5e9c47a795eeb",
+   "reportingObligation": false,
+   "reportingObligationEndDate": null,
+   "reportToAvam": false,
+   "jobCenterCode": null,
+   "jobCenterUserId": null,
+   "approvalDate": null,
+   "rejectionDate": null,
+   "rejectionCode": null,
+   "rejectionReason": null,
+   "cancellationDate": null,
+   "cancellationCode": null,
+   "jobContent": {
+    "externalUrl": "https://careers.audemarspiguet.com/fr/offer/744000156549820",
+    "numberOfJobs": null,
+    "jobDescriptions": [
+     {
+      "languageIsoCode": "de",
+      "title": "<em>Product</em> <em>Manager</em>",
+      "description": "**Description du poste**\n\nSous la responsabilité du Senior Director <em>Product</em>, vous jouerez un rôle clé dans la définition, le déploiement et la performance de nos collections horlogères."
+     }
+    ],
+    "company": {
+     "name": "Audemars Piguet SA",
+     "street": null,
+     "houseNumber": null,
+     "postalCode": null,
+     "city": null,
+     "countryIsoCode": null,
+     "postOfficeBoxNumber": null,
+     "postOfficeBoxPostalCode": null,
+     "postOfficeBoxCity": null,
+     "phone": null,
+     "email": null,
+     "website": null,
+     "surrogate": false
+    },
+    "employment": {
+     "startDate": null,
+     "endDate": null,
+     "shortEmployment": false,
+     "immediately": false,
+     "permanent": true,
+     "workloadPercentageMin": "100",
+     "workloadPercentageMax": "100",
+     "workForms": []
+    },
+    "location": {
+     "id": null,
+     "remarks": null,
+     "city": "Le Brassus",
+     "postalCode": "1348",
+     "communalCode": "5872",
+     "regionCode": "VD04",
+     "cantonCode": "VD",
+     "countryIsoCode": "CH",
+     "coordinates": {
+      "lon": "6.21",
+      "lat": "46.582"
+     }
+    },
+    "occupations": [
+     {
+      "avamOccupationCode": "101327",
+      "workExperience": null,
+      "educationCode": null,
+      "qualificationCode": null
+     },
+     {
+      "avamOccupationCode": "101327",
+      "workExperience": null,
+      "educationCode": null,
+      "qualificationCode": null
+     }
+    ],
+    "languageSkills": [
+     {
+      "languageIsoCode": "fr",
+      "spokenLevel": null,
+      "writtenLevel": null
+     },
+     {
+      "languageIsoCode": "fr",
+      "spokenLevel": null,
+      "writtenLevel": null
+     }
+    ],
+    "applyChannel": null,
+    "publicContact": null
+   },
+   "publication": {
+    "startDate": "2026-10-22",
+    "endDate": "2026-12-21",
+    "euresDisplay": false,
+    "euresAnonymous": false,
+    "publicDisplay": true,
+    "restrictedDisplay": true,
+    "companyAnonymous": false
+   },
+   "owner": null
+  },
+  "favouriteItem": null
+ },
+ {
+  "jobAdvertisement": {
+   "id": "0b7ac01c-3673-48ff-9bf7-2481d953fd36",
+   "createdTime": "2026-10-20T18:04:31.815",
+   "updatedTime": "2026-10-21T02:33:46.099",
+   "status": "PUBLISHED_PUBLIC",
+   "sourceSystem": "API",
+   "externalReference": "f44494d2-f01d-4390-bb95-83d1e6fabe32",
+   "stellennummerEgov": "242840107",
+   "stellennummerAvam": null,
+   "fingerprint": "S242840107",
+   "reportingObligation": false,
+   "reportingObligationEndDate": null,
+   "reportToAvam": false,
+   "jobCenterCode": null,
+   "jobCenterUserId": null,
+   "approvalDate": null,
+   "rejectionDate": null,
+   "rejectionCode": null,
+   "rejectionReason": null,
+   "cancellationDate": null,
+   "cancellationCode": null,
+   "jobContent": {
+    "externalUrl": "https://www.jobup.ch/fr/emplois/detail/f44494d2-f01d-4390-bb95-83d1e6fabe32/?utm_source=job-room.ch&utm_medium=affiliate&utm_campaign=wb:jobup|tg:b2c|cn:ch|lg:fr|ct:targeting,nonbrand,job|cd:feedonomics-jobroom|mg:job-application|pd:n|tt:organic",
+    "numberOfJobs": null,
+    "jobDescriptions": [
+     {
+      "languageIsoCode": "fr",
+      "title": "<em>Product</em> Owner",
+      "description": ", Business, Data Analytics, Information Systems, or a related field \\* 5\\\\+ years of experience as a <em>Product</em> Owner, <em>Product</em> <em>Manager</em>, or in a comparable role within a data, analytics, business intelligence, or software development environment \\* Experience managing and prioritizing <em>product</em> requirements"
+     }
+    ],
+    "company": {
+     "name": "SICPA SA",
+     "street": null,
+     "houseNumber": null,
+     "postalCode": "1008",
+     "city": "Prilly",
+     "countryIsoCode": "CH",
+     "postOfficeBoxNumber": null,
+     "postOfficeBoxPostalCode": null,
+     "postOfficeBoxCity": null,
+     "phone": null,
+     "email": null,
+     "website": null,
+     "surrogate": false
+    },
+    "employment": {
+     "startDate": null,
+     "endDate": null,
+     "shortEmployment": false,
+     "immediately": false,
+     "permanent": true,
+     "workloadPercentageMin": "100",
+     "workloadPercentageMax": "100",
+     "workForms": []
+    },
+    "location": {
+     "id": null,
+     "remarks": null,
+     "city": "Prilly",
+     "postalCode": "1008",
+     "communalCode": "5589",
+     "regionCode": "VD01",
+     "cantonCode": "VD",
+     "countryIsoCode": "CH",
+     "coordinates": {
+      "lon": "6.608",
+      "lat": "46.534"
+     }
+    },
+    "occupations": [
+     {
+      "avamOccupationCode": "104045",
+      "workExperience": null,
+      "educationCode": null,
+      "qualificationCode": null
+     }
+    ],
+    "languageSkills": [],
+    "applyChannel": {
+     "rawPostAddress": null,
+     "postAddress": null,
+     "emailAddress": null,
+     "phoneNumber": null,
+     "formUrl": "https://www.jobup.ch/fr/emplois/detail/f44494d2-f01d-4390-bb95-83d1e6fabe32/?utm_source=job-room.ch&utm_medium=affiliate&utm_campaign=wb:jobup|tg:b2c|cn:ch|lg:fr|ct:targeting,nonbrand,job|cd:feedonomics-jobroom|mg:job-application|pd:n|tt:organic",
+     "additionalInfo": null
+    },
+    "publicContact": null
+   },
+   "publication": {
+    "startDate": "2026-10-20",
+    "endDate": "2026-11-19",
+    "euresDisplay": true,
+    "euresAnonymous": false,
+    "publicDisplay": true,
+    "restrictedDisplay": true,
+    "companyAnonymous": false
+   },
+   "owner": null
+  },
+  "favouriteItem": null
+ },
+ {
+  "jobAdvertisement": {
+   "id": "be4ad5f8-1b4f-4ec8-84f0-d8395ee04674",
+   "createdTime": "2026-10-20T15:04:17.338",
+   "updatedTime": "2026-10-21T02:33:33.356",
+   "status": "PUBLISHED_PUBLIC",
+   "sourceSystem": "API",
+   "externalReference": "f44494d2-f01d-4390-bb95-83d1e6fabe32",
+   "stellennummerEgov": "242839139",
+   "stellennummerAvam": null,
+   "fingerprint": "S242839139",
+   "reportingObligation": false,
+   "reportingObligationEndDate": null,
+   "reportToAvam": false,
+   "jobCenterCode": null,
+   "jobCenterUserId": null,
+   "approvalDate": null,
+   "rejectionDate": null,
+   "rejectionCode": null,
+   "rejectionReason": null,
+   "cancellationDate": null,
+   "cancellationCode": null,
+   "jobContent": {
+    "externalUrl": "www.jobs.ch/de/stellenangebote/detail/f44494d2-f01d-4390-bb95-83d1e6fabe32/?utm_source=job-room.ch&inv=ppd-p&utm_medium=affiliate&utm_campaign=wb:jobs|tg:b2c|cn:ch|lg:de|ct:targeting,nonbrand,job|cd:feedonomics-jobroom|mg:job-application|pd:n|tt:organic",
+    "numberOfJobs": null,
+    "jobDescriptions": [
+     {
+      "languageIsoCode": "fr",
+      "title": "<em>Product</em> Owner",
+      "description": ", Engineering, Business, Data Analytics, Information Systems, or a related field\n* 5\\+ years of experience as a <em>Product</em> Owner, <em>Product</em> <em>Manager</em>, or in a comparable role within a data, analytics, business intelligence, or software development environment\n* Experience managing and prioritizing <em>product</em> requirements"
+     }
+    ],
+    "company": {
+     "name": "SICPA SA",
+     "street": null,
+     "houseNumber": null,
+     "postalCode": "1008",
+     "city": "Prilly",
+     "countryIsoCode": "CH",
+     "postOfficeBoxNumber": null,
+     "postOfficeBoxPostalCode": null,
+     "postOfficeBoxCity": null,
+     "phone": null,
+     "email": null,
+     "website": null,
+     "surrogate": false
+    },
+    "employment": {
+     "startDate": null,
+     "endDate": null,
+     "shortEmployment": false,
+     "immediately": false,
+     "permanent": true,
+     "workloadPercentageMin": "100",
+     "workloadPercentageMax": "100",
+     "workForms": []
+    },
+    "location": {
+     "id": null,
+     "remarks": null,
+     "city": "Prilly",
+     "postalCode": "1008",
+     "communalCode": "5589",
+     "regionCode": "VD01",
+     "cantonCode": "VD",
+     "countryIsoCode": "CH",
+     "coordinates": {
+      "lon": "6.608",
+      "lat": "46.534"
+     }
+    },
+    "occupations": [
+     {
+      "avamOccupationCode": "104045",
+      "workExperience": null,
+      "educationCode": null,
+      "qualificationCode": null
+     }
+    ],
+    "languageSkills": [],
+    "applyChannel": {
+     "rawPostAddress": null,
+     "postAddress": null,
+     "emailAddress": null,
+     "phoneNumber": null,
+     "formUrl": "www.jobs.ch/de/stellenangebote/detail/f44494d2-f01d-4390-bb95-83d1e6fabe32/?utm_source=job-room.ch&inv=ppd-p&utm_medium=affiliate&utm_campaign=wb:jobs|tg:b2c|cn:ch|lg:de|ct:targeting,nonbrand,job|cd:feedonomics-jobroom|mg:job-application|pd:n|tt:organic",
+     "additionalInfo": null
+    },
+    "publicContact": null
+   },
+   "publication": {
+    "startDate": "2026-10-20",
+    "endDate": "2026-11-19",
+    "euresDisplay": true,
+    "euresAnonymous": false,
+    "publicDisplay": true,
+    "restrictedDisplay": true,
+    "companyAnonymous": false
+   },
+   "owner": null
+  },
+  "favouriteItem": null
+ }
+]

@@ -1,0 +1,55 @@
+# Répertoire des sources de recherche d'emploi (décision du 24.10, annexe G).
+# La plateforme n'interroge que les sources dont l'accès est « automatique ».
+# Ajouter une source : l'inscrire ici d'abord, avec la date et la raison.
+
+job-room:
+  nom: "Job-Room"
+  nature: "Portail officiel suisse de l'emploi (obligation d'annonce : 5 jours d'avance)"
+  acces: "automatique"
+  remarques: "Route du site, POST _search, page et size dans l'adresse (24.10)."
+jobup:
+  nom: "jobup.ch / jobs.ch"
+  nature: "Site d'annonces, Suisse romande (même base que jobs.ch)"
+  acces: "automatique"
+  remarques: "Recherche canton par canton ; le filtre « Lausanne » de l'ancienne chaîne ne voyait que Lausanne et ses environs."
+linkedin:
+  nom: "LinkedIn"
+  nature: "Réseau social, offres d'emploi"
+  acces: "à brancher"
+  remarques: "Décision du 26.10 : offres publiques par Apify (sources/linkedin.py), « automatique » dès que linkedin.actif ; le compte de Camille n'est jamais utilisé. Avant : en session seulement (Q2)."
+mails:
+  nom: "Courrier"
+  nature: "Alertes d'emploi et mails de recruteurs"
+  acces: "en session"
+  remarques: "Origine des 32 annonces à confirmer (Q14)."
+historique:
+  nom: "Historique"
+  nature: "Candidatures antérieures importées le 08.09"
+  acces: "aucun"
+  remarques: "Trace, pas une source de sourcing."
+greenhouse:
+  nom: "Greenhouse"
+  nature: "Logiciel de candidature d'employeurs"
+  acces: "en session"
+successfactors:
+  nom: "SuccessFactors"
+  nature: "Logiciel de candidature d'employeurs"
+  acces: "en session"
+builtin:
+  nom: "Built In"
+  nature: "Site d'annonces spécialisé"
+  acces: "en session"
+bcvs:
+  nom: "BCVS"
+  nature: "Page carrière de la Banque Cantonale du Valais"
+  acces: "en session"
+romande-energie:
+  nom: "Romande Energie"
+  nature: "Page carrière d'un employeur cible (Johdi Suite)"
+  acces: "automatique"
+  remarques: "Route JSON Johdi Suite qualifiée le 15.09, branchée le 26.10 (sources/employeurs.py) : toutes les offres ouvertes à chaque passage."
+reseau:
+  nom: "Réseau"
+  nature: "Contacts et recommandations"
+  acces: "en session"
+  remarques: "Proposée pour mesurer ce que rapporte le réseau (Q18)."

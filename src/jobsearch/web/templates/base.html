@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{% block titre %}Recherche d'emploi{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+{% from "_macros.html" import icone %}
+<link rel="stylesheet" href="/static/style.css?v={{ version_css() }}">
+<script src="/static/champs.js?v={{ version_css() }}" defer></script>
+<script src="/static/compositeur.js?v={{ version_css() }}" defer></script>
+</head>
+<body{% if accueil %} class="accueil"{% endif %}>
+<header class="barre"><div class="dedans">
+  {% if accueil %}
+  <span class="marque">Recherche <span>d'emploi</span></span>
+  {% else %}
+  <a class="marque" href="/">Recherche <span>d'emploi</span></a>
+  {# Trois espaces de travail, puis les réglages. Pour un nouvel utilisateur, Offres s'ouvre avec
+     la recherche et Candidatures avec la possibilité de postuler. #}
+  <nav class="onglets" aria-label="Navigation principale">
+    {% for href, nom, fonction in [("/", "Aujourd'hui", none), ("/offres", "Offres", "offres"), ("/candidatures", "Candidatures", "postuler")]
+       if fonctions is not defined or not fonction or fonctions[fonction] %}
+    {% set actif = nav == href or (href != '/' and nav.startswith(href ~ '/')) %}
+    <a href="{{ href }}" class="{{ 'actif' if actif }}"{% if actif %} aria-current="page"{% endif %}>{{ nom }}</a>
+    {% endfor %}
+  </nav>
+  <a href="/reglages" class="lien-reglages{{ ' actif' if dans_reglages }}"{% if nav == '/reglages' %} aria-current="page"{% endif %}>{{ icone("reglages") }}<span>Réglages</span></a>
+  {% endif %}
+</div></header>
+<main>
+{% if profil_manquants and not accueil and not premiers_pas_affiches and not nav.startswith(('/profil', '/connexion')) %}<div class="bandeau attention"><span class="point"></span><span>Profil incomplet ({{ profil_manquants | map('last') | join(', ') }}) : <a href="/profil">le compléter</a>.</span></div>{% endif %}
+{% if dans_reglages and nav != '/reglages' and not accueil %}<p class="petit fil"><a href="/reglages">← Réglages</a></p>{% endif %}
+{% if msg %}<div class="flash {{ '' if ok else 'ko' }}" role="status">{{ msg }}</div>{% endif %}
+{% block contenu %}{% endblock %}
+</main>
+{% include "_connexion_ia.html" %}
+<script>
+// Dossier en préparation : l'étape se met à jour toutes les 5 s, la page se recharge quand il est fait.
+document.querySelectorAll("[data-suivi-dossier]").forEach(function (el) {
+  var minuterie = setInterval(function () {
+    fetch("/dossier/" + el.dataset.suiviDossier + "/etat", {credentials: "same-origin"})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d) return;
+        if (d.etat !== "en_cours") { clearInterval(minuterie); location.replace(location.pathname + location.hash); return; }
+        el.textContent = d.libelle;
+      })
+      .catch(function () {});
+  }, 5000);
+});
+
+// Tâche en arrière-plan (évaluation d'une annonce ajoutée) : la page se recharge jusqu'au résultat.
+document.querySelectorAll("[data-recharger]").forEach(function (el) {
+  setTimeout(function () { location.replace(location.pathname + location.hash); }, 1000 * el.dataset.recharger);
+});
+
+// Bouton Claude : bloqué avec son indicateur dès le clic, le temps que la session démarre.
+document.querySelectorAll("form[data-occupe]").forEach(function (form) {
+  form.addEventListener("submit", function () {
+    var b = form.querySelector("button");
+    if (b.disabled) return;
+    b.dataset.libelle = b.textContent;
+    b.textContent = form.dataset.occupe;
+    b.classList.add("occupe");
+    b.setAttribute("aria-busy", "true");
+    setTimeout(function () { b.disabled = true; });   // une fois l'envoi parti : un second clic ne relance rien
+  });
+});
+// Retour arrière : la page revient du cache avec le bouton bloqué ; on le rend.
+window.addEventListener("pageshow", function (e) {
+  if (!e.persisted) return;
+  document.querySelectorAll("button[data-libelle]").forEach(function (b) {
+    b.disabled = false; b.classList.remove("occupe"); b.removeAttribute("aria-busy");
+    b.textContent = b.dataset.libelle; delete b.dataset.libelle;
+  });
+});
+// Recherche dans une liste déroulante : les options qui ne contiennent pas le texte sont retirées
+// (et remises ensuite) ; masquer une option ne marche pas partout, notamment sur iPhone.
+document.querySelectorAll("input[data-filtre]").forEach(function (champ) {
+  var liste = document.getElementById(champ.dataset.filtre);
+  var groupes = Array.prototype.map.call(liste.querySelectorAll("optgroup"), function (g) {
+    return {g: g, options: Array.prototype.slice.call(g.children)};
+  });
+  var vide = liste.querySelector("option[value='']"), libelle = vide && vide.textContent;
+  var plier = function (s) { return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); };
+  champ.addEventListener("input", function () {
+    var mots = plier(champ.value).split(/\s+/).filter(Boolean), premiere = null;
+    groupes.forEach(function (x) {
+      x.options.forEach(function (o) {
+        var garder = mots.every(function (m) { return plier(o.textContent).indexOf(m) >= 0; });
+        if (garder && !premiere) premiere = o;
+        if (garder) x.g.appendChild(o); else if (o.parentNode) o.parentNode.removeChild(o);
+      });
+      x.g.hidden = !x.g.children.length;
+    });
+    if (vide) vide.textContent = mots.length && !premiere ? "— aucune candidature ouverte ne correspond —" : libelle;
+    if (mots.length) liste.value = premiere ? premiere.value : "";   // le premier résultat est choisi
+  });
+});
+// Session Claude en cours : l'état se met à jour toutes les 5 s ; la page se recharge quand elle s'arrête.
+document.querySelectorAll("[data-suivi-tache]").forEach(function (el) {
+  var minuterie = setInterval(function () {
+    fetch("/tache/" + el.dataset.suiviTache + "/etat", {credentials: "same-origin"})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (t) {
+        if (!t) return;
+        if (!t.active) {
+          clearInterval(minuterie);
+          var q = new URLSearchParams(location.search); q.delete("msg"); q.delete("ok");   // l'ancien message n'a plus cours
+          location.replace(location.pathname + (q.toString() ? "?" + q : "") + location.hash);
+          return;
+        }
+        el.textContent = t.libelle;
+      })
+      .catch(function () {});
+  }, 5000);
+});
+</script>
+</body>
+</html>

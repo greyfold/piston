@@ -1,0 +1,41 @@
+[project]
+name = "jobsearch"
+version = "0.2.0"
+description = "Recherche d'emploi : application Mac locale, assistée par Claude"
+authors = [
+    { name = "greyfold" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.162.0",
+    "httpx>=0.28.1",
+    "jinja2>=3.1.6",
+    "mammoth>=1.13.0",
+    "markdown>=3.11.2",
+    "mcp>=2.3.0",
+    "playwright>=1.64.1",
+    "pydantic>=2.14",
+    "pypdf>=7.0.0",
+    "python-docx>=1.2.0",
+    "python-multipart>=0.0.32",
+    "pyyaml>=6.0.3",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.scripts]
+jobsearch = "jobsearch.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.12,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["live: interroge les vrais sites (opt-in : -m live)",
+           "navigateur: lance Chrome (opt-in : -m navigateur)"]
+addopts = "-m 'not live and not navigateur'"

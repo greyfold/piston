@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% from "_macros.html" import bouton_action, meta, decision, notes, alertes, delais, annuler_go %}
+{% block titre %}{{ f.entreprise }} · {{ f.titre }}{% endblock %}
+{% block contenu %}
+{% set retour = "/annonce/" ~ f.empreinte %}
+<p class="petit"><a href="/">← Aujourd'hui</a></p>
+<div class="tete" style="display:flex;justify-content:space-between;gap:1rem;align-items:flex-start">
+  <div><h1>{{ f.titre }}</h1><div><b>{{ f.entreprise }}</b></div><div class="muet petit">{{ meta(f) }}</div>{{ delais(f) }}</div>
+  <span class="puce {{ f.statut }}">{{ f.statut }}</span>
+</div>
+
+{% if ent %}
+<nav class="onglets-annonce" aria-label="Vues de l'annonce">
+  <a href="/annonce/{{ f.empreinte }}" class="{{ 'actif' if onglet == 'annonce' }}"{% if onglet == 'annonce' %} aria-current="page"{% endif %}>Annonce</a>
+  <a href="/annonce/{{ f.empreinte }}?onglet=entretien" class="{{ 'actif' if onglet == 'entretien' }}"{% if onglet == 'entretien' %} aria-current="page"{% endif %}>Entretien{% if ent.date %} <span class="petit">· {{ ent.date | jour_fr }}{% if ent.heure %} {{ ent.heure }}{% endif %}</span>{% endif %}</a>
+</nav>
+{% endif %}
+
+<div class="grille-annonce" style="margin-top:1.25rem">
+  <div class="pile">
+    {% if onglet == "entretien" %}
+    <div class="carte rendez-vous">
+      <h3>Entretien{% if ent.date %} {{ ent.date | jour_fr }}{% if ent.heure %} à {{ ent.heure }}{% endif %}{% endif %}</h3>
+      <dl class="champs">
+        {% if ent.date %}<dt>Quand</dt><dd>{{ ent.date | date_fr }}{% if ent.heure %}, {{ ent.heure }}{% endif %}{% if ent.duree %} · {{ ent.duree }}{% endif %}</dd>{% endif %}
+        {% if ent.lieu %}<dt>Où</dt><dd>{{ ent.lieu }}</dd>{% endif %}
+        {% if ent.acces %}<dt>Accès</dt><dd>{{ ent.acces }}</dd>{% endif %}
+        {% if ent.avec %}<dt>Avec</dt><dd>{{ ent.avec }}</dd>{% endif %}
+        {% if ent.convocation %}<dt>Convocation</dt><dd>{{ ent.convocation }}</dd>{% endif %}
+      </dl>
+    </div>
+    <div class="texte-annonce prepa">{{ ent.corps | texte_html }}</div>
+    {% else %}
+    {% if dos %}
+    <a class="carte lien-dossier" href="/dossier/{{ f.empreinte }}">
+      <span><b>Dossier de candidature</b>
+        {% if dos.etat == "en_cours" %}<span class="muet petit" data-suivi-dossier="{{ f.empreinte }}">{{ libelle_dossier(dos) }}</span>
+        {% else %}<span class="muet petit">{{ {"pret": "prêt", "a_revoir": "à revoir avant envoi", "echec": "en échec", "interrompu": "interrompu : à refaire"}.get(dos.etat, dos.etat) }}{% if dos.couverture is not none %} · couverture {{ dos.couverture }} %{% endif %}{% if dos.origine == "coffre" %} · ancienne chaîne{% endif %}</span>{% endif %}</span>
+      <span aria-hidden="true">→</span>
+    </a>
+    {% endif %}
+    <div class="carte" id="evaluation">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem">
+        <h3>Adéquation</h3>
+        {% if not evaluation_en_cours %}<form method="post" action="/annonce/{{ f.empreinte }}/evaluer"><button class="discret petit">{{ "Réévaluer" if ev else "Évaluer" }}</button></form>{% endif %}
+      </div>
+      {% if evaluation_en_cours %}
+        <p class="muet" role="status" data-recharger="10">Évaluation en cours : la note s'affichera ici d'elle-même.</p>
+      {% elif ev %}
+        {{ notes(ev) }}
+        <p style="margin:.5rem 0">{{ ev.resultat.resume }}</p>
+        <p class="petit muet" style="margin:0 0 .5rem">Angle : {{ ev.resultat.angle }} · évaluée le {{ ev.cree_le[:10] | date_fr(True) }}{% if f.texte_origine != "plateforme" %} · sur un résumé, pas l'original{% endif %}</p>
+        {{ alertes(ev) }}
+        {% set sal = ev.resultat.salaire %}
+        {% if sal %}
+        <div class="bloc-salaire">
+          <b>Salaire {{ "indiqué" if sal.annonce_l_indique else "estimé" }} :</b>
+          {{ "{:,}".format(sal.minimum).replace(",", "’") }} – {{ "{:,}".format(sal.maximum).replace(",", "’") }} CHF brut par an à 100 %
+          <span class="muet">(confiance {{ sal.confiance }})</span>
+          {% if sal.extrait %}<q{% if f.langue %} lang="{{ f.langue }}"{% endif %}>{{ sal.extrait }}</q>{% endif %}
+          <div class="petit muet">{{ sal.raisonnement }}</div>
+        </div>
+        {% endif %}
+        <details style="margin-top:.6rem"><summary class="petit">Critères et exigences</summary>
+          <div class="tableau" style="margin-top:.5rem"><table><tbody>
+            {% for c in ev.resultat.criteres %}<tr><td class="petit">{{ c.critere }}</td><td><span class="puce {{ 'retard' if c.etat == 'ko' else 'B' if c.etat == 'ok' else '' }}">{{ c.etat }}</span></td><td class="petit">{{ c.note }}</td></tr>{% endfor %}
+          </tbody></table></div>
+          <div class="tableau" style="margin-top:.5rem"><table><tbody>
+            {% for x in ev.resultat.exigences %}<tr><td class="petit"{% if f.langue %} lang="{{ f.langue }}"{% endif %}>{{ x.exigence }}</td><td><span class="puce {{ 'B' if x.couverture == 'oui' else 'retard' if x.couverture == 'non' else '' }}">{{ x.couverture }}</span></td><td class="petit">{{ x.appui }}</td></tr>{% endfor %}
+          </tbody></table></div>
+        </details>
+      {% else %}<p class="petit muet" style="margin:.4rem 0 0">Pas encore évaluée.</p>{% endif %}
+    </div>
+    {% if f.statut in ("A", "B", "nouvelle") %}
+    <div class="carte"><h3>Décision</h3>{{ decision(f, raisons, retour, fonctions) }}</div>
+    {% elif f.statut == "retenue" %}
+    <div class="carte"><h3>Go donné</h3>{{ annuler_go(f, raisons, retour) }}</div>
+    {% endif %}
+    {% if f.angle or f.exigences %}
+    <div class="carte">
+      {% if f.angle %}<p style="margin:0"><b>Angle :</b> {{ f.angle }}</p>{% endif %}
+      {% if f.exigences %}<ul class="exig">{% for e in f.exigences %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    </div>
+    {% endif %}
+    {% set langues = {"fr": "français", "en": "anglais", "de": "allemand"} %}
+    {% if f.texte_origine != "plateforme" %}
+    <div class="bandeau attention">
+      <span class="point"></span>
+      <span>
+        {% if f.texte_origine == "coffre" %}Ce texte est un résumé de l'ancienne chaîne, pas l'annonce originale : ne pas en tirer les mots-clés du CV.
+        {% elif f.texte_origine == "extrait" %}Seul un extrait de l'annonce a été lu.
+        {% elif f.texte_origine == "introuvable" %}L'annonce originale n'est plus en ligne sur les plateformes connues ; le texte ci-dessous est un résumé.
+        {% else %}Texte de l'annonce absent.{% endif %}
+        {% if f.texte_origine != "introuvable" and f.ids_source %}
+        <form method="post" action="/annonce/{{ f.empreinte }}/original" style="display:inline"><button class="discret">Recharger l'original</button></form>
+        {% endif %}
+      </span>
+    </div>
+    {% endif %}
+    <div class="texte-annonce"{% if f.langue %} lang="{{ f.langue }}"{% endif %}>
+      {% if f.texte %}{{ f.texte | annonce_html(f.titre) }}{% else %}<p class="muet">Texte de l'annonce absent.</p>{% endif %}
+      <p class="source">{% if f.texte_origine == "plateforme" %}Texte original{% else %}Texte{% endif %}
+        {%- if f.sources %} · {{ f.sources | join(", ") }}{% endif %}
+        {%- if f.langue %} · {{ langues.get(f.langue, f.langue) }}{% endif %}
+        {%- if f.url %} · <a href="{{ f.url }}" target="_blank" rel="noopener noreferrer">voir en ligne ↗</a>{% endif %}</p>
+    </div>
+    {% if f.extra and f.extra.resume_coffre %}
+    <details class="carte"><summary class="petit">Résumé de l'ancienne chaîne (pour mémoire)</summary>
+      <div class="texte-annonce" style="border:0;padding:.5rem 0 0">{{ f.extra.resume_coffre | annonce_html }}</div></details>
+    {% endif %}
+    {% endif %}
+  </div>
+
+  <aside class="pile">
+    <div class="carte">
+      <dl class="champs">
+        {% if f.motif %}<dt>Motif</dt><dd>{{ f.motif }}{% if f.passe_ecart is not none %} (passe {{ f.passe_ecart }}){% endif %}</dd>{% endif %}
+        {% if f.url %}<dt>Annonce</dt><dd><a href="{{ f.url }}" target="_blank" rel="noopener noreferrer">ouvrir ↗</a></dd>{% endif %}
+        {% if f.url_postuler %}<dt>Postuler</dt><dd><a href="{{ f.url_postuler }}" target="_blank" rel="noopener noreferrer">formulaire officiel ↗</a></dd>{% endif %}
+        {% if dos %}<dt>Dossier</dt><dd><a href="/dossier/{{ f.empreinte }}">ouvrir le dossier</a></dd>{% endif %}
+        {% if f.postulee_le %}<dt>Envoyée</dt><dd>{{ f.postulee_le | date_fr }}{% if f.canal_envoi %} · {{ f.canal_envoi }}{% endif %}</dd>{% endif %}
+        {% if f.prochaine_action %}<dt>Prochaine</dt><dd>{{ f.prochaine_action }}{% if f.echeance %} · {{ f.echeance | date_fr(True) }}{% endif %}</dd>{% endif %}
+        {% if f.accuse_le %}<dt>Accusé</dt><dd>{{ f.accuse_le | date_fr }}</dd>{% endif %}
+        {% if f.reponse_le %}<dt>Réponse</dt><dd>{{ f.reponse_le | date_fr }}</dd>{% endif %}
+        {% if f.motif_refus %}<dt>Motif refus</dt><dd>{{ f.motif_refus }}</dd>{% endif %}
+        {% if envoyee and fonctions.jobroom %}<dt>Job-Room</dt><dd>{% if f.jobroom_saisie_le %}preuve saisie le {{ f.jobroom_saisie_le | date_fr }}{% elif jr_limite %}à saisir avant le {{ jr_limite | date_fr }}{% endif %}{% if f.jobroom_maj == "a_faire" %} · refus à reporter{% elif f.jobroom_maj == "fait" %} · refus reporté{% endif %}</dd>{% endif %}
+        {% if f.flag_rh %}<dt>Flag RH</dt><dd>{{ f.flag_rh }}</dd>{% endif %}
+        {% if f.raison_decision or f.raison_note %}<dt>Raisons</dt><dd>{{ f.raison_decision | join(", ") }}{% if f.raison_note %} · {{ f.raison_note }}{% endif %}</dd>{% endif %}
+        <dt>Empreinte</dt><dd><code>{{ f.empreinte }}</code></dd>
+      </dl>
+    </div>
+
+    <div class="carte">
+      <h3>Suivi</h3>
+      {% if f.statut in ("retenue", "A", "B") %}
+      <form method="post" action="/action" class="boutons">
+        <input type="hidden" name="empreinte" value="{{ f.empreinte }}"><input type="hidden" name="retour" value="{{ retour }}">
+        <input type="hidden" name="type" value="candidature">
+        <input type="date" name="date" value="{{ aujourdhui }}" aria-label="Date d'envoi">
+        <input type="text" name="canal" placeholder="Canal" aria-label="Canal" size="10">
+        <button class="go">Marquer envoyée</button>
+      </form>
+      {% endif %}
+      {% if f.statut in ("candidature", "entretien", "offre", "retenue") %}
+      <form method="post" action="/action" class="boutons">
+        <input type="hidden" name="empreinte" value="{{ f.empreinte }}"><input type="hidden" name="retour" value="{{ retour }}">
+        <input type="date" name="date" value="{{ aujourdhui }}" aria-label="Date">
+        <input type="text" name="motif" placeholder="Motif (refus)" aria-label="Motif" size="12">
+        <button name="type" value="entretien">Entretien</button>
+        <button name="type" value="offre">Offre</button>
+        <button class="non" name="type" value="refus">Refus</button>
+      </form>
+      <div class="boutons">
+        {{ bouton_action(f, "relance_faite", "Relance faite", retour) }}
+        {{ bouton_action(f, "accuse", "Accusé reçu", retour) }}
+        {{ bouton_action(f, "reponse", "Réponse reçue", retour) }}
+      </div>
+      {% endif %}
+      {% if envoyee and fonctions.jobroom and not f.jobroom_saisie_le %}<div class="boutons">{{ bouton_action(f, "jobroom_saisie", "Preuve Job-Room saisie", retour) }}</div>{% endif %}
+      {% if fonctions.jobroom and f.jobroom_maj == "a_faire" %}<div class="boutons">{{ bouton_action(f, "jobroom_refus", "Refus reporté sur Job-Room", retour) }}</div>{% endif %}
+      {% if f.statut == "C" %}<div class="boutons">{{ bouton_action(f, "remettre_b", "Remettre en B", retour) }}</div>{% endif %}
+      <form method="post" action="/action" class="boutons">
+        <input type="hidden" name="empreinte" value="{{ f.empreinte }}"><input type="hidden" name="retour" value="{{ retour }}">
+        <input type="hidden" name="type" value="note">
+        <input class="note" type="text" name="note" placeholder="Ajouter une note au journal" aria-label="Note" required>
+        <button>Noter</button>
+      </form>
+    </div>
+
+    <div class="carte">
+      <h3>Journal</h3>
+      <ul class="journal">
+        {% for j in journal | reverse %}<li><time>{{ j.quand[:10] | date_fr(True) }}</time>{{ j.texte }}</li>{% endfor %}
+      </ul>
+    </div>
+  </aside>
+</div>
+{% endblock %}

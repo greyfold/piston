@@ -1,0 +1,31 @@
+# Profil des tests : celui de Camille pour les consignes, coordonnées fictives.
+identite:
+  prenom: Camille
+  nom: Exemple
+  pays: Suisse
+  adresse: Rue d'Exemple 1
+  npa: '1000'
+  ville: Lausanne
+  telephone: +41 79 000 00 00
+  email: camille@example.ch
+recherche:
+  niveau: senior
+  region: Suisse romande
+evaluation:
+  criteres:
+  - 'trajet : depuis Lausanne'
+  - présence
+  - taux et contrat
+  - niveau et mandat de cadrage
+  - dimension IA
+  - langue
+  interet: mandat de cadrage, dimension IA, structure
+  angles:
+  - UX leadership
+  - Produit et IA
+  - Innovation et conduite du changement
+dossier:
+  differenciateur: IA
+  regles:
+  - 'Brevet fédéral en cours : dans la formation, pas dans les certifications.'
+  - 'Green Motion : rester vague sur le lien e-commerce / ERP.'

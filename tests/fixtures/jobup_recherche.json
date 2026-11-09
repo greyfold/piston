@@ -1,0 +1,277 @@
+{
+ "start": 0,
+ "rows": 3,
+ "num_pages": 4,
+ "current_page": 1,
+ "total_hits": 10,
+ "documents": [
+  {
+   "_links": {
+    "detail_fr": {
+     "href": "https://www.jobup.ch/fr/emplois/detail/b6d2e591-27c8-4ce6-a43f-3c71551705ca/",
+     "templated": false,
+     "methods": [
+      "GET"
+     ]
+    },
+    "detail_en": {
+     "href": "https://www.jobup.ch/en/jobs/detail/b6d2e591-27c8-4ce6-a43f-3c71551705ca/",
+     "templated": false,
+     "methods": [
+      "GET"
+     ]
+    }
+   },
+   "categories": [
+    {
+     "lvl_0": 716,
+     "path": "/716/721",
+     "lvl_1": 721
+    }
+   ],
+   "company_visible": true,
+   "age": 24,
+   "regions": [
+    {
+     "lvl_0": 52,
+     "lvl_1": 55,
+     "lvl_2": 0,
+     "path": "/52/55"
+    }
+   ],
+   "slug": "b6d2e591-27c8-4ce6-a43f-3c71551705ca-product-manager-trafic-des-paiements",
+   "company_slug": "811e0e53-46f3-4246-a111-bdcd534a64e9-banque-cantonale-vaudoise",
+   "tags": [],
+   "job_id": "b6d2e591-27c8-4ce6-a43f-3c71551705ca",
+   "datapool_id": "b6d2e591-27c8-4ce6-a43f-3c71551705ca",
+   "title": "Product Manager - Trafic des paiements",
+   "preview": "Product Manager - Trafic des paiements \nRejoignez notre département Opérations et contribuez à la transformation des paiements en Suisse. En tant ...",
+   "company_name": "Banque Cantonale Vaudoise",
+   "company_id": "811e0e53-46f3-4246-a111-bdcd534a64e9",
+   "education_ids": [],
+   "language_skills": [],
+   "work_experience": [],
+   "publication_date": "2026-09-30T13:47:57+02:00",
+   "initial_publication_date": "2026-10-02T09:32:32+00:00",
+   "place": "Lausanne",
+   "company_logo_file": "https://media.jobs.ch/media/bffc4634-aa40-42dd-996d-ec54cc1de036",
+   "company_segmentation": "gu",
+   "employment_position_ids": [
+    3
+   ],
+   "employment_grades": [
+    100
+   ],
+   "employment_type_ids": [
+    "5"
+   ],
+   "benefit_ids": [],
+   "offer_id": 1,
+   "is_active": true,
+   "metadata": [],
+   "coordinates": {
+    "lat": 46.5196,
+    "lon": 6.63222
+   },
+   "is_paid": true,
+   "images": [
+    {
+     "context": "logo",
+     "url": "https://media.jobs.ch/media/e4f66f08-4189-426c-86e0-c24f150bf28d",
+     "updated": "2026-10-20T00:17:23+02:00"
+    },
+    {
+     "context": "background",
+     "url": "https://media.jobs.ch/media/6e44b838-6b31-4b43-b0fa-131a425878b2",
+     "updated": "2026-10-20T00:17:23+02:00"
+    }
+   ],
+   "layout_type": "STANDARD"
+  },
+  {
+   "_links": {
+    "detail_fr": {
+     "href": "https://www.jobup.ch/fr/emplois/detail/f44494d2-f01d-4390-bb95-83d1e6fabe32/",
+     "templated": false,
+     "methods": [
+      "GET"
+     ]
+    },
+    "detail_en": {
+     "href": "https://www.jobup.ch/en/jobs/detail/f44494d2-f01d-4390-bb95-83d1e6fabe32/",
+     "templated": false,
+     "methods": [
+      "GET"
+     ]
+    }
+   },
+   "categories": [
+    {
+     "lvl_0": 716,
+     "path": "/716/721",
+     "lvl_1": 721
+    }
+   ],
+   "company_visible": true,
+   "age": 4,
+   "regions": [
+    {
+     "lvl_0": 52,
+     "lvl_1": 55,
+     "lvl_2": 0,
+     "path": "/52/55"
+    }
+   ],
+   "slug": "f44494d2-f01d-4390-bb95-83d1e6fabe32-product-owner",
+   "company_slug": "a7743d16-e3d0-4d05-b6a3-f1095ba82ad2-sicpa-sa",
+   "tags": [
+    {
+     "type": "employment_position",
+     "value": 1
+    }
+   ],
+   "job_id": "f44494d2-f01d-4390-bb95-83d1e6fabe32",
+   "datapool_id": "f44494d2-f01d-4390-bb95-83d1e6fabe32",
+   "title": "Product Owner",
+   "preview": "Product Owner \nEstablished in 1927, SICPA is a Swiss private technology company that supports the effective governance and long-term prosperity of ...",
+   "company_name": "SICPA SA",
+   "company_id": "a7743d16-e3d0-4d05-b6a3-f1095ba82ad2",
+   "education_ids": [],
+   "language_skills": [],
+   "work_experience": [],
+   "publication_date": "2026-10-20T11:26:15+02:00",
+   "initial_publication_date": "2026-10-20T09:26:15+00:00",
+   "place": "Prilly",
+   "company_logo_file": "https://media.jobs.ch/media/a3ced256-75ca-4598-a294-3c83cfa7e64c",
+   "company_segmentation": "kmu",
+   "employment_position_ids": [
+    1
+   ],
+   "employment_grades": [
+    100
+   ],
+   "employment_type_ids": [
+    "5"
+   ],
+   "benefit_ids": [],
+   "offer_id": 6,
+   "is_active": true,
+   "metadata": [],
+   "coordinates": {
+    "lat": 46.53431,
+    "lon": 6.60564
+   },
+   "is_paid": true,
+   "images": [
+    {
+     "context": "logo",
+     "url": "https://media.jobs.ch/media/64508a6a-19ba-4559-992e-9f9250cd3f62",
+     "updated": "2026-10-20T11:51:09+02:00"
+    }
+   ],
+   "layout_type": "STANDARD"
+  },
+  {
+   "_links": {
+    "detail_fr": {
+     "href": "https://www.jobup.ch/fr/emplois/detail/df8c5e8e-87b2-4acf-88d8-278a7dc0b12d/",
+     "templated": false,
+     "methods": [
+      "GET"
+     ]
+    },
+    "detail_en": {
+     "href": "https://www.jobup.ch/en/jobs/detail/df8c5e8e-87b2-4acf-88d8-278a7dc0b12d/",
+     "templated": false,
+     "methods": [
+      "GET"
+     ]
+    }
+   },
+   "categories": [
+    {
+     "lvl_0": 716,
+     "path": "/716/721",
+     "lvl_1": 721
+    }
+   ],
+   "company_visible": true,
+   "age": 1,
+   "regions": [
+    {
+     "lvl_0": 52,
+     "lvl_1": 55,
+     "lvl_2": 0,
+     "path": "/52/55"
+    }
+   ],
+   "slug": "df8c5e8e-87b2-4acf-88d8-278a7dc0b12d-specialiste-produits-interface-automation-suisse-romande",
+   "company_slug": "9011b8f2-d845-4fb7-9658-fd825b8c7645-phoenix-contact-ag",
+   "tags": [
+    {
+     "type": "employment_grade",
+     "value_min": 80,
+     "value_max": 100
+    }
+   ],
+   "job_id": "df8c5e8e-87b2-4acf-88d8-278a7dc0b12d",
+   "datapool_id": "df8c5e8e-87b2-4acf-88d8-278a7dc0b12d",
+   "title": "Spécialiste produits Interface & Automation (Suisse romande)",
+   "preview": "Spécialiste produits Interface & Automation (Suisse romande) \nNous créons des connexions – à travers le monde \nLe groupe Phoenix Contact est une ...",
+   "company_name": "Phoenix Contact AG",
+   "company_id": "9011b8f2-d845-4fb7-9658-fd825b8c7645",
+   "education_ids": [],
+   "language_skills": [
+    {
+     "language": "de",
+     "level": 2
+    },
+    {
+     "language": "fr",
+     "level": 3
+    }
+   ],
+   "work_experience": [],
+   "publication_date": "2026-10-23T14:29:58+02:00",
+   "initial_publication_date": "2026-10-23T12:29:58+00:00",
+   "place": "Westschweiz",
+   "company_logo_file": "https://media.jobs.ch/media/f69db44e-ef32-4e1c-9179-ad5088991b7b",
+   "company_segmentation": "gu",
+   "employment_position_ids": [
+    2
+   ],
+   "employment_grades": [
+    80,
+    85,
+    90,
+    95,
+    100
+   ],
+   "employment_type_ids": [
+    "5"
+   ],
+   "benefit_ids": [],
+   "offer_id": 6,
+   "is_active": true,
+   "metadata": [],
+   "coordinates": {
+    "lat": 46.55458,
+    "lon": 6.69478
+   },
+   "is_paid": true,
+   "images": [
+    {
+     "context": "logo",
+     "url": "https://media.jobs.ch/media/f69db44e-ef32-4e1c-9179-ad5088991b7b",
+     "updated": "2026-10-23T14:29:58+02:00"
+    },
+    {
+     "context": "background",
+     "url": "https://media.jobs.ch/media/efdf8103-dbe9-410f-b48c-4084dd97dc49",
+     "updated": "2026-10-23T14:29:58+02:00"
+    }
+   ],
+   "layout_type": "STANDARD"
+  }
+ ]
+}

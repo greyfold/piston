@@ -1,0 +1,110 @@
+{
+ "publication_end_date": "2054-02-16",
+ "_links": {
+  "detail_fr": {
+   "href": "https://www.jobup.ch/fr/emplois/detail/b6d2e591-27c8-4ce6-a43f-3c71551705ca/",
+   "templated": false,
+   "methods": [
+    "GET"
+   ]
+  },
+  "detail_en": {
+   "href": "https://www.jobup.ch/en/jobs/detail/b6d2e591-27c8-4ce6-a43f-3c71551705ca/",
+   "templated": false,
+   "methods": [
+    "GET"
+   ]
+  }
+ },
+ "categories": [
+  {
+   "lvl_0": 716,
+   "path": "/716/721",
+   "lvl_1": 721
+  }
+ ],
+ "company_visible": true,
+ "regions": [
+  {
+   "lvl_0": 52,
+   "lvl_1": 55,
+   "lvl_2": 0,
+   "path": "/52/55"
+  }
+ ],
+ "slug": "b6d2e591-27c8-4ce6-a43f-3c71551705ca-product-manager-trafic-des-paiements",
+ "company_slug": "811e0e53-46f3-4246-a111-bdcd534a64e9-banque-cantonale-vaudoise",
+ "application_method": "application_url",
+ "job_source_type": "template",
+ "last_online_date": "2026-10-23",
+ "job_id": "b6d2e591-27c8-4ce6-a43f-3c71551705ca",
+ "datapool_id": "b6d2e591-27c8-4ce6-a43f-3c71551705ca",
+ "title": "Product Manager - Trafic des paiements",
+ "company_name": "Banque Cantonale Vaudoise",
+ "company_id": "811e0e53-46f3-4246-a111-bdcd534a64e9",
+ "education_ids": [],
+ "language_skills": [],
+ "work_experience": [],
+ "publication_date": "2026-09-30T13:47:57+02:00",
+ "initial_publication_date": "2026-10-02T09:32:32+00:00",
+ "place": "Lausanne",
+ "street": "",
+ "application_questions": [],
+ "employment_position_ids": [
+  3
+ ],
+ "employment_grades": [
+  100
+ ],
+ "employment_type_ids": [
+  "5"
+ ],
+ "benefit_ids": [],
+ "external_url": "",
+ "application_url": "https://jobs.bcv.ch/talentcommunity/apply/30777/?locale=fr_FR",
+ "zipcode": "1003",
+ "synonym": "Chef de produit",
+ "template_profession": "Product Manager - Trafic des paiements",
+ "template_text": "<p> </p> <p>Rejoignez notre département Opérations et contribuez à la transformation des paiements en Suisse. En tant que Product Manager, vous aurez l’opportunité de piloter des projets stratégiques en collaboration avec de nombreux acteurs internes et externes, tout en garantissant conformité, innovation et performance de nos solutions.</p> <p> <strong> </strong> </p> <p> <strong>Vos missions principales</strong> </p> <p> <strong> </strong> </p> <ul> <li>Assurer le pilotage opérationnel de l’offre produit du trafic des paiements en Suisse en soutien de la stratégie de la Banque,</li> <li>Piloter la performance de l’offre des produits trafic des paiements (data-driven),</li> <li>Identifier les opportunités de croissance et d’évolution du produit, réaliser des prototypes et promouvoir l’innovation dans les moyens de paiement,</li> <li>Élaborer, coordonner et maintenir la roadmap produit dédiée,</li> <li>Préparer les lancements de produits, incluant la mise en place de la communication ainsi que d’indicateurs clés de succès,</li> <li>Assurer la veille technologique et de marché de l’offre des produits du trafic des paiements,</li> <li>Collaborer avec les équipes internes et partenaires externes.</li> </ul> <p> </p> <p> </p> <p> <strong>Vos compétences techniques</strong> </p> <p> <strong> </strong> </p> <ul> <li>Excellente maîtrise des systèmes de paiement : SEPA, SWIFT, ISO 20022, Instant payment, SIC, SIX,</li> <li>Connaissance approfondie des plateformes de paiement et modèles transactionnels,</li> <li>Très bonne connaissances sectorielles ou réglementaires du trafic des paiements en Suisse (réglementation bancaire, sécurité, compliance),</li> <li>Expérience confirmée en gestion de roadmap produit, priorisation et pilotage de backlog,</li> <li>Compétences analytiques et maîtrise des méthodes de gestion des produit (design thinking, DevOps, lean, agile, etc.),</li> <li>Solides capacités d’analyse de données et de reporting.</li> </ul> <p> </p> <p> </p> <p> <strong>Votre profil</strong> </p> <p> <strong> </strong> </p> <ul> <li>Formation supérieure (banque, finance, IT ou équivalent),</li> <li>Expérience réussie en gestion de produits dans le domaine des paiements,</li> <li>Aptitudes relationnelles et capacité d’influence auprès de différents interlocuteurs,</li> <li>Forte orientation résultats et esprit d’initiative,</li> <li>Grande capacité d’organisation, rigueur et résilience,</li> <li>Très bonnes connaissances de l’anglais, et idéalement de l’allemand (oral).</li> </ul> <p> </p> <p>Si ce poste est fait pour vous, postulez dès maintenant et participez à l’avenir prometteur de la BCV. Ecrivons ensemble trois histoires, celle de votre carrière, celle de votre banque, celle de notre région.</p>",
+ "template_lead_text": "",
+ "template_contact_address": "",
+ "offer_id": 1,
+ "is_active": true,
+ "metadata": [],
+ "is_responsive": true,
+ "coordinates": {
+  "lat": 46.5196,
+  "lon": 6.63222
+ },
+ "is_paid": true,
+ "headhunter_application_allowed": true,
+ "skills": [],
+ "contact_person": [],
+ "contacts": [],
+ "images": [
+  {
+   "context": "logo",
+   "url": "https://media.jobs.ch/media/e4f66f08-4189-426c-86e0-c24f150bf28d",
+   "updated": "2026-10-20T00:17:23+02:00"
+  },
+  {
+   "context": "background",
+   "url": "https://media.jobs.ch/media/6e44b838-6b31-4b43-b0fa-131a425878b2",
+   "updated": "2026-10-20T00:17:23+02:00"
+  }
+ ],
+ "benefits": [],
+ "layout_type": "STANDARD",
+ "locations": [
+  {
+   "postalCode": "1003",
+   "city": "Lausanne",
+   "cantonCode": "VD",
+   "countryCode": "CH",
+   "latitude": 46.5196,
+   "longitude": 6.63222
+  }
+ ],
+ "listing_tags": [],
+ "videos": []
+}

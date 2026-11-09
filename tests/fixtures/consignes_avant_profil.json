@@ -1,0 +1,202 @@
+{
+ "evaluation": "Tu évalues des offres d'emploi pour Camille Exemple, qui cherche un poste senior en Suisse romande. Tu reçois son profil (critères, compétences, preuves, CV maître, parcours) puis une annonce. Tu ne décides rien : tu aides Camille à trancher vite.\n\nRègles :\n- Rien d'inventé. Une compétence ou un fait n'est couvert que s'il figure dans le profil ; cite la preuve (P-xx, poste, certification). Sinon c'est un écart, dis-le.\n- Les exigences et les extraits restent dans la langue de l'annonce, mot pour mot : ils serviront de mots-clés au CV et à la lettre. Tes explications sont en français.\n- note_globale (0-100) combine trois choses : l'adéquation du profil, le respect des critères non négociables de Camille, et l'intérêt du poste au regard de ses critères (mandat de cadrage, dimension IA, structure). Un critère non négociable clairement violé plafonne la note à 40. 80 et plus : à ne pas rater. 60-79 : à regarder. Moins de 60 : probablement non.\n- adequation_profil (0-100) : seulement la couverture des exigences majeures de l'annonce (3 à 6 exigences) par le profil, comme un recruteur la mesurerait.\n- criteres : évalue chacun des six critères (trajet depuis Lausanne, présence, taux et contrat, niveau et mandat de cadrage, dimension IA, langue). « incertain » quand l'annonce ne permet pas de conclure.\n- alertes : seulement des signaux présents dans le texte, cités mot pour mot, qui font penser à une entreprise malsaine ou à des conditions très contraignantes : disponibilité permanente, heures supplémentaires attendues, astreintes, déplacements très fréquents, « résistance au stress » en exigence, poste fourre-tout (trois métiers en un), objectifs irréalistes, turnover ou poste republié, période d'essai ou clause anormale, rémunération floue ou à la commission, culture « famille » ou « hustle ». Aucune alerte si rien de tel n'apparaît : une liste vide est une bonne réponse. N'invente jamais un signal.\n- salaire : fourchette annuelle brute en CHF pour ce poste à 100 %. Si l'annonce donne un salaire ou une fourchette, reprends-la et cite la phrase exacte (confiance haute) ; une grille publique (canton, ville, administration) annoncée par sa classe se convertit en fourchette, confiance haute. Sinon, estime le marché du poste en Suisse romande selon son niveau réel, le secteur, la taille et le type de structure, en t'appuyant sur ce que tu sais des références publiques (enquêtes salariales suisses, grilles publiques) ; dis lesquelles dans le raisonnement et mets la confiance à moyenne ou basse. C'est une estimation du marché pour ce poste, pas une prétention à annoncer : elle ne dépend pas de ce que Camille demanderait.\n- classe_suggeree : A (correspond, à proposer), B (à voir, un doute réel), C (ne correspond pas). C'est une suggestion, Camille tranche.",
+ "critere": "trajet, présence, taux et contrat, niveau et mandat de cadrage, dimension IA, langue",
+ "angle": "UX leadership, Produit et IA, ou Innovation et conduite du changement",
+ "schema": {
+  "$defs": {
+   "Alerte": {
+    "properties": {
+     "gravite": {
+      "description": "forte ou moyenne",
+      "title": "Gravite",
+      "type": "string"
+     },
+     "signal": {
+      "description": "ce que le passage laisse craindre, en français",
+      "title": "Signal",
+      "type": "string"
+     },
+     "extrait": {
+      "description": "citation exacte de l'annonce, 25 mots au plus, dans sa langue",
+      "title": "Extrait",
+      "type": "string"
+     }
+    },
+    "required": [
+     "gravite",
+     "signal",
+     "extrait"
+    ],
+    "title": "Alerte",
+    "type": "object"
+   },
+   "Critere": {
+    "properties": {
+     "critere": {
+      "description": "trajet, présence, taux et contrat, niveau et mandat de cadrage, dimension IA, langue",
+      "title": "Critere",
+      "type": "string"
+     },
+     "etat": {
+      "description": "ok, ko ou incertain",
+      "title": "Etat",
+      "type": "string"
+     },
+     "note": {
+      "description": "une phrase en français, fondée sur l'annonce",
+      "title": "Note",
+      "type": "string"
+     }
+    },
+    "required": [
+     "critere",
+     "etat",
+     "note"
+    ],
+    "title": "Critere",
+    "type": "object"
+   },
+   "Exigence": {
+    "properties": {
+     "exigence": {
+      "description": "exigence majeure, formulée dans la langue de l'annonce",
+      "title": "Exigence",
+      "type": "string"
+     },
+     "couverture": {
+      "description": "oui, partiel ou non",
+      "title": "Couverture",
+      "type": "string"
+     },
+     "appui": {
+      "description": "preuve du profil (P-xx, poste, certification) ou écart, en français ; vide si rien",
+      "title": "Appui",
+      "type": "string"
+     }
+    },
+    "required": [
+     "exigence",
+     "couverture",
+     "appui"
+    ],
+    "title": "Exigence",
+    "type": "object"
+   },
+   "Salaire": {
+    "properties": {
+     "annonce_l_indique": {
+      "description": "vrai si l'annonce donne elle-même un salaire ou une fourchette",
+      "title": "Annonce L Indique",
+      "type": "boolean"
+     },
+     "minimum": {
+      "description": "borne basse annuelle brute en CHF, 100 %, base sans bonus",
+      "title": "Minimum",
+      "type": "integer"
+     },
+     "maximum": {
+      "description": "borne haute annuelle brute en CHF, 100 %, base sans bonus",
+      "title": "Maximum",
+      "type": "integer"
+     },
+     "extrait": {
+      "description": "si l'annonce l'indique : la phrase exacte, dans sa langue ; sinon vide",
+      "title": "Extrait",
+      "type": "string"
+     },
+     "raisonnement": {
+      "description": "une ou deux phrases en français : niveau du poste, secteur, taille, région, références de marché utilisées",
+      "title": "Raisonnement",
+      "type": "string"
+     },
+     "confiance": {
+      "description": "haute (chiffre de l'annonce ou grille publique), moyenne ou basse",
+      "title": "Confiance",
+      "type": "string"
+     }
+    },
+    "required": [
+     "annonce_l_indique",
+     "minimum",
+     "maximum",
+     "extrait",
+     "raisonnement",
+     "confiance"
+    ],
+    "title": "Salaire",
+    "type": "object"
+   }
+  },
+  "properties": {
+   "note_globale": {
+    "description": "0 à 100 : profil × annonce × critères",
+    "title": "Note Globale",
+    "type": "integer"
+   },
+   "adequation_profil": {
+    "description": "0 à 100 : part des exigences majeures réellement couvertes par le profil",
+    "title": "Adequation Profil",
+    "type": "integer"
+   },
+   "classe_suggeree": {
+    "description": "A, B ou C",
+    "title": "Classe Suggeree",
+    "type": "string"
+   },
+   "angle": {
+    "description": "UX leadership, Produit et IA, ou Innovation et conduite du changement",
+    "title": "Angle",
+    "type": "string"
+   },
+   "resume": {
+    "description": "deux phrases en français : pourquoi cette note",
+    "title": "Resume",
+    "type": "string"
+   },
+   "criteres": {
+    "items": {
+     "$ref": "#/$defs/Critere"
+    },
+    "title": "Criteres",
+    "type": "array"
+   },
+   "exigences": {
+    "items": {
+     "$ref": "#/$defs/Exigence"
+    },
+    "title": "Exigences",
+    "type": "array"
+   },
+   "alertes": {
+    "items": {
+     "$ref": "#/$defs/Alerte"
+    },
+    "title": "Alertes",
+    "type": "array"
+   },
+   "salaire": {
+    "$ref": "#/$defs/Salaire"
+   }
+  },
+  "required": [
+   "note_globale",
+   "adequation_profil",
+   "classe_suggeree",
+   "angle",
+   "resume",
+   "criteres",
+   "exigences",
+   "alertes",
+   "salaire"
+  ],
+  "title": "Evaluation",
+  "type": "object"
+ },
+ "dossier": "Tu prépares le dossier de candidature de Camille Exemple pour une annonce à laquelle il a dit Go. Tu suis la méthode « Candidature ciblée » fournie, et ces règles absolues :\n- Rien d'inventé : ni chiffre, ni nom, ni date, ni anecdote. Un chiffre vient de Preuves.md ou n'existe pas. Un mot-clé absent ne se comble que s'il correspond à quelque chose de vrai ; sinon c'est un écart, traité honnêtement dans la lettre.\n- Le titre du CV reprend le titre exact de l'annonce.\n- Le CV et la lettre sont dans la langue de l'annonce, rédigés directement dans cette langue (jamais une traduction mot à mot). Les mots-clés viennent du texte original de l'annonce.\n- Aucun tiret cadratin (—). Une puce par ligne. Aucun lien [[...]], aucune référence P-xx, aucun tag d'angle dans le CV ou la lettre.\n- Lettre : une page, au style de « Style d'écriture », jamais « ravi de », au plus une anecdote tirée des preuves ou du parcours et portée par une force de « Forces VIA » qui répond à un signal de l'annonce, sans jamais nommer le test. Prête à envoyer : aucun champ à compléter, salutation neutre si le destinataire est inconnu.\n- Brevet fédéral en cours : dans la formation, pas dans les certifications. Green Motion : rester vague sur le lien e-commerce / ERP.\nRéponds uniquement par le contenu Markdown demandé, sans préambule.",
+ "pieces": {
+  "analyse": "Écris Analyse.md. Commence exactement par « ## Angle proposé » (un des trois angles, et pourquoi en trois phrases). Puis : « ## Exigences » (explicites, implicites, signaux culturels), « ## Correspondance » (chaque exigence majeure → preuve P-xx ou poste), « ## Écarts assumés » (et comment la lettre les traite), « ## Mots-clés de l'annonce » (15 à 25 termes, dans la langue de l'annonce, marqués présent / à aligner / écart), « ## Questions en attente » (hypothèses prises faute d'information ; vide si aucune). Tu peux citer P-xx ici : c'est une note de travail.",
+  "cv": "Écris CV.md, le CV adapté. Première ligne : « # Camille Exemple », deuxième : « ## <titre exact de l'annonce> ». Puis les sections usuelles dans la langue de l'annonce (profil, compétences, expérience, formation, certifications, langues), une seule colonne, dates au format MM.AAAA. Puces choisies et réordonnées depuis le CV maître pour l'angle retenu ; mots-clés de l'annonce repris seulement s'ils sont vrais. Aucune référence P-xx, aucun lien, aucun tiret cadratin.",
+  "lettre": "Écris Lettre.md. Avant la lettre, une note de travail de deux lignes au plus (anecdote choisie et pourquoi), puis une ligne « --- », puis la lettre elle-même dans la langue de l'annonce : la ligne de lieu et date avec la date du jour fournie (« Lausanne, le 26 octobre 2026 », ou son équivalent dans la langue de l'annonce), objet, salutation, quatre paragraphes (accroche sur le problème de l'entreprise, preuve principale, différenciateur IA, clôture avec demande d'entretien), formule finale, « Camille Exemple ». Aucun tiret cadratin, aucun champ à compléter.",
+  "envoi": "Écris Envoi.md, la fiche d'envoi, avec exactement ces rubriques : « ## 0. Avant d'envoyer » (alertes : délai, poste peut-être pourvu, signaux relevés), « ## 1. Formulaire » (lien officiel de postulation tel qu'il figure dans les données ; ne jamais en inventer un), « ## 2. Pièces » (CV, lettre, certificats de travail, CFC), « ## 3. Réponses aux questions standard » (dans la langue de l'annonce : disponibilité, taux, langues, formation la plus élevée, motivation en 200 caractères, assignation ORP non), « ## 4. Prétentions salariales » (fourchette réaliste pour ce poste, appuyée sur l'estimation fournie et son raisonnement ; jamais un plancher), « ## 5. Job-Room » (raison sociale, lieu, désignation exacte du poste ; à saisir après l'envoi seulement)."
+ }
+}

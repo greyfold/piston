@@ -1,0 +1,24 @@
+# Répertoire des sources de recherche d'emploi : le socle commun à toute installation.
+# La plateforme n'interroge que les sources dont l'accès est « automatique ».
+# Les pages carrière d'employeurs et les autres sources s'ajoutent depuis l'application
+# (page Sources), dans le dossier de données de la personne.
+
+job-room:
+  nom: "Job-Room"
+  nature: "Portail officiel suisse de l'emploi (obligation d'annonce : 5 jours d'avance)"
+  acces: "automatique"
+  remarques: "Route du site, POST _search, page et size dans l'adresse."
+jobup:
+  nom: "jobup.ch / jobs.ch"
+  nature: "Site d'annonces, Suisse romande (même base que jobs.ch)"
+  acces: "automatique"
+  remarques: "Recherche lieu par lieu (ville ou canton, par son nom)."
+linkedin:
+  nom: "LinkedIn"
+  nature: "Réseau social, offres d'emploi"
+  acces: "à brancher"
+  remarques: "Offres publiques par Apify (sources/linkedin.py), « automatique » dès que linkedin.actif ; aucun compte LinkedIn personnel n'est utilisé."
+mails:
+  nom: "Courrier"
+  nature: "Alertes d'emploi et mails de recruteurs"
+  acces: "en session"

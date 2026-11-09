@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icone %}
+{% block titre %}Tes données et l'IA · Recherche d'emploi{% endblock %}
+{% block contenu %}
+<div class="confidentialite">
+<p class="surtitre">{{ icone("cadenas") }} Confidentialité</p>
+<h1>L'IA écrit tes candidatures sans connaître ton nom</h1>
+<p class="intro">Ton nom, ton adresse, ton téléphone et ton e-mail ne quittent jamais ton ordinateur. L'IA reçoit des balises
+  à leur place ; la plateforme remet tes vraies coordonnées dans le CV et la lettre une fois le texte revenu, ici, sur ton Mac.</p>
+
+<h2>La preuve, avec ton profil</h2>
+<div class="cartes deux">
+  <div class="carte">
+    <div class="tete"><b>Sur ton Mac</b><span class="puce B">ce que tu vois</span></div>
+    <p class="demo">{{ entete or "Complète tes coordonnées dans le Profil pour voir la démonstration." }}</p>
+  </div>
+  <div class="carte">
+    <div class="tete"><b>Ce que l'IA reçoit</b><span class="puce">balises</span></div>
+    <p class="demo balises">{{ entete_masque or "{NOM_COMPLET} · {ADRESSE} · {TELEPHONE} · {EMAIL}" }}</p>
+  </div>
+</div>
+<p class="petit muet">À chaque tâche (note d'une annonce, CV, lettre, fiche d'envoi), avant l'envoi. Que l'IA tourne sur ce Mac ou dans la machine virtuelle, elle ne reçoit que les balises.</p>
+
+<div class="cartes deux">
+  <div class="carte">
+    <div class="tete"><b>Reste sur ton Mac</b>{{ icone("cadenas") }}</div>
+    <ul class="liste-confidentialite">
+      <li>Nom et prénom, aussi dans les noms de fichiers</li>
+      <li>Adresse, téléphone, e-mail, site et LinkedIn</li>
+      <li>Date de naissance et numéro AVS</li>
+      <li>Les coordonnées des personnes citées dans tes preuves{% if tiers %} ({{ tiers }} dans ton profil){% endif %}</li>
+      <li>Ton inscription au chômage : la réponse « assignation ORP » et la rubrique Job-Room de la fiche d'envoi s'écrivent sans l'IA</li>
+      <li>Tes montants : la section « Conditions matérielles » de tes critères n'est jamais envoyée</li>
+    </ul>
+  </div>
+  <div class="carte">
+    <div class="tete"><b>Ce que l'IA reçoit, parce qu'elle en a besoin</b>{{ icone("ia") }}</div>
+    <ul class="liste-confidentialite">
+      <li>Ton parcours : postes, employeurs, dates, réalisations</li>
+      <li>Tes compétences, tes preuves et tes critères de recherche</li>
+      <li>Ta ville (trajets, lieu de la lettre) et ta nationalité (droit de travailler)</li>
+      <li>Le texte des annonces</li>
+    </ul>
+    <p class="petit muet">C'est une protection par balises, pas un anonymat : un parcours détaillé reste reconnaissable par qui le
+      cherche. C'est pourquoi il ne part que vers ton propre compte Claude, jamais vers un autre service.</p>
+  </div>
+</div>
+
+<h2>Comment l'IA travaille</h2>
+<div class="carte">
+  <ul class="liste-confidentialite">
+    <li><b>Avec ton abonnement Claude</b>, sans clé API ni intermédiaire.{% if moteur and moteur.connecte %} <span class="puce B">connecté</span>{% endif %}</li>
+    <li><b>Sans aucun outil</b> pour noter les annonces et écrire les dossiers : ni fichiers, ni Internet, ni tes réglages, extensions ou connecteurs Claude.</li>
+    <li><b>Consigne dans un fichier temporaire</b> lisible de ton seul compte, effacé après la tâche : rien de ton profil n'apparaît dans la liste des processus.</li>
+    <li><b>Dans la machine virtuelle</b>, si tu l'actives : l'IA ne voit ni ton dossier personnel, ni ton trousseau, ni Mail, ni Chrome.</li>
+    <li><b>Rien n'est envoyé à un employeur sans toi</b> : tu relis, tu envoies.</li>
+  </ul>
+</div>
+
+<h2>Les exceptions, que tu déclenches</h2>
+<div class="carte">
+  <ul class="liste-confidentialite">
+    <li><b>Remplir un formulaire</b> ou <b>saisir une preuve Job-Room</b> : Claude in Chrome tape tes vraies coordonnées dans la page de l'employeur ou de Job-Room. Il doit les voir pour les saisir. Il ne le fait que quand tu le lui demandes.</li>
+    <li><b>Gmail</b>, s'il est activé : la session Claude qui interroge ta boîte voit les messages liés à tes candidatures. Le tri des réponses se fait ensuite sur ton Mac. Apple Mail, lui, est lu sur ton Mac, sans l'IA.</li>
+  </ul>
+</div>
+
+<h2>Ton réglage chez Claude</h2>
+<div class="carte">
+  <p>Dans <a href="https://claude.ai/settings/data-privacy-controls" rel="noopener" target="_blank">claude.ai → Paramètres → Confidentialité</a>,
+    désactive « Aider à améliorer Claude » si tu ne veux pas que tes échanges servent à entraîner les modèles. Ce réglage vaut aussi pour la plateforme, qui passe par ton compte.</p>
+</div>
+
+{% if extrait %}
+<h2>Vérifier toi-même</h2>
+<details class="carte">
+  <summary><b>Ton profil tel que l'IA le reçoit</b> <span class="muet petit">(les lignes qui contenaient une coordonnée)</span></summary>
+  <pre class="extrait-masque">{% for l in extrait %}{{ l }}
+{% endfor %}</pre>
+  {% if balises %}
+  <div class="tableau"><table>
+    <thead><tr><th>Balise envoyée</th><th>Ce qu'elle cache</th><th>Remise à la réception</th></tr></thead>
+    <tbody>{% for b, libelle, valeur in balises %}<tr><td><code>{{ "{" ~ b ~ "}" }}</code></td><td>{{ libelle }}</td><td>{{ valeur }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  <p class="petit muet">Ce tableau ne s'affiche qu'ici. Il n'est envoyé nulle part.</p>
+  {% endif %}
+</details>
+{% elif not profil_present %}
+<p class="petit muet">Quand ton parcours sera dans le profil, cette page montrera aussi les lignes masquées avant l'envoi.</p>
+{% endif %}
+</div>
+{% endblock %}

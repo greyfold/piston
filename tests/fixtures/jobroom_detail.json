@@ -1,0 +1,110 @@
+{
+ "id": "8d6d4974-ddaa-4d83-80e3-016debfe186f",
+ "createdTime": "2026-10-23T02:18:28.081729",
+ "updatedTime": "2026-10-24T02:58:05.383602",
+ "status": "PUBLISHED_PUBLIC",
+ "sourceSystem": "EXTERN",
+ "externalReference": null,
+ "stellennummerEgov": null,
+ "stellennummerAvam": null,
+ "fingerprint": "p7e009395b718c01b4c270218157ab281aeefb8e76ba949ad0dd5e9c47a795eeb",
+ "reportingObligation": false,
+ "reportingObligationEndDate": null,
+ "reportToAvam": false,
+ "jobCenterCode": null,
+ "jobCenterUserId": null,
+ "approvalDate": null,
+ "rejectionDate": null,
+ "rejectionCode": null,
+ "rejectionReason": null,
+ "cancellationDate": null,
+ "cancellationCode": null,
+ "jobContent": {
+  "externalUrl": "https://careers.audemarspiguet.com/fr/offer/744000156549820",
+  "numberOfJobs": null,
+  "jobDescriptions": [
+   {
+    "languageIsoCode": "de",
+    "title": "Product Manager",
+    "description": "**Description de l'entreprise**\n\nLe présent et le futur d-Audemars Piguet se construisent grâce à la contribution de tous nos talents. Inspirés par la richesse de notre passé, nous sommes enthousiastes à l-idée de ce que nous créerons dans le futur. Ensemble, nous sommes résolument tournés vers l-avenir et en quête continue d-excellence dans tous nos métiers.\n\nSi notre mission vous inspire, venez poursuivre votre parcours au sein de notre famille pour que l-on continue de créer l'extraordinaire. Écrivons le prochain chapitre de votre carrière ensemble !\n\nVideo Player is loading.\n\nPlay Video\n\nPlay\n\nLoaded: 0.00%\n\n0:00\n\nMute\n\n \n\nCaptions\n\n *  , selectedcaptions off\n *  Unknown\n\nFullscreen\n\nThis is a modal window.\n\n**Description du poste**\n\nSous la responsabilité du Senior Director Product, vous jouerez un rôle clé dans la définition, le déploiement et la performance de nos collections horlogères.\n\nVéritable interface entre les équipes Design, R&amp;D, Industrialisation, Qualité, Supply Chain, Commercial et Marketing, vous piloterez l'ensemble du cycle de vie des produits afin de garantir leur cohérence avec la stratégie de la Manufacture, les attentes du marché et les objectifs business.\n\nDans ce cadre-là, vos responsabilités principales seront de :&nbsp;\n\n *  Encadrer et développer une équipe Produit, en définissant les priorités, en accompagnant la montée en compétences et en favorisant un environnement de travail collaboratif, stimulant et performant au sein de l-écosystème produit\n *  Garantir et porter la vision produit des collections, en contribuant à la stratégie à moyen et long terme, à l'architecture de l'offre, à son positionnement et à sa cohérence globale\n *  Piloter le déploiement du plan Produit ainsi que les évolutions techniques des collections existantes, de l'expression du besoin jusqu'à la validation finale, en collaboration avec les équipes Design, R&amp;D, Industrialisation et Qualité\n *  Analyser les performances des collections et les tendances du marché, afin d'identifier les opportunités d'optimisation, d'innovation et d'évolution du portefeuille produits\n *  Garantir l-excellence technique des produits, en assurant la maîtrise des spécifications, des coûts, de la qualité, des normes et de la gestion des données produit\n *  Représenter la fonction Produit auprès des instances et projets transverses, en contribuant aux roadmaps, comités, revues produit et événements stratégiques\n *  Accompagner les lancements et le cycle de vie des produits, en fournissant les outils, contenus et expertises nécessaires aux marchés et aux équipes commerciales\n *  Contribuer à la performance globale de l-activité, en collaborant étroitement avec les achats, la Supply Chain et les autres fonctions métiers pour garantir la disponibilité et la compétitivité de l-offre\n\n**Qualifications**\n\n *  Formation supérieure en Microtechnique, Ingénierie, Design Industriel ou domaine équivalent\n *  Minimum 7 ans d'expérience en Product Management dans l'industrie horlogère\n *  Excellente connaissance du produit horloger (mouvements, complications, matériaux et processus d'industrialisation)\n *  Expérience dans le développement produit et la gestion de projets techniques complexes\n *  Capacité démontrée à manager, développer et fédérer des équipes grâce à un leadership naturel\n *  Forte capacité d-organisation et de gestion des priorités\n *  Esprit analytique et orientation résultats\n *  Curiosité technique et sens de l-innovation\n *  Excellentes compétences en communication et collaboration transverse\n *  Maîtrise des outils PLM, ERP et des outils de gestion de projet\n *  Maîtrise du français et de l'anglais\n\n**Informations supplémentaires**\n\nCe que nous offrons :\n\n *  La prise en charge des assurances maladie (base et complémentaire)\n *  5 semaines annuelles de vacances et 2 semaines supplémentaires entre Noël et Nouvel An grâce au cumul quotidien de minutes additionnelles\n *  Une contribution à vos activités sportives ou culturelles\n *  La possibilité selon la fonction de travailler à distance\n *  Un restaurant d-entreprise\n *  Une LPP avantageuse\n\nVous souhaitez exprimer votre expertise au sein d-Audemars Piguet ? N-hésitez pas et postulez en ligne ! Nous nous réjouissons de discuter des opportunités qui pourraient correspondre à votre prochaine aventure professionnelle.\n\nLe masculin vaut pour le féminin.\n\n\\#LI-JF1"
+   }
+  ],
+  "company": {
+   "name": "Audemars Piguet SA",
+   "street": null,
+   "houseNumber": null,
+   "postalCode": null,
+   "city": null,
+   "countryIsoCode": null,
+   "postOfficeBoxNumber": null,
+   "postOfficeBoxPostalCode": null,
+   "postOfficeBoxCity": null,
+   "phone": null,
+   "email": null,
+   "website": null,
+   "surrogate": false
+  },
+  "employment": {
+   "startDate": null,
+   "endDate": null,
+   "shortEmployment": false,
+   "immediately": false,
+   "permanent": true,
+   "workloadPercentageMin": "100",
+   "workloadPercentageMax": "100",
+   "workForms": []
+  },
+  "location": {
+   "id": null,
+   "remarks": null,
+   "city": "Le Brassus",
+   "postalCode": "1348",
+   "communalCode": "5872",
+   "regionCode": "VD04",
+   "cantonCode": "VD",
+   "countryIsoCode": "CH",
+   "coordinates": {
+    "lon": "6.21",
+    "lat": "46.582"
+   }
+  },
+  "occupations": [
+   {
+    "avamOccupationCode": "101327",
+    "workExperience": null,
+    "educationCode": null,
+    "qualificationCode": null
+   },
+   {
+    "avamOccupationCode": "101327",
+    "workExperience": null,
+    "educationCode": null,
+    "qualificationCode": null
+   }
+  ],
+  "languageSkills": [
+   {
+    "languageIsoCode": "fr",
+    "spokenLevel": null,
+    "writtenLevel": null
+   },
+   {
+    "languageIsoCode": "fr",
+    "spokenLevel": null,
+    "writtenLevel": null
+   }
+  ],
+  "applyChannel": null,
+  "publicContact": null
+ },
+ "publication": {
+  "startDate": "2026-10-22",
+  "endDate": "2026-12-21",
+  "euresDisplay": false,
+  "euresAnonymous": false,
+  "publicDisplay": true,
+  "restrictedDisplay": true,
+  "companyAnonymous": false
+ },
+ "owner": null
+}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block titre %}Fournisseur d'IA · Recherche d'emploi{% endblock %}
+{% block contenu %}
+<h1>Fournisseur d'IA</h1>
+<p class="muet">L'IA de ton abonnement : elle note les annonces et écrit tes dossiers de candidature. Aucune clé API, rien n'est facturé en plus. Ce que la plateforme peut lire pour toi (courrier, Indeed, Chrome) est sur la page <a href="/connecteurs">Connecteurs</a>.</p>
+
+<div class="cartes deux">
+{% for f in fournisseurs %}
+  <section class="carte" id="{{ f.id }}">
+    <div class="tete"><b>{{ f.nom }}</b>
+      {% if f.etat.connecte %}<span class="puce B">connecté{% if f.etat.abonnement %} · {{ f.etat.abonnement }}{% endif %}</span>
+      {% else %}<span class="puce retard">{{ "non connecté" if f.etat.installe else "absent" }}</span>{% endif %}</div>
+    <div class="meta">{{ f.detail }}. Évaluation des annonces, dossiers de candidature, Indeed, preuves Job-Room et formulaires.{% if distant %} Tourne dans la machine virtuelle.{% endif %}</div>
+    <div class="petit muet" style="margin-top:.35rem">{{ f.etat.message }}</div>
+    {% if not f.etat.connecte %}
+    <div class="boutons" style="margin-top:.6rem">
+      <button type="button" class="go" data-connexion-ia="{{ f.id }}" data-nom="{{ f.nom }}">Se connecter avec {{ f.nom }}</button></div>
+    {% endif %}
+  </section>
+{% endfor %}
+</div>
+
+<p class="petit">Tes coordonnées ne sont jamais envoyées à l'IA : balises à l'aller, vraies valeurs au retour, sur ce Mac. <a href="/confidentialite">Ce que l'IA reçoit</a></p>
+{% endblock %}

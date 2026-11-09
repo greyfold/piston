@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block titre %}Offres · Recherche d'emploi{% endblock %}
+{% block contenu %}
+<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap">
+  <h1>Offres <span class="muet" style="font-weight:500">{{ stats.total }} annonces</span></h1>
+  <a class="bouton" href="/offres/ajouter">Ajouter une annonce</a>
+</div>
+<form class="filtres" method="get">
+  <input type="text" name="q" value="{{ q }}" placeholder="Entreprise ou intitulé" aria-label="Recherche">
+  <select name="statut" aria-label="Statut">
+    <option value="">Tous les statuts</option>
+    {% for s in STATUTS %}{% if s in stats.par_statut %}<option value="{{ s }}" {{ 'selected' if s == statut }}>{{ s }} ({{ stats.par_statut[s] }})</option>{% endif %}{% endfor %}
+  </select>
+  <select name="source" aria-label="Source">
+    <option value="">Toutes les sources</option>
+    {% for s, n in stats.par_source.items() %}<option value="{{ s }}" {{ 'selected' if s == source }}>{{ s }} ({{ n }})</option>{% endfor %}
+  </select>
+  <button>Filtrer</button>
+</form>
+<p class="petit muet">{{ total }} résultat{{ 's' if total != 1 }}{% if total > 400 %} (400 affichés){% endif %}.</p>
+<div class="tableau"><table>
+  <thead><tr><th>Annonce</th><th>Source</th><th>Statut</th><th>Motif</th><th>Vue le</th></tr></thead>
+  <tbody>
+  {% for f in fiches %}
+    <tr>
+      <td><a href="/annonce/{{ f.empreinte }}">{{ f.titre }}</a><div class="muet petit">{{ f.entreprise }} · {{ f.lieu }}</div></td>
+      <td class="petit">{% for s in f.sources or [] %}<a href="?source={{ s | urlencode }}">{{ s }}</a>{{ ", " if not loop.last }}{% else %}<span class="muet">?</span>{% endfor %}{% if f.url %} <a href="{{ f.url }}" target="_blank" rel="noopener noreferrer" aria-label="Voir l'annonce en ligne">↗</a>{% endif %}</td>
+      <td><span class="puce {{ f.statut }}">{{ f.statut }}</span></td>
+      <td class="petit">{{ (f.motif or f.angle or "")[:140] }}</td>
+      <td class="petit">{{ f.vue_le | date_fr(True) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icone %}
+{% block titre %}{{ t.titre }} · Recherche d'emploi{% endblock %}
+{% block contenu %}
+{# Une tâche de la checklist « Bien démarrer » : un seul écran, ses seuls champs, puis retour
+   au tableau de bord. Pas d'assistant dans l'assistant. #}
+<div class="tache">
+  <a class="retour" href="/#premiers-pas">{{ icone("precedent") }} Tableau de bord</a>
+  <form method="post" action="/premiers-pas/{{ tache }}" class="carte-accueil tache-carte" autocomplete="on">
+    <div class="titre-etape">
+      <span class="pastille">{{ icone(t.icone) }}</span>
+      <div>
+        {% if rang is not none %}<p class="surtitre">Bien démarrer · {{ rang + 1 }} sur {{ total }}</p>{% endif %}
+        <h1>{{ t.titre }}</h1>
+        <p class="intro">{{ t.intro }}</p>
+      </div>
+    </div>
+    <div class="grille-champs">
+      {% include "_champs_profil.html" %}
+    </div>
+    <div class="actions-accueil">
+      <a class="lien-neutre" href="/#premiers-pas">Plus tard</a>
+      <button class="go grand">Enregistrer</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block titre %}Réglages · Recherche d'emploi{% endblock %}
+{% block contenu %}
+<h1>Réglages</h1>
+<p class="muet">Ce que la plateforme sait de toi, où elle cherche, ce à quoi elle se connecte, et comment elle tourne.</p>
+
+<div class="cartes deux reglages">
+  <a class="carte lien-dossier" href="/profil">
+    <span><b>Ma recherche</b>
+      <span class="muet petit">Coordonnées, postes et cantons, pré-tri, critères, parcours, coffre.</span>
+      {% if profil_manquants %}<span class="puce retard">à compléter : {{ profil_manquants | map('last') | join(', ') }}</span>
+      {% else %}<span class="puce B">complet</span>{% endif %}</span>
+    <span aria-hidden="true">→</span>
+  </a>
+
+  <a class="carte lien-dossier" href="/interface">
+    <span><b>Interface et objectifs</b>
+      <span class="muet petit">Preuves Job-Room pour l'ORP, objectifs de postulations par semaine et par mois, fonctions ouvertes.</span>
+      <span>{% for titre, actif in options %}<span class="puce {{ 'B' if actif }}">{{ titre }} : {{ "oui" if actif else "non" }}</span> {% endfor %}</span></span>
+    <span aria-hidden="true">→</span>
+  </a>
+
+  <a class="carte lien-dossier" href="/sources">
+    <span><b>Sources</b>
+      <span class="muet petit">Les sites et pages carrière lus chaque matin ; brancher une nouvelle page.</span>
+      <span class="puce">{{ nb_sources }} source{{ 's' if nb_sources != 1 }} au répertoire</span></span>
+    <span aria-hidden="true">→</span>
+  </a>
+
+  <section class="carte">
+    <div class="tete"><b>Fournisseur d'IA</b>
+      {% if claude %}<span class="puce B">Claude connecté</span>{% else %}<span class="puce retard">Claude pas connecté</span>{% endif %}</div>
+    <div class="meta">L'IA de ton abonnement, qui note les annonces et écrit tes dossiers.</div>
+    <ul class="liens-reglages">
+      <li><a href="/ia">Voir la connexion</a></li>
+      {% if not claude %}<li><a href="/ia" data-connexion-ia="claude" data-nom="Claude">Se connecter à Claude</a></li>{% endif %}
+    </ul>
+  </section>
+
+  <section class="carte">
+    <div class="tete"><b>Connecteurs</b>
+      <span class="puce {{ 'B' if connecteurs_actifs }}">{{ connecteurs_actifs | length }} actif{{ 's' if connecteurs_actifs | length > 1 }}</span></div>
+    <div class="meta">Ce que la plateforme peut lire pour toi, et les clés d'accès rangées dans le trousseau.</div>
+    <ul class="liens-reglages">
+      <li><a href="/connecteurs">Connecteurs</a> <span class="muet petit">{{ connecteurs_actifs | join(', ') if connecteurs_actifs else "aucun actif" }}</span></li>
+      <li><a href="/sante#cles">Clés d'accès</a> <span class="muet petit">{{ nb_cles }} sur {{ total_cles }} enregistrée{{ 's' if nb_cles > 1 }}</span></li>
+    </ul>
+  </section>
+
+  <a class="carte lien-dossier" href="/sante">
+    <span><b>Système</b>
+      <span class="muet petit">Passages du matin, sauvegardes, import du coffre.</span>
+      <span class="puce {{ 'retard' if passage.niveau == 'alerte' else ('nouvelle' if passage.niveau == 'attention' else 'B') }}">{{ passage.texte }}</span></span>
+    <span aria-hidden="true">→</span>
+  </a>
+</div>
+{% endblock %}

@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icone %}
+{% block titre %}Bienvenue · Recherche d'emploi{% endblock %}
+{% block contenu %}
+{# Accueil selon la spec Nexus « 03 Onboarding » : un écran par étape, une action principale,
+   « Passer » neutre, toutes les étapes montrées d'emblée, la valeur montrée avant d'être racontée. #}
+<div class="coquille-accueil">
+<div class="carte-accueil">
+  <nav class="stepper" aria-label="Mise en route">
+    <ol>
+    {% for e in etapes_accueil %}
+      <li class="{{ e.etat }}"{% if e.etat == 'en_cours' %} aria-current="step"{% endif %}>
+        <span class="marqueur"><span class="lecteur">Étape {{ loop.index }} sur {{ etapes_accueil | length }}{{ ', faite' if e.etat == 'faite' }} : </span>
+          {% if e.etat == 'faite' %}<svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.25 7.34a1 1 0 0 1-1.42.006l-3.75-3.72a1 1 0 1 1 1.408-1.42l3.04 3.016 6.543-6.624a1 1 0 0 1 1.414-.006Z" clip-rule="evenodd"/></svg>
+          {% else %}<span aria-hidden="true">{{ loop.index }}</span>{% endif %}</span>
+        <span class="libelle">{{ e.label }}</span>
+      </li>
+    {% endfor %}
+    </ol>
+  </nav>
+
+{% if ecran == 'ia' %}
+  {# ---------------------------------------------------------------- 1. L'IA #}
+  <h1>Connecte ton IA</h1>
+  <p class="intro">Ta première recherche tourne déjà, sans IA. Ton abonnement d'IA servira ensuite à noter les annonces et à écrire tes dossiers. Rien n'est facturé en plus.</p>
+
+  {% if claude.connecte %}
+  <div class="etat-tache ok">{{ icone("fin") }}<div><p class="fort">Connecté à Claude{% if claude.abonnement %} · abonnement {{ claude.abonnement }}{% endif %}</p>
+    <p>Tu peux voir ce que ta recherche a trouvé.</p></div></div>
+  <div class="actions-accueil">
+    <span></span>
+    <a class="bouton go grand" href="/bienvenue/offres">Voir mes premières offres {{ icone("suivant") }}</a>
+  </div>
+  {% else %}
+  {# Un bouton par fournisseur : la personne choisit l'IA de son abonnement. #}
+  <div class="fournisseurs" role="group" aria-label="Fournisseurs d'IA">
+    {% for f in fournisseurs %}
+    <button type="button" class="fournisseur" data-connexion-ia="{{ f.id }}" data-nom="{{ f.nom }}">
+      <span class="pastille">{{ icone("ia") }}</span>
+      <span class="texte-fournisseur"><span class="fort">Se connecter avec {{ f.nom }}</span><span class="detail">{{ f.detail }}</span></span>
+      {{ icone("suivant") }}
+    </button>
+    {% endfor %}
+  </div>
+  <p class="aide-accueil" data-apres-connexion="/bienvenue/offres">Tes identifiants restent dans l'application : la plateforme ne les voit jamais.</p>
+  <p class="aide-accueil lien-confidentialite">{{ icone("cadenas") }}<span>Ton nom, ton adresse et ton téléphone ne partent jamais vers l'IA : elle reçoit des balises à leur place. <a href="/confidentialite" target="_blank">Voir ce qu'elle reçoit</a></span></p>
+  <div class="actions-accueil">
+    <a class="lien-neutre" href="/bienvenue/offres">Passer pour l'instant</a>
+  </div>
+  {% endif %}
+
+{% elif ecran == 'sources' %}
+  {# ---------------------------------------------------------------- 2. Les sources #}
+  <h1>Tes sources</h1>
+  <p class="intro">Les sites que la plateforme lit pour toi chaque matin. Ils sont publics : aucun compte n'est nécessaire.</p>
+  <form method="post" action="/bienvenue/sources" class="formulaire-accueil" id="form-sources">
+    <fieldset class="cartes-choix">
+      <legend>Sites d'emploi</legend>
+      {% for s in socle %}
+      <label class="carte-choix">
+        <input type="checkbox" name="sources" value="{{ s.id }}"{% if s.id in choisis %} checked{% endif %}>
+        <span><span class="titre-choix">{{ s.nom }}</span><span class="description-choix">{{ s.detail }}</span></span>
+      </label>
+      {% endfor %}
+    </fieldset>
+    <div class="plus-tard">
+      <p class="fort">Plus tard, depuis la page Sources</p>
+      <ul>
+        <li><span class="fort">Indeed</span>, par ton compte d'IA une fois connecté.</li>
+        <li><span class="fort">Les pages carrière</span> des entreprises qui t'intéressent : tu colles l'adresse, la plateforme la lit chaque matin.</li>
+      </ul>
+    </div>
+    <div class="actions-accueil">
+      <a class="lien-neutre" href="/bienvenue/recherche">Retour</a>
+      <button type="submit" class="go grand" id="lancer-sources">Lancer ma recherche {{ icone("suivant") }}</button>
+    </div>
+  </form>
+  <script>
+  (function () {
+    var form = document.getElementById("form-sources"), bouton = document.getElementById("lancer-sources");
+    function maj() { bouton.disabled = !form.querySelector("input[name=sources]:checked"); }
+    form.addEventListener("change", maj); maj();
+  })();
+  </script>
+
+{% elif ecran == 'recherche' %}
+  {# ---------------------------------------------------------------- 2. La recherche #}
+  <h1>Ta recherche</h1>
+  <p class="intro">Ce que la plateforme cherchera pour toi chaque matin.</p>
+
+  <form method="post" action="/bienvenue/recherche" class="formulaire-accueil" id="form-recherche">
+    <fieldset class="cartes-choix">
+      <legend>Quel type de poste cherches-tu ?</legend>
+      <p class="aide-accueil" id="objectif-aide">Règle le tri des annonces. Tu pourras le changer à tout moment.</p>
+      {% for o in objectifs %}
+      <label class="carte-choix">
+        <input type="radio" name="objectif" value="{{ o.valeur }}" data-effet="{{ o.description }}"{% if o.valeur == objectif %} checked{% endif %} aria-describedby="objectif-aide">
+        <span><span class="titre-choix">{{ o.libelle }}</span><span class="description-choix">{{ o.description }}</span></span>
+      </label>
+      {% endfor %}
+    </fieldset>
+
+    <div class="champ">
+      <label for="poste">Poste recherché <span class="requis" title="obligatoire">*</span></label>
+      <input type="text" id="poste" name="poste" value="{{ poste }}" required autocomplete="organization-title" aria-describedby="poste-aide">
+      <div class="aide" id="poste-aide">Un intitulé comme tu le taperais sur un site d'emploi. Tu pourras en ajouter d'autres ensuite.</div>
+    </div>
+
+    <fieldset class="cantons" aria-describedby="cantons-aide">
+      <legend>Où ? <span class="requis" title="obligatoire">*</span></legend>
+      <div class="puces-cantons">
+        {% for code in romands %}
+        <label class="puce-canton"><input type="checkbox" name="cantons" value="{{ code }}"{% if code in cantons_choisis %} checked{% endif %}><span>{{ cantons[code] }}</span></label>
+        {% endfor %}
+      </div>
+      <details class="autres-cantons"{% if cantons_choisis | reject('in', romands) | list %} open{% endif %}>
+        <summary>Autres cantons</summary>
+        <div class="puces-cantons">
+          {% for code, nom in cantons | dictsort(by='value') if code not in romands %}
+          <label class="puce-canton"><input type="checkbox" name="cantons" value="{{ code }}"{% if code in cantons_choisis %} checked{% endif %}><span>{{ nom }}</span></label>
+          {% endfor %}
+        </div>
+      </details>
+      <div class="aide" id="cantons-aide">La plateforme ne cherche que là. Rien n'est envoyé aux employeurs.</div>
+    </fieldset>
+
+    {# Aperçu en direct : la recherche devient la sienne avant d'exister. #}
+    <div class="apercu-accueil" aria-live="polite">
+      <p class="surtitre">Aperçu</p>
+      <div class="ligne-apercu">
+        <span class="pastille">{{ icone("recherche") }}</span>
+        <div>
+          <p class="fort" id="apercu-titre">« {{ poste or 'Ton poste' }} »</p>
+          <p id="apercu-texte">Chaque matin sur les sites d'emploi.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions-accueil">
+      <button type="submit" class="lien-neutre" form="form-passer">Passer pour l'instant</button>
+      <button type="submit" class="go grand" id="lancer">Continuer {{ icone("suivant") }}</button>
+    </div>
+  </form>
+  <form method="post" action="/bienvenue/terminer" id="form-passer"><input type="hidden" name="suite" value="/"></form>
+  <script>
+  (function () {
+    var form = document.getElementById("form-recherche"), poste = document.getElementById("poste");
+    var bouton = document.getElementById("lancer");
+    function maj() {
+      var cantons = Array.prototype.map.call(form.querySelectorAll("input[name=cantons]:checked"),
+        function (c) { return c.nextElementSibling.textContent; });
+      var objectif = form.querySelector("input[name=objectif]:checked");
+      var p = poste.value.trim();
+      document.getElementById("apercu-titre").textContent = "« " + (p || "Ton poste") + " »" + (cantons.length ? " · " + cantons.join(", ") : "");
+      document.getElementById("apercu-texte").textContent = "Chaque matin sur les sites d'emploi." + (objectif ? " " + objectif.dataset.effet : "");
+      bouton.disabled = !p || !cantons.length || !objectif;
+    }
+    form.addEventListener("input", maj);
+    form.addEventListener("change", maj);
+    maj();
+  })();
+  </script>
+
+{% else %}
+  {# ---------------------------------------------------------------- 3. Les premières offres #}
+  {% if premiere.etat == 'en_cours' %}
+  <h1>Ta première recherche</h1>
+  <p class="intro">« {{ poste }} » à {{ lieux }}, sur {{ sites }}.</p>
+  <div class="etat-tache">
+    <span class="spinner" aria-hidden="true"></span>
+    <div><p class="fort">Recherche en cours…</p>
+      <p>Les sites sont lus un par un, puis les annonces passent le tri selon tes choix. Ça prend en général moins d'une minute.</p></div>
+  </div>
+  <p class="aide-accueil">Tu peux fermer cette fenêtre : la recherche continue.</p>
+  <script>
+  setInterval(function () {
+    fetch("/bienvenue/offres/etat", {credentials: "same-origin"}).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (e) { if (e && e.etat !== "en_cours") location.reload(); }).catch(function () {});
+  }, 2000);
+  </script>
+
+  {% elif premiere.etat == 'finie' and premiere.gardees %}
+  <div class="succes-accueil">
+    <span class="pastille ronde">{{ icone("fin") }}</span>
+    <h1>{{ premiere.gardees }} offre{{ 's' if premiere.gardees > 1 }} pour toi</h1>
+    <p class="intro">Trouvée{{ 's' if premiere.gardees > 1 }} pour « {{ poste }} » à {{ lieux }}, sans que tu aies tapé une seule recherche.</p>
+    <dl class="bilan-accueil">
+      <div><dt>Sites lus</dt><dd>{{ premiere.sources | join(", ") or "—" }}</dd></div>
+      <div><dt>Annonces trouvées</dt><dd>{{ premiere.trouvees }}</dd></div>
+      <div><dt>Gardées pour toi</dt><dd>{{ premiere.gardees }}</dd></div>
+      <div><dt>Écartées au tri</dt><dd>{{ premiere.ecartees }}{% if premiere.motifs %} <span class="muet">({% for m, n in premiere.motifs %}{{ m | lower }} : {{ n }}{{ ", " if not loop.last }}{% endfor %})</span>{% endif %}</dd></div>
+    </dl>
+    <ul class="liste-offres">
+      {% for o in premiere.apercu %}
+      <li><span class="fort">{{ o.titre }}</span><span class="muet">{{ o.entreprise }}{{ " · " ~ o.lieu if o.lieu }}</span></li>
+      {% endfor %}
+    </ul>
+    <div class="actions-accueil centre">
+      <form method="post" action="/bienvenue/terminer"><input type="hidden" name="suite" value="/profil/identite"><button class="bouton">Compléter mon profil</button></form>
+      <form method="post" action="/bienvenue/terminer"><input type="hidden" name="suite" value="/"><button class="go grand">Voir mes offres {{ icone("suivant") }}</button></form>
+    </div>
+  </div>
+
+  {% elif premiere.etat == 'finie' %}
+  <div class="succes-accueil">
+    <span class="pastille ronde neutre">{{ icone("recherche") }}</span>
+    <h1>Rien de neuf aujourd'hui</h1>
+    <p class="intro">Les sites n'ont rien publié ces derniers jours pour « {{ poste }} » à {{ lieux }}{% if premiere.trouvees %} qui passe tes choix ({{ premiere.trouvees }} annonce{{ 's' if premiere.trouvees > 1 }} écartée{{ 's' if premiere.trouvees > 1 }}){% endif %}. La recherche repart chaque matin à {{ heure_passage }}.</p>
+    <div class="actions-accueil centre">
+      <a class="bouton" href="/bienvenue/recherche">Modifier ma recherche</a>
+      <form method="post" action="/bienvenue/terminer"><input type="hidden" name="suite" value="/"><button class="go grand">Aller au tableau de bord</button></form>
+    </div>
+  </div>
+
+  {% else %}
+  <h1>La recherche n'a pas abouti</h1>
+  <p class="intro">Les sites d'emploi n'ont pas répondu{% if premiere.erreur %} ({{ premiere.erreur }}){% endif %}. Ta recherche est enregistrée : elle repartira chaque matin à {{ heure_passage }}.</p>
+  <div class="actions-accueil">
+    <form method="post" action="/bienvenue/terminer"><input type="hidden" name="suite" value="/"><button class="lien-neutre">Continuer sans</button></form>
+    <form method="post" action="/bienvenue/offres/relancer"><button class="go grand">Réessayer</button></form>
+  </div>
+  {% endif %}
+{% endif %}
+</div>
+</div>
+{% endblock %}

@@ -1,0 +1,218 @@
+# Critères de recherche en version machine : ce que le code sait trancher seul.
+# Source : « Critères de recherches.md » du coffre (mise à jour du 28.10.2026).
+# Le fichier du coffre fait foi ; ici, seulement ce qui se décide sans jugement.
+# Tout le reste (adéquation, désirabilité, mandat de cadrage, dimension IA)
+# reste « nouvelle » et passe par Camille, puis par le tri IA (phase 2).
+#
+# Les motifs sont des expressions régulières Python, appliquées sans accents
+# et en minuscules. « limite: true » = écartée, mais montrée dans « Écartées
+# limites » sur le tableau de bord pour recalibrer le filtre (constat F-19).
+# Aucun montant de salaire dans ce fichier.
+
+sourcing:
+  cantons: [VD, GE, FR, VS, NE]
+  requetes:
+    - UX Lead
+    - Head of Design
+    - Design Manager
+    - Lead Product Designer
+    - Responsable UX
+    - Head of Product Design
+    - Service Design
+    - Design Thinking
+    - Product Manager
+    - Senior Product Manager
+    - Head of Product
+    - AI Product Manager
+    - Product Owner
+    - Chef de produit digital
+    - Product Strategy
+    - Innovation Manager
+    - Responsable innovation
+    - Digital Transformation
+    - Transformation digitale
+    - AI Adoption
+    - AI Enablement
+    - Change Manager IA
+    - intelligence artificielle
+  # Une requête par entreprise nommée dans « Structures visées ».
+  entreprises:
+    - Nexthink
+    - SOPHiA Genetics
+    - Scandit
+    - Futurdigital
+    - Edana
+    - Le Labster
+    - Swissquote
+    - Lombard Odier
+    - IBM
+    - MSC
+    - EPFL
+    - Association des Communes Genevoises
+    - Transports publics de la région lausannoise
+    - Romande Energie
+  # jobup filtre par ville ou par canton (par son nom), pas par rayon.
+  jobup_lieux: [Vaud, Genève, Fribourg, Valais, Neuchâtel]
+  # LinkedIn par Apify : syntaxe de recherche LinkedIn (« OR »), un run payant par requête.
+  linkedin_requetes:
+    - AI Product Manager
+    - UX Lead OR Head of UX OR Design Manager
+    - Innovation Manager OR AI Change Management OR AI Transformation
+    - AI Solution Lead OR AI & Automation Lead
+  linkedin_lieu: "Lausanne, Vaud, Switzerland"
+
+# L'intitulé doit toucher une des six familles, sinon C (passe 0, « hors de
+# portée »). Job-Room et jobup cherchent mot par mot : « Responsable innovation »
+# rapporte tous les « Responsable », « Service Design » tous les « Service »
+# (constaté au premier passage, 24.10 : 30 annonces sur 44 hors sujet). C'est le
+# « pré-tri sur les intitulés » que faisait l'ancienne chaîne à la main.
+familles_cibles: >-
+  \b(ux|ui/ux|user experience|experience utilisateur|design|designer|product|produit|produits|
+  owner|innovation|innover|transformation|digital|digitale|numerique|ia|ai|artificial|
+  intelligence artificielle|change|changement|adoption|enablement|strategy|strategie|
+  gouvernance|governance|cx|customer experience|experience client)\b
+
+regles:
+  # --- Passe 0 : hors de portée, jugée sur le titre et l'employeur -----------------
+  - id: titre-ingenierie
+    passe: 0
+    champ: titre
+    motif: "Métier exclu : ingénierie ou développement"
+    regex: >-
+      \b(engineer|ingenieur|ingenieure|developer|developpeur|developpeuse|full[ -]?stack|
+      devops|sre|platform engineer|software|logiciel|solutions? architect|
+      architecte (logiciel|solution|cloud|data|systeme|technique|si))\b
+  - id: titre-data-recherche
+    passe: 0
+    champ: titre
+    motif: "Métier exclu : data science ou recherche en IA"
+    regex: >-
+      \b(data scientist|data engineer|mlops|analytics engineer|data architect|data analyst|
+      machine learning|research scientist|ai researcher|chercheur|chercheuse|postdoc|doctorant)\b
+  - id: titre-vente
+    passe: 0
+    champ: titre
+    motif: "Métier exclu : vente"
+    regex: >-
+      \b(sales|account manager|key account|business development|business developer|
+      commercial|commerciale|vendeur|vendeuse|client advisor|conseiller clientele|
+      conseillere clientele|presales|pre-sales)\b
+  - id: titre-marketing-execution
+    passe: 0
+    champ: titre
+    motif: "Métier exclu : marketing d'exécution"
+    regex: \b(community manager|social media|content manager|redacteur|redactrice|brand activation|trade marketing)\b
+  - id: titre-design-non-numerique
+    passe: 0
+    champ: titre
+    motif: "Métier exclu : design non numérique"
+    regex: >-
+      \b(graphiste|graphic design|packaging|industrial design|designer industriel|
+      design industriel|architecte d'interieur|interior design|fashion|mode|textile|
+      horloger|watch design|bijou)\b
+  - id: titre-gestion-projet-pure
+    passe: 0
+    champ: titre
+    motif: "Métier exclu : gestion de projet pure"
+    regex: \b(project manager|chef de projet|cheffe de projet|program manager|programme manager|pmo|project leader)\b
+    sauf: \b(digital|numerique|produit|product|innovation|ia|ai|ux|transformation)\b
+  - id: titre-allemand
+    passe: 0
+    champ: titre
+    motif: "Langue : intitulé en allemand"
+    # « (m/f/d) » se lit aussi dans des intitulés anglais (JTI, 27.10) : l'annonce allemande
+    # qui le porte tombe sous « langue-allemand », d'après son texte.
+    regex: \((m/w/d|w/m/d)\)|\b(leiter|leiterin|mitarbeiter|mitarbeiterin|sachbearbeiter|verantwortliche|projektleiter|fachspezialist|fuhrungskraft)\b
+  - id: employeur-regie
+    passe: 0
+    champ: entreprise
+    motif: "Régie ou société de placement (vérifier si le poste est interne)"
+    limite: true
+    regex: >-
+      \b(ekkiden|adone|amaris|academic work|michael page|page personnel|yellowshark|impirio|
+      hays|randstad|adecco|manpower|robert walters|kelly services|interiman|gi group|experis|
+      coople|morgan philips|spring professional|kforce)\b
+
+  # --- Passe 1 : éliminatoire, jugée sur le texte ---------------------------------
+  - id: niveau-junior
+    passe: 1
+    champ: titre
+    motif: "Niveau : stage, apprentissage ou junior"
+    regex: \b(stagiaire|stage|intern|internship|apprenti|apprentie|apprentissage|junior|trainee|praktikum|praktikant|master's thesis|master thesis|thesis|travail de master|graduate assistant|civiliste)\b
+  - id: langue-allemand
+    passe: 1
+    champ: langue
+    motif: "Langue : annonce rédigée en allemand"
+    regex: ^de$
+  - id: allemand-exige
+    passe: 1
+    champ: texte
+    motif: "Langue : allemand exigé"
+    regex: >-
+      (allemand|german|deutsch|schweizerdeutsch|suisse allemand)[^.\n]{0,60}
+      (courant|indispensable|requis|exige|obligatoire|parfait|maternel|c1|c2|b2|fluent|fluency|
+      required|mandatory|native|proficien|business level)
+      |(courant|indispensable|parfaite maitrise|maitrise|fluent|fluency|native)[^.\n]{0,30}(en )?(allemand|german)
+  # L'allemand demandé en atout ne bloque plus une annonce (décision du 28.10, ELCA) :
+  # seul l'allemand exigé l'écarte.
+  - id: contrat-api-duree-determinee
+    passe: 1
+    champ: permanent
+    motif: "Contrat : durée déterminée (selon la plateforme)"
+    limite: true
+    regex: ^false$
+    # Un CDD de deux ans ou plus est accepté (décision du 28.10, OMPI) : la durée doit être
+    # dite à côté du contrat, pour ne pas confondre avec « 3 years of experience ».
+    # La plateforme ne donne pas la durée : l'exception se lit dans le titre et le texte.
+    sauf_champ: titre_texte
+    sauf: &cdd_deux_ans >-
+      (contrat|contract|cdd|duree|duration|fixed[- ]term|appointment|mission|engagement)[^.\n]{0,40}
+      \b([2-9]|deux|trois|quatre|cinq|two|three|four|five)\s*(ans|annees|years?)\b
+      |\b([2-9]|deux|trois|quatre|cinq|two|three|four|five)\s*(ans|annees|years?)[^.\n]{0,30}
+      (contrat|contract|cdd|fixed[- ]term|renouvelable|renewable|determinee)
+      |\b(2[4-9]|[3-9]\d)\s*(mois|months?)\b
+  - id: contrat-cdd
+    passe: 1
+    champ: titre_texte
+    motif: "Contrat : CDD ou mission"
+    limite: true
+    regex: >-
+      \b(cdd|duree determinee|contrat determine|temporaire|temporary|fixed[- ]term|befristet|
+      remplacement|mission de \d+ mois|contrat de \d+ mois|\d+ mois renouvelable|maternity cover|conge maternite|
+      \d+[ -]months?|defined duration|fixed duration|limited duration|duree limitee)\b
+    # Un CDD de deux ans ou plus est accepté : même exception que la règle précédente.
+    sauf: *cdd_deux_ans
+  - id: contrat-freelance
+    passe: 1
+    champ: titre_texte
+    motif: "Contrat : freelance, portage ou temps partiel"
+    regex: \b(freelance|free-lance|portage salarial|independant|temps partiel|part[- ]time)\b
+  - id: taux
+    passe: 1
+    champ: taux_max
+    motif: "Taux : moins de 100 %"
+    regex: ^([0-9]|[1-8][0-9]|9[0-4])$
+  - id: canton
+    passe: 1
+    champ: canton
+    motif: "Lieu : hors des cantons VD, GE, FR, VS, NE"
+    regex: ^(?!(VD|GE|FR|VS|NE)$)[A-Z]{2}$
+
+# Balises de raison, un clic dans le tableau de bord (décision du 24.10, D7).
+raisons:
+  pour:
+    - employeur visé
+    - poste et mandat conformes
+    - angle fort
+    - contact dans l'entreprise
+    - à saisir vite
+  contre:
+    - trajet
+    - taux ou contrat
+    - niveau
+    - pas d'IA
+    - pas de mandat de cadrage
+    - employeur peu attirant
+    - exigence que je n'ai pas
+    - annonce déjà vue ou douteuse
+    - pas le moment

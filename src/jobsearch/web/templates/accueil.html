@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+{% from "_macros.html" import bouton_action, meta, decision, notes, alertes, delais, adequation, annuler_go, preremplir, claude, etat_tache %}
+{% block contenu %}
+<div class="bandeau {{ etat.niveau }}"><span class="point"></span><span>{{ etat.texte }} <a href="/sante">Système</a></span></div>
+
+{% if rythme.alerte %}<div class="bandeau alerte"><span class="point"></span><span>{{ rythme.semaine.n }} postulation{{ 's' if rythme.semaine.n > 1 }} cette semaine, l'objectif est {{ rythme.semaine.min }} : il en manque {{ rythme.semaine.manque }} d'ici dimanche.</span></div>{% endif %}
+
+{% if premiers_pas %}{% set faits = premiers_pas | selectattr(5) | list | length %}
+{# Checklist Nexus du premier tableau de bord : ce qui reste du profil, pourquoi et en combien de temps ; masquable. #}
+<section class="carte premiers-pas" id="premiers-pas" aria-labelledby="premiers-pas-titre">
+  <div class="tete">
+    <div><h2 id="premiers-pas-titre">Bien démarrer</h2>
+      <p class="muet petit">{{ faits }} sur {{ premiers_pas | length }} fait{{ 's' if faits > 1 }}. Le reste rend la note des annonces et tes dossiers plus justes.</p></div>
+    <div class="boutons-tete"><a class="petit" href="/interface">Ce qui s'ouvre</a>
+      <form method="post" action="/premiers-pas/masquer"><button class="lien-neutre petit">Masquer</button></form></div>
+  </div>
+  <div class="progression" role="progressbar" aria-valuemin="0" aria-valuemax="{{ premiers_pas | length }}" aria-valuenow="{{ faits }}" aria-label="Bien démarrer">
+    <i style="width:{{ 100 * faits // premiers_pas | length }}%"></i></div>
+  <ul class="checklist">
+  {% for id, libelle, pourquoi, duree, lien, fait in premiers_pas %}
+    <li class="{{ 'fait' if fait }}">
+      <span class="coche" aria-hidden="true">{% if fait %}<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.25 7.34a1 1 0 0 1-1.42.006l-3.75-3.72a1 1 0 1 1 1.408-1.42l3.04 3.016 6.543-6.624a1 1 0 0 1 1.414-.006Z" clip-rule="evenodd"/></svg>{% endif %}</span>
+      <span class="texte"><span class="libelle">{{ libelle }}{% if fait %}<span class="lecteur"> (fait)</span>{% endif %}</span><span class="pourquoi">{{ pourquoi }}</span></span>
+      {% if not fait %}<span class="duree">{{ duree }}</span><a class="bouton petit" href="{{ lien }}"{% if id == 'ia' %} data-connexion-ia="claude" data-nom="Claude"{% endif %}>Commencer</a>{% endif %}
+    </li>
+  {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<h1>À faire aujourd'hui</h1>
+{% if rythme.actif %}{# option « Objectifs », et au moins un objectif : seules les périodes qui en ont un #}
+<div class="chiffres rythme">
+{% for nom, lib in [("semaine", "postulations cette semaine"), ("mois", "postulations ce mois")] if rythme[nom].actif %}{% set p = rythme[nom] %}
+  <div class="chiffre {{ 'atteint' if p.atteint else ('chaud' if nom == 'semaine' and rythme.alerte) }}">
+    <b>{{ p.n }} <small>/ {{ p.min }}</small></b>
+    <span>{{ lib }} · {{ "objectif atteint" if p.atteint else "il en manque %d" % p.manque }}</span>
+    <div class="jauge" aria-hidden="true"><i style="width:{{ [100 * p.n // p.min, 100] | min if p.min else 100 }}%"></i></div>
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+<div class="chiffres">
+  <div class="chiffre"><b>{{ a_trancher | length }}</b><span>à trancher</span></div>
+  <div class="chiffre"><b>{{ retenues | length }}</b><span>Go, à envoyer</span></div>
+  <div class="chiffre {{ 'chaud' if relances.dues }}"><b>{{ relances.dues | length }}</b><span>relances dues</span></div>
+  {% if fonctions.jobroom %}<div class="chiffre {{ 'chaud' if jobroom.a_saisir and jobroom.a_saisir[0]._jours_restants <= 5 }}"><b>{{ jobroom.a_saisir | length }}</b><span>preuves Job-Room</span></div>{% endif %}
+  <div class="chiffre"><b>{{ '%.1f' % stats.ratio_a if stats.ratio_a is not none else '–' }} %</b><span>ratio d'A (cible 5–15)</span></div>
+</div>
+
+{% if entretiens %}
+<h2 id="entretiens">Entretiens à venir <span class="compte">{{ entretiens | length }}</span></h2>
+<div class="cartes deux">
+{% for e in entretiens %}{% set f = e._annonce %}{% set j = e.date | jours_restants %}
+  <article class="carte entretien-prochain{{ ' proche' if j <= 1 }}">
+    <div class="tete">
+      <div>
+        <h3><a href="/annonce/{{ f.empreinte }}?onglet=entretien">{{ f.titre }}</a></h3>
+        <div><b>{{ f.entreprise }}</b></div>
+        <div class="meta">{{ e.date | date_fr }}{% if e.heure %}, {{ e.heure }}{% endif %}{% if e.lieu %} · {{ e.lieu }}{% endif %}</div>
+      </div>
+      <span class="puce {{ 'entretien' if j <= 1 }}">{{ e.date | jour_fr }}{% if e.heure %} {{ e.heure }}{% endif %}</span>
+    </div>
+    {% if e.avec %}<p class="petit" style="margin:.5rem 0 0"><b>Avec :</b> {{ e.avec }}</p>{% endif %}
+    <p class="petit" style="margin:.5rem 0 0"><a href="/annonce/{{ f.empreinte }}?onglet=entretien">Ouvrir la préparation →</a></p>
+  </article>
+{% endfor %}
+</div>
+{% endif %}
+
+<h2 id="trancher">À trancher <span class="compte">{{ a_trancher | length }}</span></h2>
+<nav class="tri" aria-label="Trier">
+  Trier par
+  {% for k, v in [("urgence", "urgence"), ("note", "note"), ("recence", "date de publication"), ("statut", "statut")] %}
+  <a href="/?tri={{ k }}#trancher" class="{{ 'actif' if tri == k }}">{{ v }}</a>{% endfor %}
+</nav>
+{% if a_trancher %}
+<div class="cartes deux">
+{% for f in a_trancher %}
+  <article class="carte" id="a-{{ f.empreinte }}">
+    <div class="tete">
+      <div>
+        <h3><a href="/annonce/{{ f.empreinte }}">{{ f.titre }}</a></h3>
+        <div><b>{{ f.entreprise }}</b></div>
+        <div class="meta">{{ meta(f) }}</div>
+      </div>
+      <span class="puce {{ f.statut }}">{{ f.statut }}</span>
+    </div>
+    {{ delais(f) }}
+    {{ adequation(evals.get(f.empreinte)) }}
+    {% if f.angle %}<p class="petit" style="margin:.5rem 0 0"><b>Angle :</b> {{ f.angle }}</p>{% endif %}
+    {% if f.exigences %}<ul class="exig">{% for e in f.exigences[:3] %}<li>{{ e }}</li>{% endfor %}</ul>
+    {% elif f.texte %}<p class="extrait">{{ f.texte[:400] }}</p>{% endif %}
+    {% if f.motif and f.statut == 'B' %}<p class="petit muet" style="margin:.4rem 0 0">{{ f.motif }}</p>{% endif %}
+    {{ decision(f, raisons, "/#trancher", fonctions) }}
+  </article>
+{% endfor %}
+</div>
+{% else %}<p class="vide">Rien à trancher. Le prochain passage cherchera de nouvelles annonces.</p>{% endif %}
+<p class="petit"><a href="/offres/ajouter">Ajouter une annonce trouvée ailleurs</a></p>
+
+<h2 id="retenues">Go donné, à envoyer <span class="compte">{{ retenues | length }}</span></h2>
+{% if retenues %}
+<div class="cartes deux">
+{% for f in retenues %}
+  <article class="carte">
+    <div class="tete"><div>
+      <h3><a href="/annonce/{{ f.empreinte }}">{{ f.titre }}</a></h3>
+      <div><b>{{ f.entreprise }}</b></div>
+      {{ delais(f) }}
+      {% set d = dossiers.get(f.empreinte) %}
+      <div class="meta">
+        {% if d and d.etat == "en_cours" %}<span data-suivi-dossier="{{ f.empreinte }}">{{ libelle_dossier(d) }}</span>
+        {% elif d and d.etat == "interrompu" %}{{ libelle_dossier(d) }} · <a href="/dossier/{{ f.empreinte }}">le refaire</a>
+        {% elif d and d.etat in ("pret", "a_revoir") %}<a href="/dossier/{{ f.empreinte }}">Ouvrir le dossier →</a>{% if d.couverture is not none %} · couverture {{ d.couverture }} %{% endif %}{% if d.origine == "coffre" %} · ancienne chaîne{% endif %}
+        {% elif d and d.etat == "echec" %}Dossier en échec : {{ (d.erreur or "")[:120] }} · <a href="/dossier/{{ f.empreinte }}">détails</a>
+        {% else %}Dossier pas encore produit{% endif %}
+      </div>
+    </div>
+    <span class="puce {{ 'retard' if d and d.etat in ('echec', 'a_revoir', 'interrompu') else 'retenue' }}">
+      {{ {"en_cours": "en préparation", "pret": "dossier prêt", "a_revoir": "à revoir", "echec": "échec", "interrompu": "interrompu"}.get(d.etat) if d else ("dossier prêt" if f.cv_genere else "dossier à faire") }}</span></div>
+    {{ adequation(evals.get(f.empreinte)) }}
+    <form method="post" action="/action" class="boutons">
+      <input type="hidden" name="empreinte" value="{{ f.empreinte }}"><input type="hidden" name="retour" value="/#retenues">
+      <input type="hidden" name="type" value="candidature">
+      <input type="date" name="date" value="{{ aujourdhui }}" aria-label="Date d'envoi">
+      <input type="text" name="canal" placeholder="Canal (portail, e-mail…)" aria-label="Canal">
+      <button class="go">Marquer envoyée</button>
+    </form>
+    <div class="boutons">
+      {% if d and d.etat in ("pret", "a_revoir") and (f.url_postuler or f.url) %}{{ claude(f, "formulaire", "Remplir avec Claude", "/#retenues", "go", taches.get(f.empreinte)) }}{% endif %}
+      {{ etat_tache(taches.get(f.empreinte), etats_taches) }}
+      {% if f.url_postuler or f.url %}<a class="petit" href="{{ f.url_postuler or f.url }}" target="_blank" rel="noopener noreferrer">Ouvrir le formulaire officiel ↗</a>{% endif %}
+    </div>
+    {{ annuler_go(f, raisons, "/#retenues") }}
+  </article>
+{% endfor %}
+</div>
+{% else %}<p class="vide">Aucun Go en attente d'envoi.</p>{% endif %}
+
+<h2 id="courrier">Courrier des employeurs <span class="compte">{{ courrier_a_trancher | length }} à trancher</span></h2>
+{% if courrier_a_trancher %}
+<div class="cartes">
+{% for c in courrier_a_trancher %}
+  <article class="carte">
+    <div class="tete"><div>
+      <h3>{{ c.objet }}</h3>
+      <div class="meta">{{ c.recu_le | date_fr(True) }} · {{ c.expediteur }} · {{ c.message or "" }}</div>
+    </div><span class="puce">{{ {"offre": "offre ?", "refus": "refus ?", "entretien": "entretien ?", "accuse": "accusé ?", "ambigu": "ambigu", "inconnu": "à lire"}.get(c.classe_proposee or c.classe, c.classe) }}</span></div>
+    {% if c.extrait %}<p class="extrait">{{ c.extrait }}</p>{% endif %}
+    <form method="post" action="/courrier/{{ c.id }}" class="boutons courrier">
+      {% set probables = (c.classement | selectattr(0, '>', 0) | list)[:4] %}
+      {% set deja = probables | map(attribute=1) | map(attribute='empreinte') | list %}
+      <div class="choix-candidature">
+        <input type="search" class="filtre" data-filtre="cand-{{ c.id }}" placeholder="Chercher une candidature…" aria-label="Chercher une candidature" autocomplete="off">
+        <select id="cand-{{ c.id }}" name="empreinte" aria-label="Candidature" required>
+          <option value="">— choisir la candidature —</option>
+          {% if probables %}<optgroup label="Les plus probables">
+            {% for s, o, raisons in probables %}<option value="{{ o.empreinte }}" {{ 'selected' if o.empreinte == c.proposee }} title="{{ raisons | join(', ') }}">{{ o.entreprise }} — {{ o.titre[:45] }}</option>{% endfor %}
+          </optgroup>{% endif %}
+          <optgroup label="{{ 'Autres candidatures' if probables else 'Candidatures' }}">
+            {% for s, o, raisons in c.classement if o.empreinte not in deja %}<option value="{{ o.empreinte }}">{{ o.entreprise }} — {{ o.titre[:45] }}</option>{% endfor %}
+          </optgroup>
+        </select>
+      </div>
+      <select name="classe" aria-label="Type de réponse" required>
+        <option value="">— type de réponse —</option>
+        {% for k, v in [("accuse", "Accusé de réception"), ("entretien", "Entretien"), ("refus", "Refus"), ("offre", "Offre")] %}<option value="{{ k }}" {{ 'selected' if k == c.classe_proposee }}>{{ v }}</option>{% endfor %}
+      </select>
+      <button class="go" name="decision" value="applique">Appliquer</button>
+      <button class="discret" name="decision" value="ignore" formnovalidate>Ignorer</button>
+      {% if c.lien %}<a class="petit" href="{{ c.lien }}">ouvrir dans Mail</a>{% endif %}
+    </form>
+  </article>
+{% endfor %}
+</div>
+{% else %}<p class="vide">Aucun courrier à trancher.</p>{% endif %}
+{% if courrier_recent %}
+<details class="petit" style="margin-top:.5rem"><summary>{{ courrier_recent | length }} réponse(s) appliquée(s) ces 14 derniers jours</summary>
+  <ul>{% for c in courrier_recent %}<li>{{ c.recu_le | date_fr(True) }} · <a href="/annonce/{{ c.empreinte }}">{{ c.entreprise }}</a> · {{ c.classe }}{% if c.message %} ({{ c.message }}){% endif %}</li>{% endfor %}</ul>
+</details>
+{% endif %}
+
+{% if fonctions.jobroom %}{# option « Preuves de recherche Job-Room » #}
+<h2 id="jobroom">Preuves Job-Room <span class="compte">{{ jobroom.a_saisir | length }} à saisir</span></h2>
+<div class="boutons" style="margin:-.3rem 0 .6rem">
+  {% if jobroom.a_saisir or (tache_jobroom and tache_jobroom.active) %}{{ claude(none, "jobroom", "Saisir par Claude", "/#jobroom", "go", tache_jobroom) }}{% endif %}
+  {{ etat_tache(tache_jobroom, etats_taches) }}
+  <span class="petit muet">Automatique dès qu'une candidature est notée envoyée.</span>
+</div>
+{% if jobroom.a_saisir or jobroom.refus_a_reporter %}
+<div class="tableau"><table>
+  <thead><tr><th>Avant le</th><th>Raison sociale</th><th>Désignation exacte du poste</th><th>Postulation</th><th></th></tr></thead>
+  <tbody>
+  {% for f in jobroom.a_saisir %}
+    <tr>
+      <td><span class="puce {{ 'retard' if f._jours_restants <= 5 }}">{{ f._limite | date_fr(True) }}</span></td>
+      <td>{{ f.entreprise }}</td>
+      <td><a href="/annonce/{{ f.empreinte }}">{{ f.titre }}</a></td>
+      <td>{{ f.postulee_le | date_fr(True) }}{% if f.canal_envoi %} · {{ f.canal_envoi }}{% endif %}</td>
+      <td style="white-space:nowrap">{{ bouton_action(f, "jobroom_saisie", "Saisie faite", "/#jobroom") }}</td>
+    </tr>
+  {% endfor %}
+  {% for f in jobroom.refus_a_reporter %}
+    <tr>
+      <td><span class="puce">refus</span></td><td>{{ f.entreprise }}</td>
+      <td><a href="/annonce/{{ f.empreinte }}">{{ f.titre }}</a></td>
+      <td>Résultat négatif à reporter{% if f.motif_refus %} : {{ f.motif_refus }}{% endif %}</td>
+      <td>{{ bouton_action(f, "jobroom_refus", "Reporté", "/#jobroom") }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+<p class="petit muet">À saisir sur <a href="https://www.job-room.ch/work-efforts/create" target="_blank" rel="noopener noreferrer">job-room.ch</a> : résultat « en suspens », assignation ORP « non ». Vérifier d'abord la liste du mois (anti-doublon).</p>
+{% else %}<p class="vide">Rien à saisir pour l'instant.</p>{% endif %}
+{% if jobroom.a_verifier %}<p class="petit muet">{{ jobroom.a_verifier | length }} candidatures plus anciennes n'ont pas de preuve inscrite au registre (délai passé) : à vérifier dans Job-Room, voir <a href="/candidatures">Candidatures</a>.</p>{% endif %}
+{% endif %}
+
+<h2 id="relances">Relances dues <span class="compte">{{ relances.dues | length }}</span></h2>
+{% if relances.dues %}
+<div class="tableau"><table>
+  <thead><tr><th>Échéance</th><th>Annonce</th><th>Action</th><th></th></tr></thead>
+  <tbody>
+  {% for f in relances.dues[:25] %}
+    <tr>
+      <td><span class="puce retard">{{ f._echeance | date_fr(True) }}</span>{% if f._retard > 0 %} <span class="muet petit">+{{ f._retard }} j</span>{% endif %}</td>
+      <td><a href="/annonce/{{ f.empreinte }}">{{ f.entreprise }}</a><div class="muet petit">{{ f.titre }}</div></td>
+      <td class="petit">{{ f.prochaine_action or "" }}</td>
+      <td style="white-space:nowrap">{{ bouton_action(f, "relance_faite", "Relancé", "/#relances") }} {{ bouton_action(f, "refus", "Refus", "/#relances", "discret") }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% if relances.dues | length > 25 %}<p class="petit muet">… et {{ relances.dues | length - 25 }} autres dans <a href="/candidatures">Candidatures</a>.</p>{% endif %}
+{% else %}<p class="vide">Aucune relance due.</p>{% endif %}
+{% if relances.a_classer %}<p class="petit muet">{{ relances.a_classer | length }} candidatures ont eu leurs deux relances sans réponse : à classer (refus ou sans suite) depuis <a href="/candidatures#sans-suite">Candidatures</a>.</p>{% endif %}
+
+<h2 id="limites">Écartées limites <span class="compte">{{ limites | length }} sur 14 jours</span></h2>
+<p class="petit muet" style="margin-top:-.4rem">Écartées par une règle de montage (régie, CDD de moins de deux ans). À parcourir pour savoir si le filtre est trop dur.</p>
+{% if limites %}
+<div class="tableau"><table><tbody>
+{% for f in limites %}
+  <tr><td><a href="/annonce/{{ f.empreinte }}">{{ f.titre }}</a><div class="muet petit">{{ f.entreprise }} · {{ f.lieu }}</div></td>
+      <td class="petit">{{ f.motif }}</td>
+      <td>{{ bouton_action(f, "remettre_b", "Remettre en B", "/#limites") }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+{% else %}<p class="vide">Aucune annonce limite récente.</p>{% endif %}
+{% endblock %}

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block titre %}Dossier · {{ f.entreprise }}{% endblock %}
+{% block contenu %}
+<p class="petit"><a href="/annonce/{{ f.empreinte }}">← Annonce</a></p>
+<h1>Dossier · {{ f.titre }}</h1>
+<div><b>{{ f.entreprise }}</b></div>
+<div class="bandeau {{ 'ok' if d.etat == 'pret' else 'alerte' if d.etat in ('echec', 'interrompu') else 'attention' }}" style="margin-top:1rem">
+  <span class="point"></span>
+  {% if d.etat == "en_cours" %}<span data-suivi-dossier="{{ f.empreinte }}">{{ libelle_dossier(d) }}</span>
+  {% else %}<span>{{ {"interrompu": "Interrompu : la tâche s'est arrêtée (tableau de bord redémarré ?). Refaire le dossier.", "pret": "Prêt : relire, puis envoyer par le lien officiel.", "a_revoir": "À revoir avant envoi : voir les contrôles.", "echec": "Échec : " ~ (d.erreur or "")}.get(d.etat) }}
+  {% if d.couverture is not none %} · couverture des mots-clés {{ d.couverture }} %{% endif %}</span>{% endif %}
+  {% if d.origine == "coffre" %}<span class="petit muet" style="margin-left:auto">Dossier de l'ancienne chaîne, dans le coffre (lecture seule)</span>
+  {% elif d.etat != "en_cours" %}<form method="post" action="/dossier/{{ f.empreinte }}/refaire" style="margin-left:auto"><button class="discret">Refaire</button></form>{% endif %}
+</div>
+
+{% if fichiers %}
+<h2>Documents</h2>
+<p class="petit" style="margin:-.4rem 0 .6rem">
+  Lettre datée du <b>{{ date_lettre | date_fr }}</b>
+  {% if envoyee %}<span class="muet">· date d'envoi, figée</span>
+  {% else %}<span class="muet">· date du jour, mise à jour jusqu'à l'envoi puis figée par « Marquer envoyée »</span>{% endif %}
+  {% if pdf_lettre_coffre %}<br><span class="muet">Les PDF de l'ancienne chaîne gardent la date de leur production : envoie plutôt le Word, daté.</span>{% endif %}
+</p>
+<div class="docs">
+  <nav class="onglets-docs" aria-label="Documents">
+    {% for n in fichiers %}
+    <a href="/dossier/{{ f.empreinte }}?doc={{ n | urlencode }}#apercu" class="{{ 'actif' if n == apercu }}">
+      {{ "CV" if "-CV-" in n else "Lettre" if ("Letter" in n or "Lettre" in n) else n }}
+      <span class="format">{{ n.rsplit(".", 1)[1] | upper }}</span></a>
+    {% endfor %}
+  </nav>
+  {% if apercu %}
+  <div class="apercu" id="apercu">
+    <iframe src="/dossier/{{ f.empreinte }}/apercu/{{ apercu | urlencode }}" title="Aperçu de {{ apercu }}" loading="lazy"></iframe>
+  </div>
+  <div class="boutons">
+    <a class="bouton" href="/dossier/{{ f.empreinte }}/fichier/{{ apercu | urlencode }}">⬇ Télécharger {{ apercu }}</a>
+    <a class="bouton discret" href="/dossier/{{ f.empreinte }}/apercu/{{ apercu | urlencode }}" target="_blank" rel="noopener">Plein écran ↗</a>
+    {% if f.url_postuler %}<a class="bouton" href="{{ f.url_postuler }}" target="_blank" rel="noopener noreferrer">Formulaire officiel ↗</a>{% endif %}
+    {% if f.url_postuler or f.url %}
+    <form method="post" action="/annonce/{{ f.empreinte }}/preremplir" style="display:inline">
+      <input type="hidden" name="cible" value="employeur"><input type="hidden" name="retour" value="/dossier/{{ f.empreinte }}">
+      <button class="go">Pré-remplir le formulaire</button></form>
+    {% endif %}
+  </div>
+  {% if apercu.endswith(".docx") %}<p class="petit muet">Aperçu du contenu et de la structure du Word ; la mise en page exacte se voit dans le PDF{% if not d.origine == "coffre" %} (produit dès que LibreOffice est installé){% endif %}.</p>{% endif %}
+  {% endif %}
+</div>
+{% endif %}
+
+{% if motscles %}
+<h2 id="mots-cles">Mots-clés de l'annonce</h2>
+<div class="carte">
+  <div class="jauge" role="img" aria-label="Couverture {{ motscles.taux }} %">
+    <div class="jauge-barre {{ 'ok' if motscles.taux >= 80 else 'moyen' if motscles.taux >= 60 else 'bas' }}" style="width: {{ motscles.taux }}%"></div>
+  </div>
+  <p style="margin:.45rem 0 .8rem"><b>{{ motscles.taux }} %</b> des mots-clés de l'annonce figurent dans le CV
+    ({{ motscles.presents | length }} sur {{ motscles.presents | length + motscles.absents | length }} ; seuil de la méthode : 80 %).</p>
+
+  {% if motscles.absents %}
+  <form method="post" action="/dossier/{{ f.empreinte }}/mots-cles">
+    <p class="petit" style="margin:0 0 .35rem"><b>Manquants</b> : coche ceux qui sont vrais pour toi. Les autres sont des écarts, à traiter dans la lettre.</p>
+    <div class="tags mots">
+      {% for t, n in motscles.absents %}<label{% if f.langue %} lang="{{ f.langue }}"{% endif %}><input type="checkbox" name="termes" value="{{ t }}">{{ t }} <small>×{{ n }}</small></label>{% endfor %}
+    </div>
+    {% if d.origine == "plateforme" %}
+    <div class="boutons">
+      <input class="note" type="text" name="precision" placeholder="Précision facultative (ex. : « machine learning » vu en formation, pas en poste)" aria-label="Précision">
+      <button class="go">Intégrer au CV</button>
+    </div>
+    <p class="petit muet" style="margin:.35rem 0 0">Le CV est réécrit pour placer ces termes là où ils sont justes, sans rien inventer d'autre ; la version précédente est gardée.</p>
+    {% else %}<p class="petit muet">Dossier de l'ancienne chaîne : à réviser dans Obsidian.</p>{% endif %}
+  </form>
+  {% endif %}
+
+  <details class="petit" style="margin-top:.7rem"><summary>Présents ({{ motscles.presents | length }})</summary>
+    <div class="tags mots">{% for t, n in motscles.presents %}<span class="present"{% if f.langue %} lang="{{ f.langue }}"{% endif %}>{{ t }} <small>×{{ n }}</small></span>{% endfor %}</div>
+  </details>
+  {% if motscles.format %}
+  <details class="petit"><summary>Format du CV ({{ motscles.format | length }} point{{ 's' if motscles.format | length > 1 }})</summary>
+    <ul>{% for x in motscles.format %}<li>{{ x }}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if d.controles %}
+<h2>Contrôles</h2>
+<div class="tableau"><table><tbody>
+{% for c in d.controles %}<tr><td><span class="puce {{ 'B' if c.ok else 'retard' }}">{{ "ok" if c.ok else "à voir" }}</span></td><td class="petit">{{ c.cq }}</td><td class="petit muet">{{ c.detail }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endif %}
+
+{% for nom, texte in pieces %}
+<h2>{{ nom }}</h2>
+<div class="texte-annonce"{% if f.langue and nom in ("CV.md", "Lettre.md") %} lang="{{ f.langue }}"{% endif %}>{{ texte | texte_html }}</div>
+{% endfor %}
+{% endblock %}

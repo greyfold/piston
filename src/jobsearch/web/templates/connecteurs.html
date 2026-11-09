@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titre %}Connecteurs · Recherche d'emploi{% endblock %}
+{% block contenu %}
+<h1>Connecteurs</h1>
+<p class="muet">Ce que la plateforme peut lire pour toi. Les connecteurs « compte Claude » passent par ton compte Claude (claude.ai) ; ceux « sur ce Mac » restent sur ce Mac. Chaque tâche ne reçoit que les outils de lecture du connecteur qu'elle utilise : rien n'est envoyé, déplacé ni effacé.</p>
+
+<p class="petit muet">Les connecteurs « compte Claude » demandent que Claude soit connecté : {% if moteur.connecte %}c'est le cas{% else %}<a href="/ia" data-connexion-ia="claude" data-nom="Claude">se connecter</a>{% endif %} (page <a href="/ia">Fournisseur d'IA</a>).</p>
+
+{% for role, libelle in roles.items() %}
+<h2>{{ libelle }}</h2>
+<div class="cartes deux">
+{% for c in connecteurs if c.role == role %}
+  <section class="carte" id="{{ c.id }}">
+    <div class="tete"><b>{{ c.nom }}</b>
+      <span class="puce {{ 'B' if c.actif else '' }}">{{ "actif" if c.actif else "inactif" }}</span></div>
+    <div class="meta">{{ c.lieu_libelle }} · {{ c.usage }}</div>
+    <div class="petit muet" style="margin-top:.35rem">Pour l'activer : {{ c.activer }}</div>
+    <div class="boutons" style="margin-top:.6rem">
+      <form method="post" action="/connecteurs/{{ c.id }}/{{ 'desactiver' if c.actif else 'activer' }}">
+        <button class="{{ 'discret' if c.actif else 'go' }}">{{ "Désactiver" if c.actif else "Activer" }}</button></form>
+      <form method="post" action="/connecteurs/{{ c.id }}/tester"><button class="discret">Tester</button></form>
+    </div>
+  </section>
+{% endfor %}
+</div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,251 @@
+{% macro bouton_action(f, type, libelle, retour, classe="", champs=None) -%}
+<form method="post" action="/action" style="display:inline">
+  <input type="hidden" name="empreinte" value="{{ f.empreinte }}">
+  <input type="hidden" name="type" value="{{ type }}">
+  <input type="hidden" name="retour" value="{{ retour }}">
+  {% for k, v in (champs or {}).items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+  <button class="{{ classe }}">{{ libelle }}</button>
+</form>
+{%- endmacro %}
+
+{% macro meta(f) -%}
+{{ f.lieu or "lieu ?" }}
+{% if f.sources %} · {{ f.sources | join(", ") }}{% endif %}
+{%- endmacro %}
+
+{% macro delais(f) -%}
+{% set j = f.delai_postulation | jours_restants %}
+<div class="delais">
+  {% if f.delai_postulation %}
+    <span class="delai {{ 'depasse' if j < 0 else 'urgent' if j <= 7 else 'proche' if j <= 14 else '' }}"
+          title="Délai de postulation indiqué dans l'annonce">
+      {% if j < 0 %}Délai dépassé ({{ f.delai_postulation | date_fr(True) }})
+      {% elif j == 0 %}Postuler aujourd'hui
+      {% elif j == 1 %}Postuler avant demain
+      {% else %}Postuler avant le {{ f.delai_postulation | date_fr(True) }} · {{ j }} j{% endif %}
+    </span>
+  {% elif f.fin_publication %}
+    {% set jf = f.fin_publication | jours_restants %}
+    <span class="delai sans" title="Pas de délai dans l'annonce ; date de fin de publication donnée par la plateforme">
+      {% if jf is not none and jf < 0 %}Plus en ligne depuis le {{ f.fin_publication | date_fr(True) }}{% else %}En ligne jusqu'au {{ f.fin_publication | date_fr(True) }}{% endif %}
+    </span>
+  {% else %}<span class="delai sans">Pas de délai indiqué</span>{% endif %}
+  {% if f.publiee_le %}<span class="publiee" title="Date de publication">Publiée le {{ f.publiee_le | date_fr(True) }} ({{ f.publiee_le | il_y_a }})</span>{% endif %}
+</div>
+{%- endmacro %}
+
+{% macro decision(f, raisons, retour, fonctions=none) -%}
+{% set peut_postuler = fonctions is none or fonctions.postuler %}
+<form class="decision" method="post" action="/action">
+  <input type="hidden" name="empreinte" value="{{ f.empreinte }}">
+  <input type="hidden" name="retour" value="{{ retour }}">
+  <details class="raisons">
+    <summary>Pourquoi ? (un clic, facultatif)</summary>
+    <div class="tags">
+      <span class="groupe">Pour</span>
+      {% for r in raisons.pour %}<label><input type="checkbox" name="raisons" value="{{ r }}">{{ r }}</label>{% endfor %}
+      <span class="groupe">Contre</span>
+      {% for r in raisons.contre %}<label><input type="checkbox" name="raisons" value="{{ r }}">{{ r }}</label>{% endfor %}
+    </div>
+  </details>
+  <div class="boutons">
+    <input class="note" type="text" name="note" placeholder="Note (facultatif)" aria-label="Note">
+    {% if peut_postuler %}<button class="go" name="type" value="go">Go</button>
+    {% else %}<button class="go" type="button" disabled aria-describedby="verrou-{{ f.empreinte }}">Go</button>{% endif %}
+    <button name="type" value="attendre">Attendre</button>
+    <button class="non" name="type" value="pasgo">Pas go</button>
+  </div>
+  {% if not peut_postuler %}<p class="verrou" id="verrou-{{ f.empreinte }}">Pour postuler, il reste : {% for i, libelle, lien in fonctions.manque.postuler %}<a href="{{ lien }}"{% if i == 'ia' %} data-connexion-ia="claude" data-nom="Claude"{% endif %}>{{ libelle[:1] | lower }}{{ libelle[1:] }}</a>{{ ", " if not loop.last }}{% endfor %}.</p>{% endif %}
+</form>
+{%- endmacro %}
+
+
+{% macro notes(e) -%}
+{% if e %}
+<div class="notes">
+  <span class="note-glob {{ 'haute' if e.note_globale >= 80 else 'moyenne' if e.note_globale >= 60 else 'basse' }}" title="Adéquation globale : profil, annonce et critères">{{ e.note_globale }}<small>/100</small></span>
+  <span class="note-profil" title="Part des exigences majeures couvertes par le profil">Profil {{ e.adequation_profil }} %</span>
+  <span class="puce" title="Classe suggérée par l'évaluation">suggère {{ e.resultat.classe_suggeree }}</span>
+  {% if e.resultat.salaire %}{{ salaire(e.resultat.salaire) }}{% endif %}
+</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro preremplir(f, cible, libelle, retour, classe="") -%}
+<form method="post" action="/annonce/{{ f.empreinte }}/preremplir" style="display:inline">
+  <input type="hidden" name="cible" value="{{ cible }}"><input type="hidden" name="retour" value="{{ retour }}">
+  <button class="{{ classe }}" title="Ouvre Chrome et remplit ce qui est reconnu ; rien n'est envoyé ni sauvegardé sans toi">{{ libelle }}</button>
+</form>
+{%- endmacro %}
+
+{# Tant que la session tourne (`tache.active`), le bouton reste bloqué avec son indicateur et
+   la page suit l'état ; après un échec il redevient cliquable, l'échec étant dit à côté. #}
+{% macro claude(f, type, libelle, retour, classe="", tache=none) -%}
+<form method="post" action="/annonce/{{ f.empreinte if f else 'tous' }}/claude" style="display:inline" data-occupe="Claude démarre…">
+  <input type="hidden" name="type" value="{{ type }}"><input type="hidden" name="retour" value="{{ retour }}">
+  {% if tache and tache.active %}
+  <button class="{{ classe }} occupe" disabled aria-busy="true" data-suivi-tache="{{ tache.id }}">{{ tache.libelle }}</button>
+  {% else %}
+  <button class="{{ classe }}" title="Claude travaille dans ton Chrome habituel ; tu ne fais que te connecter si un site le demande">{{ libelle }}</button>
+  {% endif %}
+</form>
+{%- endmacro %}
+
+{% macro etat_tache(t, etats) -%}
+{% if t and t.etat == "arret" %}<span class="echec-tache" role="alert">Échec de Claude{% if t.message %} : {{ t.message[:160] }}{% endif %}</span>
+{% elif t and not t.active %}<span class="puce etat-tache {{ 'retard' if t.etat in ('arret', 'connexion') else 'B' if t.etat in ('fait', 'a_envoyer') else '' }}"
+  title="{{ t.message or '' }}">Claude : {{ etats.get(t.etat, t.etat) }}{% if t.message %} · {{ t.message[:60] }}{% endif %}</span>{% endif %}
+{%- endmacro %}
+
+{% macro annuler_go(f, raisons, retour) -%}
+<details class="annuler">
+  <summary>Annuler le Go…</summary>
+  <form method="post" action="/action">
+    <input type="hidden" name="empreinte" value="{{ f.empreinte }}">
+    <input type="hidden" name="retour" value="{{ retour }}">
+    <div class="tags">
+      {% for r in raisons.contre %}<label><input type="checkbox" name="raisons" value="{{ r }}">{{ r }}</label>{% endfor %}
+    </div>
+    <div class="boutons">
+      <input class="note" type="text" name="note" placeholder="Pourquoi (facultatif)" aria-label="Raison">
+      <button class="non" name="type" value="annuler_go">Annuler la candidature</button>
+      <button name="type" value="attendre" title="Remettre parmi les annonces à trancher">Remettre à trancher</button>
+    </div>
+    <p class="petit muet" style="margin:.3rem 0 0">L'annonce passe en C avec ta raison (ou revient en B). Le dossier est conservé.</p>
+  </form>
+</details>
+{%- endmacro %}
+
+{% macro criteres_ko(e) -%}
+{% if e %}
+{% set ko = e.resultat.criteres | selectattr("etat", "equalto", "ko") | list %}
+{% set doute = e.resultat.criteres | selectattr("etat", "equalto", "incertain") | list %}
+{% if ko or doute %}
+<div class="criteres-carte">
+  {% for c in ko %}<span class="crit ko" title="{{ c.note }}">✕ {{ c.critere }}</span>{% endfor %}
+  {% for c in doute %}<span class="crit doute" title="{{ c.note }}">? {{ c.critere }}</span>{% endfor %}
+</div>
+{% endif %}
+{% endif %}
+{%- endmacro %}
+
+{% macro adequation(e, dos=None) -%}
+{% if e %}
+{{ notes(e) }}
+{{ criteres_ko(e) }}
+<p class="petit" style="margin:.45rem 0 0">{{ e.resultat.resume }}</p>
+{{ alertes(e) }}
+{% else %}<p class="petit muet" style="margin:.45rem 0 0">Pas encore évaluée (prochain passage, ou « Évaluer » sur la page de l'annonce).</p>{% endif %}
+{%- endmacro %}
+
+{% macro alertes(e) -%}
+{% if e and e.resultat.alertes %}
+<div class="alertes" role="note">
+  <b>⚠ Signaux à vérifier</b>
+  <ul>{% for a in e.resultat.alertes %}<li class="{{ a.gravite }}">{{ a.signal }}<q>{{ a.extrait }}</q></li>{% endfor %}</ul>
+</div>
+{% endif %}
+{%- endmacro %}
+
+
+{% macro salaire(sal) -%}
+<span class="salaire" title="{{ 'Indiqué dans l\'annonce' if sal.annonce_l_indique else 'Estimation du marché, confiance ' ~ sal.confiance }} — {{ sal.raisonnement }}">
+  {{ "{:,}".format(sal.minimum // 1000).replace(",", "’") }}–{{ "{:,}".format(sal.maximum // 1000).replace(",", "’") }} k CHF
+  <small>{{ "annonce" if sal.annonce_l_indique else "estimé" }}</small>
+</span>
+{%- endmacro %}
+
+{# Icônes (tracés Lucide, licence ISC), dessinées avec la couleur du texte. #}
+{% set ICONES = {
+  "reglages": '<path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/>',
+  "identite": '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+  "recherche": '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  "pretri": '<path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>',
+  "criteres": '<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
+  "dossier": '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  "coffre": '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
+  "fin": '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  "courrier": '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+  "cadenas": '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  "precedent": '<path d="m15 18-6-6 6-6"/>',
+  "ia": '<path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21"/><path d="M12 7.5 13.4 10.6 16.5 12 13.4 13.4 12 16.5 10.6 13.4 7.5 12 10.6 10.6Z"/>',
+  "suivant": '<path d="m9 18 6-6-6-6"/>',
+  "modele": '<rect x="5.25" y="5.25" width="13.5" height="13.5" rx="3"/><path d="M9.75 2.25v3M14.25 2.25v3M9.75 18.75v3M14.25 18.75v3M2.25 9.75h3M2.25 14.25h3M18.75 9.75h3M18.75 14.25h3"/><circle cx="12" cy="12" r="1.9" fill="currentColor" stroke="none"/>',
+  "micro": '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>',
+  "arret": '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/>',
+  "base": '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>',
+  "info": '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  "chevron": '<path d="m6 9 6 6 6-6"/>',
+  "envoyer": '<path d="M21 3 3 9.75l8.25 3 3 8.25L21 3Z"/><path d="M11.25 12.75 21 3"/>',
+} %}
+{% macro icone(nom, classe="icone") -%}
+<svg class="{{ classe }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ ICONES.get(nom, "") | safe }}</svg>
+{%- endmacro %}
+
+
+{# Fil d'un entretien avec l'IA (Nexus, règles AI) : ce que l'IA écrit est étiqueté par du texte,
+   sans bulle ni violet ; les réponses de la personne sont des bulles neutres à droite.
+   Sous chaque question, repliée (Nexus ExplainDisclosure) : sur quoi elle s'appuie, passages vérifiés
+   mot pour mot ; une question écrite d'avance est dite comme telle. `lien_base` : un élément cité
+   ouvre le volet de la base sur lui (page Ton parcours). #}
+{% macro fil_entretien(echanges, lien_base=false) -%}
+<ol class="fil" aria-label="Échanges de l'entretien">
+  {% for x in echanges %}
+  {% set ap = x.appui %}
+  <li class="message ia{% if loop.last and not x.reponse %} courante{% endif %}">
+    {% if ap and ap.fixe %}<span class="badge-fixe">Question de départ</span>
+    {% else %}<span class="badge-ia">{{ icone("modele") }}Question de l'IA</span>{% endif %}
+    <p>{{ x.question }}</p>
+    {% if ap %}
+    <details class="appuis">
+      <summary>{{ icone("info") }}<span>Sur quoi s'appuie cette question</span>{{ icone("chevron", "icone chevron") }}</summary>
+      <div class="corps-appuis">
+        {% if ap.pourquoi %}<p class="pourquoi">{{ ap.pourquoi }}</p>{% endif %}
+        {% if ap.appuis %}
+        <dl>
+          {% for a in ap.appuis %}
+          <div>
+            <dt>{% if a.source == "element" and lien_base %}<button type="button" class="lien-source" data-voir-element="{{ a.element }}">{{ a.libelle }}</button>{% else %}{{ a.libelle }}{% endif %}</dt>
+            <dd>« {{ a.passage }} »</dd>
+          </div>
+          {% endfor %}
+        </dl>
+        {% elif not ap.fixe %}<p class="sans-appui">Aucun passage cité n'a pu être retrouvé mot pour mot : vérifie la question toi-même.</p>{% endif %}
+      </div>
+    </details>
+    {% endif %}
+  </li>
+  {% if x.reponse %}<li class="message moi"><span class="cache">Ta réponse : </span><p>{{ x.reponse }}</p></li>{% endif %}
+  {% endfor %}
+</ol>
+{%- endmacro %}
+
+{# Compositeur (Nexus AIComposer) : un seul contour autour de la saisie et de son pied ; Entrée va à la
+   ligne, ⌘ Entrée envoie ; la dictée se fait sur l'ordinateur (compositeur.js) ; l'avertissement
+   « L'IA peut se tromper » dessous. L'attente (Nexus AIStatus) montre le temps écoulé après 10 s. #}
+{% macro compositeur(placeholder, attente, attente_detail="", envoyer="Répondre", desactive=false, rows=4, id="reponse",
+                    avert="L'IA peut se tromper. Vérifie les informations importantes.") -%}
+<div class="compositeur" data-compositeur>
+  <label for="{{ id }}" class="cache">Ta réponse</label>
+  <textarea id="{{ id }}" name="reponse" rows="{{ rows }}" required {% if desactive %}disabled{% endif %}
+            placeholder="{{ placeholder }}" aria-describedby="{{ id }}-raccourci {{ id }}-avert"></textarea>
+  <div class="pied-compositeur">
+    <div class="gauche">
+      <button type="button" class="bouton-dictee" data-dictee hidden aria-pressed="false" {% if desactive %}disabled{% endif %}>
+        <span data-dictee-icone>{{ icone("micro") }}</span><span data-dictee-libelle>Dicter</span></button>
+      <span class="etat-dictee" data-dictee-etat role="status" aria-live="polite"></span>
+    </div>
+    <div class="droite">
+      <span class="raccourci" id="{{ id }}-raccourci"><kbd>⌘</kbd><kbd>↵</kbd> pour envoyer</span>
+      <button class="go envoyer" {% if desactive %}disabled{% endif %}>{{ envoyer }} {{ icone("envoyer") }}</button>
+    </div>
+  </div>
+  <p class="erreur-dictee" data-dictee-erreur role="alert" hidden></p>
+</div>
+<p class="avert-ia" id="{{ id }}-avert">{{ avert }}</p>
+<div class="statut-ia" data-attente role="status" hidden>
+  <span class="spinner" aria-hidden="true"></span>
+  <div><p class="fort">{{ attente }}</p>{% if attente_detail %}<p>{{ attente_detail }}</p>{% endif %}</div>
+  <span class="ecoule" data-ecoule hidden></span>
+</div>
+{%- endmacro %}

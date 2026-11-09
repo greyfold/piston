@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block titre %}Santé · Recherche d'emploi{% endblock %}
+{% block contenu %}
+<div class="bandeau {{ etat.niveau }}"><span class="point"></span><span>{{ etat.texte }}</span></div>
+<h1>Santé du système</h1>
+
+<h2>30 derniers matins</h2>
+<div class="calendrier" aria-label="Jours avec un passage">
+  {% for j in jours | reverse %}<span class="{{ 'fait' if j.fait }}" title="{{ j.date | date_fr }} : {{ 'passage' if j.fait else 'aucun passage' }}"></span>{% endfor %}
+</div>
+<p class="petit muet">Vert : un passage (ancienne chaîne ou plateforme). Rouge : aucun. Le jour le plus récent est à droite.</p>
+
+<div class="chiffres">
+  <div class="chiffre"><b>{{ nb_sauvegardes }}</b><span>sauvegardes{% if derniere_sauvegarde %} · dernière {{ derniere_sauvegarde[10:18] }}{% endif %}</span></div>
+  <div class="chiffre"><b>{{ import_le[:10] | date_fr(True) if import_le else "–" }}</b><span>import du coffre</span></div>
+</div>
+
+<p class="petit muet" id="claude">La connexion à l'IA a sa page : <a href="/ia">Fournisseur d'IA</a>.</p>
+
+<h2 id="cles">Clés d'accès</h2>
+<p class="muet">Rangées dans le trousseau macOS, jamais dans un fichier. La clé n'est jamais affichée : seulement ses quatre derniers caractères. Avant d'être rangée, elle est essayée auprès du service.</p>
+<div class="cartes deux">
+{% for c in cles %}
+  <div class="carte">
+    <div class="tete"><b>{{ c.nom }}</b>
+      {% if c.presente %}<span class="puce B">enregistrée · …{{ c.fin }}</span>{% else %}<span class="puce retard">absente</span>{% endif %}</div>
+    <div class="meta">{{ c.usage }}</div>
+    {% if depuis_le_mac %}
+    <form method="post" action="/cles/{{ c.id }}/enregistrer" class="boutons" autocomplete="off">
+      <input type="password" name="cle" placeholder="{{ c.prefixe }}…" aria-label="Clé {{ c.nom }}" autocomplete="off" spellcheck="false" required style="flex:1 1 220px">
+      <button class="go">{{ "Remplacer" if c.presente else "Enregistrer" }}</button>
+    </form>
+    <div class="petit muet" style="margin-top:.35rem">Où la trouver : {{ c.ou }}</div>
+    {% if c.presente %}<form method="post" action="/cles/{{ c.id }}/retirer" onsubmit="return confirm('Retirer cette clé du trousseau ?')"><button class="discret petit">Retirer</button></form>{% endif %}
+    {% else %}
+    <div class="petit muet" style="margin-top:.35rem">À saisir depuis le Mac (pas depuis le téléphone : le réseau local n'est pas chiffré).</div>
+    {% endif %}
+  </div>
+{% endfor %}
+</div>
+
+<h2>Passages <span class="compte">{{ runs | length }}</span></h2>
+{% if runs %}
+<div class="pile">
+{% for r in runs %}
+  <details class="carte" {{ 'open' if loop.first }}>
+    <summary><b>n°{{ r.id }}</b> · {{ r.debut }} → {{ r.fin or "…" }} · <span class="puce {{ 'retard' if r.statut != 'complet' }}">{{ r.statut }}</span> <span class="muet petit">({{ r.declencheur }})</span></summary>
+    {% if r.resume %}<pre class="petit" style="white-space:pre-wrap;margin:.6rem 0">{{ r.resume }}</pre>{% endif %}
+    <div class="tableau"><table>
+      <thead><tr><th>Étape</th><th>Statut</th><th>Compteurs</th></tr></thead>
+      <tbody>
+      {% for e in r.etapes %}
+        <tr><td>{{ e.etape }}</td><td><span class="puce {{ 'retard' if e.statut != 'ok' }}">{{ e.statut }}</span></td>
+            <td class="petit">{% for k, v in e.compteurs.items() %}{{ k }} : {{ v }}{{ " · " if not loop.last }}{% endfor %}{% if e.erreur %}<div style="color:var(--alerte)">{{ e.erreur }}</div>{% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </details>
+{% endfor %}
+</div>
+{% else %}<p class="vide">Aucun passage pour l'instant. Lance <code>uv run jobsearch passage</code>.</p>{% endif %}
+{% endblock %}

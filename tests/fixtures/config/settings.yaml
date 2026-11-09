@@ -1,0 +1,114 @@
+# Configuration des tests : une installation d'exemple, avec des valeurs personnelles fictives,
+# pour exercer ce que le profil et le pré-tri en font. L'application livre config/, neutre.
+# Réglages de la plateforme. Aucun secret ici : le jeton du tableau de bord
+# vit dans data/jeton (créé au premier lancement), la clé Apify dans le
+# trousseau macOS. Claude n'a pas de clé : Claude Code est connecté au compte.
+
+# Coffre Obsidian : lu seulement par `jobsearch importer`, jamais écrit.
+coffre: "~/Documents/Coffre-exemple"
+
+web:
+  # 0.0.0.0 = joignable depuis le téléphone sur le Wi-Fi de la maison (ou Tailscale).
+  # Jeton exigé pour toute connexion qui ne vient pas du Mac lui-même.
+  hote: "0.0.0.0"
+  port: 8765
+
+passage:
+  heure: "06:30"            # heure locale (Zurich) ; launchd suit le changement d'heure
+  fenetre_min_jours: 2      # fenêtre de sourcing minimale
+  fenetre_max_jours: 14     # rattrapage maximal après une panne
+  pause_requetes_s: 0.8     # rythme humain entre deux requêtes
+  duree_max_etape_s: 900    # une étape qui dépasse est arrêtée, les suivantes tournent
+  evaluations_par_passage: 30 # notes d'adéquation par passage (Claude Code, abonnement)
+  originaux_par_passage: 25 # textes originaux rechargés par passage (annonces actives résumées par l'ancienne chaîne)
+
+surveillance:
+  alerte_apres_heures: 26   # aucun passage complet depuis 26 h : alerte
+  rappel_toutes_heures: 6   # pas plus d'une alerte toutes les 6 h
+
+objectifs:
+  # Minimum de postulations exigé (ORP). Pas de maximum : le but reste un poste adapté.
+  semaine_min: 2            # semaine du lundi au dimanche
+  mois_min: 8               # mois civil
+  alerte_vendredi: "09:00"  # notification le vendredi dès cette heure si la semaine n'a pas son minimum
+
+sauvegardes:
+  garder: 30
+
+moteur:
+  # Toutes les tâches IA passent par Claude Code, connecté au compte Claude de
+  # l'utilisateur (abonnement) : aucune clé API (décision du 06.11).
+  modele: "claude-opus-5-5"         # évaluation et dossiers
+  repli: "claude-sonnet-5-5"        # si le modèle principal est surchargé ou indisponible
+  # claude: "~/.local/bin/claude"   # chemin de la commande, si elle n'est pas trouvée seule
+
+travailleur:
+  # local : Claude Code et toutes les sources tournent sur ce Mac (comme avant).
+  # distant : les tâches Claude et les sources confiées passent par le travailleur,
+  # dans la machine virtuelle (`jobsearch vm demarrer`), joint sur ce port du Mac.
+  mode: local
+  adresse: "http://127.0.0.1:8766"
+  sources: [indeed]
+
+vm:
+  # Machine virtuelle Lima (Virtualization.framework d'Apple) : Ubuntu, Python, uv,
+  # Claude Code, Chromium. Elle ne voit que le dossier des données et le code (lecture seule).
+  nom: jobsearch
+  cpus: 2
+  memoire: "3GiB"
+  disque: "20GiB"
+  port: 8766
+
+jobs_ch:
+  actif: true               # jobs.ch, même route que jobup, mêmes requêtes et mêmes lieux
+
+alertes_email:
+  # Alertes d'emploi reçues par e-mail (Apple Mail, Gmail) : le moteur en tire les offres.
+  # Chaque alerte lue est une tâche Claude sur l'abonnement : désactivé par défaut.
+  actif: false
+  mails_par_passage: 5
+
+
+courrier:
+  # Réponses des employeurs, par le serveur MCP Apple Mail (lecture seule).
+  # serveur_mcp vide = la version installée la plus récente du plugin apple-mail.
+  comptes: [iCloud, Google]
+  serveur_mcp: ""
+
+automatisation:
+  # Sessions Claude dans ton Chrome habituel (extension Claude in Chrome ; `claude` connecté).
+  jobroom_par_claude: true      # preuve Job-Room lancée dès qu'une candidature est notée envoyée
+  formulaire_par_claude: true   # bouton « Remplir avec Claude » sur les cartes Go
+
+indeed:
+  # Le site refuse les scripts (HTTP 403) : on passe par le connecteur Indeed de claude.ai,
+  # dans une session `claude -p` sans tête lancée par le passage (Claude Code connecté).
+  actif: true
+  outils: "mcp__claude_ai_Indeed"   # préfixe des outils Indeed dans Claude Code
+  modele: "haiku"                   # le modèle ne fait qu'appeler les outils
+  lieux: [Lausanne, Genève]         # chaque requête du sourcing est lancée dans chaque lieu
+  recherches_max: 20                # appels search_jobs par passage, en roulement d'un jour à l'autre
+  details_max: 25                   # textes complets lus par passage (nouvelles, pas écartées)
+  recherches_par_tour: 10           # paquets espacés : 50 appels d'affilée déclenchent la limite d'Indeed
+  pause_tours_s: 20
+  essais: 4                         # connexion refusée : on attend le délai indiqué par Indeed
+  anciennete_max_jours: 60          # Indeed garde des annonces de plusieurs mois
+  duree_max_s: 600
+
+linkedin:
+  # Offres LinkedIn publiques par l'acteur Apify crawlworks/linkedin-jobs-scraper (décision du 26.10) ;
+  # le compte LinkedIn de Camille n'est jamais utilisé. Jeton Apify dans le trousseau macOS,
+  # saisi sur la page Santé du tableau de bord (depuis le Mac).
+  # Requêtes et lieu : `linkedin_requetes` et `linkedin_lieu` dans config/criteres.yaml.
+  actif: false
+  acteur: "crawlworks~linkedin-jobs-scraper"
+  annonces_par_requete: 25
+  plafond_usd_par_run: 1.0          # garde-fou de dépense côté Apify, par requête
+  attente_max_s: 480                # au-delà, les runs encore en cours sont arrêtés
+
+notifications:
+  macos: true
+  # Notification sur le téléphone par ntfy.sh (service externe) : appli ntfy, s'abonner à ce sujet.
+  # Le nom est long et impossible à deviner : qui le connaît lit les notifications. Vide = coupé.
+  # Un clic sur la notification ouvre le tableau de bord (sur le Wi-Fi de la maison).
+  ntfy_sujet: "sujet-de-test"
