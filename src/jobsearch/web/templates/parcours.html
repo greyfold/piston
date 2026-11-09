@@ -1,9 +1,62 @@
 {% extends "base.html" %}
 {% from "_macros.html" import icone, fil_entretien, compositeur %}
 {% block titre %}Ton parcours · Recherche d'emploi{% endblock %}
+{# Mode concentré : pas de barre de menu. Pendant l'entretien, la page prend toute la fenêtre ; le message
+   du passage précédent s'affiche au-dessus de la saisie plutôt qu'en haut. #}
+{% block barre %}{% endblock %}
+{% block message %}{% if vide or not entretien.element %}{{ super() }}{% endif %}{% endblock %}
+{% block classe_corps %}concentre{% if not vide and entretien.element %} entretien-fixe{% endif %}{% endblock %}
 {% block contenu %}
 {# Ton parcours : import du CV, puis entretien guidé par l'IA, poste après poste (parcours.py).
    La base vit dans l'application ; chaque élément montre d'où il vient. #}
+{% set e = entretien.element if not vide else none %}
+{% if e %}
+{# Entretien en cours, en pleine fenêtre : deux bandeaux en haut (la page, puis le poste), le fil sur toute la
+   largeur (la page défile, sa barre au bord droit de la fenêtre), la saisie fixée en bas. #}
+<div class="salle-entretien">
+  <header class="tete-salle">
+    <div class="bande-page">
+      <a class="retour-salle" href="/#premiers-pas">{{ icone("precedent") }}<span>Tableau de bord</span></a>
+      <h1>Ton parcours</h1>
+      {% if rang is not none %}<p class="etape-salle">Bien démarrer · {{ rang + 1 }} sur {{ total }}</p>{% endif %}
+    </div>
+    <div class="bande-entretien">
+      <div class="dedans-salle">
+        <div class="tete-entretien">
+          <div>
+            <p class="surtitre">Entretien · {{ genres[e.genre] | lower }} {{ entretien.rang }} sur {{ entretien.total }}</p>
+            <h2 id="entretien-titre">{{ e.titre }}{% if e.organisation %} <span class="muet">· {{ e.organisation }}</span>{% endif %}</h2>
+          </div>
+          <button type="button" class="bouton-volet" data-ouvrir-volet="volet-base" aria-haspopup="dialog" aria-controls="volet-base">
+          {{ icone("base") }}<span>Ta base</span><span class="compte-volet">{{ nb_elements }} élément{{ "s" if nb_elements > 1 }}</span></button>
+        </div>
+        <div class="progression" role="progressbar" aria-valuemin="0" aria-valuemax="{{ entretien.total }}" aria-valuenow="{{ entretien.faits }}" aria-label="Entretien">
+          <i style="width: {{ (100 * entretien.faits / entretien.total) | round | int if entretien.total else 0 }}%"></i></div>
+      </div>
+    </div>
+  </header>
+  <section class="corps-salle" id="entretien" aria-labelledby="entretien-titre">
+    <div class="dedans-salle">{{ fil_entretien(entretien.echanges, lien_base=true) }}</div>
+  </section>
+  <div class="pied-salle">
+    <div class="dedans-salle">
+      {% if not ia %}
+      <div class="bandeau attention"><span class="point"></span>
+        <span>L'entretien demande ton IA.
+          <button type="button" class="lien-neutre" data-connexion-ia="claude" data-nom="Claude">Connecter Claude</button></span></div>
+      {% endif %}
+      {% if msg %}<div class="flash {{ '' if ok else 'ko' }}" role="status">{{ msg }}</div>{% endif %}
+      <form data-repondre>
+        {{ compositeur("Réponds avec tes mots : ils sont gardés tels quels.", "L'IA range ta réponse…",
+                       "Et prépare la question suivante.", desactive=not ia, rows=1,
+                       avert="L'IA peut se tromper. Vérifie ce qu'elle range dans ta base.") }}
+        <p class="flash ko" data-erreur hidden role="alert"></p>
+        {# « Passer à la suite » (/parcours/passer) retiré pour le moment. #}
+      </form>
+    </div>
+  </div>
+</div>
+{% else %}
 <div class="parcours-page centree">
   <a class="retour" href="/#premiers-pas">{{ icone("precedent") }} Tableau de bord</a>
   <div class="titre-etape tete-parcours">
@@ -50,30 +103,6 @@
   {% else %}
   <div class="parcours-colonne">
     <section class="carte-accueil entretien" id="entretien" aria-labelledby="entretien-titre">
-      {% set e = entretien.element %}
-      {% if e %}
-      <div class="tete-entretien">
-        <div>
-          <p class="surtitre">Entretien · {{ genres[e.genre] | lower }} {{ entretien.rang }} sur {{ entretien.total }}</p>
-          <h2 id="entretien-titre">{{ e.titre }}{% if e.organisation %} <span class="muet">· {{ e.organisation }}</span>{% endif %}</h2>
-        </div>
-        <button type="button" class="bouton-volet" data-ouvrir-volet="volet-base" aria-haspopup="dialog" aria-controls="volet-base">
-          {{ icone("base") }}<span>Ta base</span><span class="compte-volet">{{ nb_elements }} élément{{ "s" if nb_elements > 1 }}</span></button>
-      </div>
-      <div class="progression" role="progressbar" aria-valuemin="0" aria-valuemax="{{ entretien.total }}" aria-valuenow="{{ entretien.faits }}" aria-label="Entretien">
-        <i style="width: {{ (100 * entretien.faits / entretien.total) | round | int if entretien.total else 0 }}%"></i></div>
-      {{ fil_entretien(entretien.echanges, lien_base=true) }}
-      <form data-repondre>
-        {{ compositeur("Réponds avec tes mots : ils sont gardés tels quels.", "L'IA range ta réponse…",
-                       "Et prépare la question suivante.", desactive=not ia,
-                       avert="L'IA peut se tromper. Vérifie ce qu'elle range dans ta base.") }}
-        <p class="flash ko" data-erreur hidden role="alert"></p>
-        <div class="actions-entretien">
-          <button type="submit" form="passer" class="lien-neutre">Passer à la suite</button>
-        </div>
-      </form>
-      <form id="passer" method="post" action="/parcours/passer"></form>
-      {% else %}
       <div class="tete-entretien"><h2 id="entretien-titre">Entretien</h2>
         <button type="button" class="bouton-volet" data-ouvrir-volet="volet-base" aria-haspopup="dialog" aria-controls="volet-base">
           {{ icone("base") }}<span>Ta base</span><span class="compte-volet">{{ nb_elements }} élément{{ "s" if nb_elements > 1 }}</span></button>
@@ -86,11 +115,13 @@
         <a class="lien-neutre" href="/">Tableau de bord</a>
         <a class="bouton go grand" href="/premiers-pas/criteres">Ce qui compte pour toi {{ icone("suivant") }}</a>
       </div>
-      {% endif %}
     </section>
-
   </div>
+  {% endif %}
+</div>
+{% endif %}
 
+{% if not vide %}
   {# Volet latéral gauche (Nexus SlideOver, side="left") : la base, consultée et corrigée à la demande.
      <dialog> modal : focus gardé dans le volet et rendu au bouton, Échap et clic à côté ferment. #}
   <dialog class="volet gauche base-parcours" id="volet-base" aria-labelledby="base-titre" aria-describedby="base-description">
@@ -193,21 +224,62 @@
       <p class="petit muet"><a href="/premiers-pas/dossier?formulaire=1">Réglages du dossier</a> : différenciateur, règles particulières, certifications, pages du CV.</p>
     </div>
   </dialog>
-  {% endif %}
-</div>
+{% endif %}
 <script>
 (function () {
-  function envoyer(form, url, quand, suite) {
+  // Entretien : à l'envoi, la réponse part tout de suite dans le fil, suivie de l'attente ; la zone de saisie
+  // se vide et garde sa hauteur. En cas d'échec, l'erreur s'affiche dans le fil, sous la réponse, avec
+  // « Réessayer » (renvoie le même texte) et « Modifier ma réponse » (la remet dans la zone de saisie).
+  function versLeFil(form, fil, attente) {
+    var champ = form.querySelector("textarea"), place = attente.parentNode, suivant = attente.nextSibling;
+    fil.querySelectorAll(".envoi-echoue").forEach(function (li) { li.remove(); });   // un nouvel envoi remplace l'échec
+    var courante = fil.querySelector(".courante");
+    var texte = champ.value;
+    var moi = document.createElement("li"), p = document.createElement("p"), cache = document.createElement("span");
+    moi.className = "message moi"; cache.className = "cache"; cache.textContent = "Ta réponse : ";
+    p.textContent = texte; moi.append(cache, p);
+    var attendre = document.createElement("li");
+    attendre.className = "message attente-fil";
+    attendre.appendChild(attente);
+    fil.append(moi, attendre);
+    if (courante) courante.classList.remove("courante");
+    champ.value = ""; champ.style.height = "";              // la zone revient à une ligne
+    return function (message) {                            // l'envoi a échoué : l'erreur à la suite du fil
+      place.insertBefore(attente, suivant); attendre.remove();
+      if (courante) courante.classList.add("courante");
+      moi.classList.add("envoi-echoue");
+      var li = document.createElement("li"), msg = document.createElement("p"), actions = document.createElement("div");
+      li.className = "message erreur-fil envoi-echoue"; li.setAttribute("role", "alert");
+      msg.textContent = message;
+      actions.className = "actions-erreur";
+      var reessayer = document.createElement("button"), modifier = document.createElement("button");
+      reessayer.type = modifier.type = "button";
+      reessayer.className = "go petit"; reessayer.textContent = "Réessayer";
+      modifier.className = "lien-neutre"; modifier.textContent = "Modifier ma réponse";
+      reessayer.addEventListener("click", function () { champ.value = texte; form.requestSubmit(); });
+      modifier.addEventListener("click", function () {
+        moi.remove(); li.remove(); champ.value = texte;
+        champ.dispatchEvent(new Event("input")); champ.focus();   // la zone reprend la hauteur du texte
+      });
+      actions.append(reessayer, modifier); li.append(msg, actions);
+      fil.appendChild(li);
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    };
+  }
+  function envoyer(form, url, quand, suite, fil) {
     var attente = form.querySelector("[data-attente]"), erreur = form.querySelector("[data-erreur]");
     var boutons = form.querySelectorAll("button, textarea, input");
     form.addEventListener("submit", function (ev) {
-      if (ev.submitter && ev.submitter.getAttribute("form")) return;       // « Passer à la suite »
       ev.preventDefault();
       var corps = new FormData(form);
+      var echec = fil ? versLeFil(form, fil, attente) : null;
       erreur.hidden = true; attente.hidden = false;
+      if (fil) window.scrollTo(0, document.documentElement.scrollHeight);   // la réponse et l'attente au-dessus de la saisie
       boutons.forEach(function (b) { b.disabled = true; });
       fetch(url, {method: "POST", credentials: "same-origin", body: corps})
-        .then(function (r) { return r.json(); })
+        .then(function (r) {
+          return r.json().catch(function () { return {ok: false, erreur: "le serveur a répondu " + r.status}; });
+        })
         .then(function (d) {
           if (!d.ok) throw new Error(d.erreur || "échec");
           // Même adresse à l'ancre près (deux tours de suite sans rien de rangé) : le navigateur
@@ -221,9 +293,11 @@
           }
         })
         .catch(function (e) {
-          attente.hidden = true; erreur.hidden = false;
-          erreur.textContent = "Ça n'a pas abouti : " + e.message + ". " + suite;
+          attente.hidden = true;
           boutons.forEach(function (b) { b.disabled = false; });
+          if (echec) { echec("Ça n'a pas abouti : " + e.message + "."); return; }
+          erreur.hidden = false;
+          erreur.textContent = "Ça n'a pas abouti : " + e.message + ". " + suite;
         });
     });
   }
@@ -244,9 +318,10 @@
       var m = d.ajoutes.length ? "Rangé dans ta base : " + d.ajoutes.join(" ; ") + "." : "";
       if (d.ecartes.length) m += " " + d.ecartes.length + " écarté(s) : pas dans tes mots.";
       return "/parcours?ok=1" + (m ? "&msg=" + encodeURIComponent(m.trim()) : "") + "#entretien";
-    }, "Ta réponse est toujours là : réessaie.");
+    }, "", document.querySelector(".corps-salle .fil"));
     if (location.hash === "#entretien") rep.querySelector("textarea").focus({preventScroll: true});
-    rep.scrollIntoView({block: "end"});            // comme une conversation : la saisie en bas de l'écran
+    // Comme une conversation : la page s'ouvre sur le dernier échange, juste au-dessus de la saisie.
+    window.scrollTo(0, document.documentElement.scrollHeight);
   }
   var volet = document.getElementById("volet-base");
   if (volet) {

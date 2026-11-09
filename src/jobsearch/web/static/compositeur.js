@@ -80,12 +80,8 @@
     var form = boite.closest("form");
     var zone = boite.querySelector("textarea");
     var bouton = boite.querySelector("[data-dictee]");
-    var libelle = boite.querySelector("[data-dictee-libelle]");
-    var icone = boite.querySelector("[data-dictee-icone]");
     var etat = boite.querySelector("[data-dictee-etat]");
     var erreurDictee = boite.querySelector("[data-dictee-erreur]");
-    var iconeMicro = icone.innerHTML;
-    var iconeArret = '<svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></svg>';
 
     // Entrée va à la ligne ; ⌘ (ou Ctrl) Entrée envoie.
     zone.addEventListener("keydown", function (ev) {
@@ -128,13 +124,21 @@
     function afficher(actif, message) {
       dicte = actif;
       boite.classList.toggle("dictee", actif);
-      bouton.setAttribute("aria-pressed", actif ? "true" : "false");
-      libelle.textContent = actif ? "Arrêter" : "Dicter";
-      icone.innerHTML = actif ? iconeArret : iconeMicro;
+      bouton.setAttribute("aria-pressed", actif ? "true" : "false");   // le nom reste « Dicter » : c'est un interrupteur
       var err = !!(message && message.erreur);
       etat.textContent = message && !err ? message.texte : "";
       erreurDictee.hidden = !err;
       erreurDictee.textContent = err ? message.texte : "";
+      // Dans l'application Mac, l'erreur qui se corrige dans les Réglages Système y mène d'un clic.
+      if (err && message.reglages && pont) {
+        var lien = document.createElement("a");
+        lien.href = "#"; lien.textContent = "Ouvrir les Réglages Système";
+        lien.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          pont.postMessage({ action: "reglages", page: message.reglages });
+        });
+        erreurDictee.append(" ", lien);
+      }
     }
     function inserer(texte) {
       if (!texte) return;
@@ -149,7 +153,7 @@
       if (m.type === "pret") afficher(true, { texte: "J'écoute…" });
       else if (m.type === "installation") afficher(true, { texte: "Installation de la langue…" });
       else if (m.type === "partiel" || m.type === "final") inserer(m.texte);
-      else if (m.type === "erreur") afficher(false, { texte: "Dictée impossible : " + m.message + ".", erreur: true });
+      else if (m.type === "erreur") afficher(false, { texte: "Dictée impossible : " + m.message + ".", erreur: true, reglages: m.reglages });
       else if (m.type === "fin") { if (dicte) afficher(false); zone.focus(); }
     }
     bouton.addEventListener("click", function () {

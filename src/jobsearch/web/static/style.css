@@ -615,7 +615,53 @@ ul.liens-reglages { list-style: none; margin: 0; padding: 0; display: flex; flex
 .bouton-volet .icone { width: 1rem; height: 1rem; }
 .compte-volet { font-size: .78rem; font-weight: 500; color: var(--texte-3); font-variant-numeric: tabular-nums; }
 .entretien { padding: 1.5rem 1.5rem 1.25rem; }
-.parcours-colonne .fil { max-height: max(14rem, calc(100dvh - 27rem)); }
+/* Mode concentré (Ton parcours) : pas de barre de menu. Pendant l'entretien, toute la fenêtre : deux bandeaux
+   collés en haut (la page, puis le poste), le fil sur toute la largeur, la saisie collée en bas. Un seul
+   défilement, celui de la page : sa barre est au bord droit de la fenêtre. */
+body.entretien-fixe main { max-width: none; padding: 0; }
+body.entretien-fixe main > .bandeau { max-width: 48rem; margin: 1rem auto; }
+.salle-entretien { min-height: 100dvh; display: flex; flex-direction: column; }
+.dedans-salle { max-width: 48rem; margin: 0 auto; padding: 0 16px; }
+.tete-salle { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--bord); }
+.bande-page { display: flex; align-items: center; gap: 1rem; padding: .55rem 16px; border-bottom: 1px solid var(--bord); }
+.bande-page h1 { margin: 0; font-size: 1.05rem; }
+.retour-salle { display: inline-flex; align-items: center; gap: .3rem; padding: .3rem .6rem .3rem .4rem; border-radius: 999px;
+  color: var(--texte-2); font-size: .9rem; }
+.retour-salle:hover { text-decoration: none; background: var(--surface-2); color: var(--texte); }
+.retour-salle:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
+.retour-salle .icone { width: 1rem; height: 1rem; }
+.etape-salle { margin: 0 0 0 auto; font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--texte-3); white-space: nowrap; }
+.bande-entretien { padding: .75rem 0 .1rem; }
+.bande-entretien .surtitre { margin: 0 0 .2rem; font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--texte-3); }
+.bande-entretien h2 { margin: 0; }
+.bande-entretien .progression { margin: .6rem 0 .5rem; }
+.corps-salle { flex: 1 0 auto; padding: .5rem 0 1rem; }
+.corps-salle .fil { max-height: none; overflow: visible; margin: .75rem 0 0; padding: 0; }
+.pied-salle { position: sticky; bottom: 0; z-index: 4; padding: .75rem 0 .9rem; background: var(--fond);
+  border-top: 1px solid var(--bord); }
+.pied-salle .flash, .pied-salle .bandeau { margin: 0 0 .6rem; }
+.pied-salle .avert-ia { margin: .4rem 0 0; }
+/* Une seule ligne au départ ; la zone grandit avec le texte (compositeur.js), sans manger le fil. */
+.pied-salle .compositeur textarea { min-height: 0; max-height: min(12rem, 30dvh); }
+.fil .attente-fil { align-self: stretch; }
+.fil .attente-fil .statut-ia { margin: 0; }
+/* Envoi échoué : la réponse reste dans le fil, estompée, et l'erreur suit, avec de quoi réessayer. */
+.fil .moi.envoi-echoue { opacity: .65; }
+.fil .erreur-fil { align-self: stretch; padding: .65rem .85rem; border: 1px solid var(--alerte); border-radius: 10px;
+  background: var(--alerte-pale); }
+.fil .erreur-fil p { color: var(--alerte); }
+.actions-erreur { display: flex; align-items: center; gap: 1rem; margin-top: .55rem; }
+.pied-salle .actions-entretien { margin-top: .35rem; }
+.pied-salle form > .flash { margin: .6rem 0 0; }
+@media (max-width: 640px) {
+  .bande-page { gap: .5rem; }
+  .retour-salle span, .etape-salle { display: none; }
+  .bande-entretien h2 { font-size: .98rem; }
+  .bande-entretien .tete-entretien { gap: .6rem; }
+  .bande-entretien .compte-volet { display: none; }
+}
 
 /* Volet latéral (Nexus SlideOver) : pleine hauteur, entête fixe, corps qui défile, fond assombri. */
 dialog.volet { position: fixed; inset: 0 auto 0 0; width: min(34rem, calc(100vw - 2.5rem)); max-width: none; height: 100dvh;
@@ -705,22 +751,20 @@ button.go.envoyer { display: inline-flex; align-items: center; gap: .4rem; paddi
 button.go.envoyer .icone { width: .95rem; height: .95rem; }
 .compositeur.occupe button.go.envoyer { opacity: .6; }
 
-/* Dictée : bouton secondaire ; pendant l'écoute, pastille rouge qui respire et consigne lue aux lecteurs d'écran. */
-.bouton-dictee { display: inline-flex; align-items: center; gap: .35rem; padding: .35rem .75rem; border: 1px solid var(--bord);
-  border-radius: 999px; background: var(--surface); color: var(--texte-2); font: inherit; font-size: .85rem; font-weight: 500; cursor: pointer; }
+/* Dictée (Nexus AIComposer) : icône micro seule, ronde, à droite de l'envoi ; en écoute, l'état pressé vert
+   partagé avec les retours sur l'IA (AIFeedback). */
+.bouton-dictee { display: inline-grid; place-items: center; width: 2.1rem; height: 2.1rem; padding: 0; border: 1px solid var(--bord);
+  border-radius: 50%; background: var(--surface); color: var(--texte-2); cursor: pointer; flex: none; }
 .bouton-dictee:hover { border-color: var(--texte-3); color: var(--texte); }
 .bouton-dictee:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
-.bouton-dictee .icone { width: .95rem; height: .95rem; }
-.bouton-dictee[aria-pressed="true"] { border-color: var(--alerte); color: var(--alerte); background: var(--alerte-pale); }
-.bouton-dictee[aria-pressed="true"]::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--alerte);
-  animation: respire 1.4s ease-in-out infinite; }
+.bouton-dictee .icone { width: 1rem; height: 1rem; }
+.bouton-dictee[aria-pressed="true"] { border-color: var(--vert); background: var(--vert-pale); color: var(--vert-fonce); }
 .bouton-dictee:disabled { opacity: .5; cursor: not-allowed; }
-@keyframes respire { 50% { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .bouton-dictee[aria-pressed="true"]::before { animation: none; } }
 .etat-dictee { font-size: .8rem; color: var(--texte-2); min-width: 0; }
 .etat-dictee.indice { color: var(--texte-3); }
 .erreur-dictee { margin: .5rem 0 0; padding: .45rem .6rem; border-radius: 8px; background: var(--alerte-pale); color: var(--alerte); font-size: .8rem; line-height: 1.4; }
 .erreur-dictee[hidden] { display: none; }
+.erreur-dictee a { color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
 
 .avert-ia { margin: .5rem 0 0; font-size: .75rem; color: var(--texte-3); }
 .statut-ia { display: flex; gap: .75rem; align-items: flex-start; margin-top: .85rem; padding: .75rem .9rem; border: 1px solid var(--bord); border-radius: 10px; }

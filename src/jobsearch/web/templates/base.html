@@ -13,7 +13,9 @@
 <script src="/static/champs.js?v={{ version_css() }}" defer></script>
 <script src="/static/compositeur.js?v={{ version_css() }}" defer></script>
 </head>
-<body{% if accueil %} class="accueil"{% endif %}>
+<body class="{% block classe_corps %}{{ 'accueil' if accueil }}{% endblock %}">
+{# Une page peut retirer la barre de menu (mode concentré : l'entretien de « Ton parcours »). #}
+{% block barre %}
 <header class="barre"><div class="dedans">
   {% if accueil %}
   <span class="marque">Recherche <span>d'emploi</span></span>
@@ -31,10 +33,11 @@
   <a href="/reglages" class="lien-reglages{{ ' actif' if dans_reglages }}"{% if nav == '/reglages' %} aria-current="page"{% endif %}>{{ icone("reglages") }}<span>Réglages</span></a>
   {% endif %}
 </div></header>
+{% endblock %}
 <main>
 {% if profil_manquants and not accueil and not premiers_pas_affiches and not nav.startswith(('/profil', '/connexion')) %}<div class="bandeau attention"><span class="point"></span><span>Profil incomplet ({{ profil_manquants | map('last') | join(', ') }}) : <a href="/profil">le compléter</a>.</span></div>{% endif %}
 {% if dans_reglages and nav != '/reglages' and not accueil %}<p class="petit fil"><a href="/reglages">← Réglages</a></p>{% endif %}
-{% if msg %}<div class="flash {{ '' if ok else 'ko' }}" role="status">{{ msg }}</div>{% endif %}
+{% block message %}{% if msg %}<div class="flash {{ '' if ok else 'ko' }}" role="status">{{ msg }}</div>{% endif %}{% endblock %}
 {% block contenu %}{% endblock %}
 </main>
 {% include "_connexion_ia.html" %}

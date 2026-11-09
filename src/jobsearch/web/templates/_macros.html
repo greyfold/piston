@@ -231,13 +231,15 @@
             placeholder="{{ placeholder }}" aria-describedby="{{ id }}-raccourci {{ id }}-avert"></textarea>
   <div class="pied-compositeur">
     <div class="gauche">
-      <button type="button" class="bouton-dictee" data-dictee hidden aria-pressed="false" {% if desactive %}disabled{% endif %}>
-        <span data-dictee-icone>{{ icone("micro") }}</span><span data-dictee-libelle>Dicter</span></button>
       <span class="etat-dictee" data-dictee-etat role="status" aria-live="polite"></span>
     </div>
+    {# La dictée à droite de l'envoi : les deux façons de répondre côte à côte, l'état de la dictée à gauche. #}
     <div class="droite">
       <span class="raccourci" id="{{ id }}-raccourci"><kbd>⌘</kbd><kbd>↵</kbd> pour envoyer</span>
       <button class="go envoyer" {% if desactive %}disabled{% endif %}>{{ envoyer }} {{ icone("envoyer") }}</button>
+      {# Icône seule (Nexus AIComposer) : nommée « Dicter », aria-pressed dit si elle écoute. #}
+      <button type="button" class="bouton-dictee" data-dictee hidden aria-pressed="false" aria-label="Dicter" title="Dicter"
+              {% if desactive %}disabled{% endif %}>{{ icone("micro") }}</button>
     </div>
   </div>
   <p class="erreur-dictee" data-dictee-erreur role="alert" hidden></p>

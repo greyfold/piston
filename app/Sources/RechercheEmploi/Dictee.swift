@@ -1,9 +1,11 @@
 // Dictée des entretiens avec l'IA : le micro de l'ordinateur et la reconnaissance vocale d'Apple,
 // exigée « sur l'appareil » (requiresOnDeviceRecognition) : la voix ne quitte jamais le Mac.
 // Pont « dictee » de la vue web (compositeur.js) :
-//   JS → Swift  {action: "demarrer", langue: "fr-FR"} | {action: "arreter"}
-//   Swift → JS  window.dicteeRetour({type: "pret" | "partiel" | "final" | "fin" | "erreur", texte?, message?})
+//   JS → Swift  {action: "demarrer", langue: "fr-FR"} | {action: "arreter"} | {action: "reglages", page: "dictee"}
+//   Swift → JS  window.dicteeRetour({type: "pret" | "partiel" | "final" | "fin" | "erreur", texte?, message?, reglages?})
+//   « reglages » : la page des Réglages Système qui corrige l'erreur (dictee, micro, reconnaissance).
 
+import AppKit
 import AVFoundation
 import Speech
 import WebKit
@@ -20,6 +22,7 @@ final class Dictee: NSObject, WKScriptMessageHandler {
         switch action {
         case "demarrer": demarrer(langue: corps["langue"] as? String ?? "fr-FR")
         case "arreter": arreter()
+        case "reglages": Dictee.ouvrirReglages(corps["page"] as? String ?? "")
         default: break
         }
     }
@@ -31,12 +34,12 @@ final class Dictee: NSObject, WKScriptMessageHandler {
         SFSpeechRecognizer.requestAuthorization { statut in
             DispatchQueue.main.async {
                 guard statut == .authorized else {
-                    return self.erreur("la reconnaissance vocale n'est pas autorisée (Réglages Système › Confidentialité › Reconnaissance vocale)")
+                    return self.erreur("la reconnaissance vocale n'est pas autorisée (Réglages Système › Confidentialité et sécurité › Reconnaissance vocale)", reglages: "reconnaissance")
                 }
                 AVCaptureDevice.requestAccess(for: .audio) { ok in
                     DispatchQueue.main.async {
                         guard ok else {
-                            return self.erreur("l'accès au micro est refusé (Réglages Système › Confidentialité › Micro)")
+                            return self.erreur("l'accès au micro est refusé (Réglages Système › Confidentialité et sécurité › Micro)", reglages: "micro")
                         }
                         self.ecouter(langue: langue)
                     }
@@ -48,7 +51,7 @@ final class Dictee: NSObject, WKScriptMessageHandler {
     private func ecouter(langue: String) {
         // Rien ne part vers les serveurs d'Apple : sans modèle local pour cette langue, pas de dictée.
         guard let reconnaisseur = Dictee.reconnaisseurLocal(langue) else {
-            return erreur("la dictée sur l'ordinateur n'est pas installée pour cette langue (Réglages Système › Clavier › Dictée)")
+            return erreur("la dictée sur l'ordinateur n'est pas installée pour cette langue (Réglages Système › Clavier › Dictée)", reglages: "dictee")
         }
         guard reconnaisseur.isAvailable else { return erreur("la reconnaissance vocale est indisponible pour l'instant") }
 
@@ -75,7 +78,7 @@ final class Dictee: NSObject, WKScriptMessageHandler {
                 } else if let erreur, self.enCours {
                     let code = (erreur as NSError).code
                     // 1110 : rien entendu ; 216 / 301 : arrêt demandé. Pas des erreurs pour la personne.
-                    if ![1110, 216, 301].contains(code) { self.erreur(erreur.localizedDescription) } else { self.terminer() }
+                    if ![1110, 216, 301].contains(code) { let (m, page) = Dictee.message(erreur); self.erreur(m, reglages: page) } else { self.terminer() }
                 }
             }
         }
@@ -103,6 +106,29 @@ final class Dictee: NSObject, WKScriptMessageHandler {
         return nil
     }
 
+    /// Le message d'Apple, en anglais et sans remède, remplacé par la marche à suivre quand on la connaît.
+    /// La reconnaissance d'Apple, même sur l'appareil, exige la Dictée de macOS (Siri peut rester éteint).
+    static func message(_ erreur: Error) -> (String, String?) {
+        let e = erreur as NSError
+        let texte = e.localizedDescription.lowercased()
+        if e.domain == "kAFAssistantErrorDomain" && (e.code == 1700 || (texte.contains("dictation") && texte.contains("disabled"))) {
+            return ("la Dictée de macOS est désactivée : active-la dans Réglages Système › Clavier › Dictée (Siri peut rester éteint), puis réessaie", "dictee")
+        }
+        return (e.localizedDescription, nil)
+    }
+
+    /// Les pages des Réglages Système (macOS 13 et plus) ; seules celles-ci peuvent être ouvertes.
+    static let pagesReglages = [
+        "dictee": "x-apple.systempreferences:com.apple.Keyboard-Settings.extension",
+        "micro": "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+        "reconnaissance": "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition",
+    ]
+
+    static func ouvrirReglages(_ page: String) {
+        guard let adresse = pagesReglages[page], let url = URL(string: adresse) else { return }
+        NSWorkspace.shared.open(url)
+    }
+
     func arreter() {
         guard enCours else { return envoyer(["type": "fin"]) }
         // Fin du son : la reconnaissance rend son dernier résultat (isFinal), puis terminer().
@@ -121,14 +147,16 @@ final class Dictee: NSObject, WKScriptMessageHandler {
         envoyer(["type": "fin"])
     }
 
-    private func erreur(_ message: String) {
+    private func erreur(_ message: String, reglages: String? = nil) {
         tache?.cancel()
         if moteurAudio.isRunning { moteurAudio.stop() }
         moteurAudio.inputNode.removeTap(onBus: 0)
         requete = nil
         tache = nil
         enCours = false
-        envoyer(["type": "erreur", "message": message])
+        var m = ["type": "erreur", "message": message]
+        if let reglages { m["reglages"] = reglages }
+        envoyer(m)
     }
 
     private func envoyer(_ m: [String: String]) {
