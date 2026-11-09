@@ -124,6 +124,10 @@ def environnement():
     env = dict(os.environ)
     for v in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
         env.pop(v, None)
+    # Ni télémétrie ni rapports d'erreur de Claude Code : rien de la recherche ne part ailleurs
+    # que vers le compte Claude de la personne.
+    env.setdefault("DISABLE_TELEMETRY", "1")
+    env.setdefault("DISABLE_ERROR_REPORTING", "1")
     return env
 
 

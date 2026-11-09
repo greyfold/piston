@@ -362,8 +362,11 @@ def connexion():
     """`claude auth login` dans la VM, dans le terminal de l'utilisateur (interactif)."""
     if (instance() or {}).get("status") != "Running":
         raise VMImpossible("démarrer d'abord la machine virtuelle : jobsearch vm demarrer")
+    # Une connexion laissée en route (fenêtre annulée côté Mac) garde son propre code : on la
+    # termine d'abord, sinon le code collé pourrait venir d'une autre tentative.
+    _lima("shell", "--workdir", "/", nom(), "--", "pkill", "-f", "^claude.auth.login", timeout=30)
     return subprocess.call([limactl(), "shell", "--workdir", "/", nom(), "--", "bash", "-lc",
-                            'export PATH="$HOME/.local/bin:$PATH"; claude auth login --claudeai'],
+                            'export PATH="$HOME/.local/bin:$PATH"; exec claude auth login --claudeai'],
                            env=environnement_lima())
 
 

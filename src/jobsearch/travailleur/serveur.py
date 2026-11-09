@@ -167,7 +167,9 @@ def commande_session(consigne):
     import json as _json
     mcp = {"mcpServers": {"chrome": {"command": "/opt/node/bin/chrome-devtools-mcp",
                                      "args": ["--browserUrl", "http://127.0.0.1:%d" % PORT_DEVTOOLS]}}}
-    return [moteur.executable(), "-p", consigne, "--mcp-config", _json.dumps(mcp), "--strict-mcp-config",
+    modele = (reglages().get("moteur") or {}).get("modele")
+    return [moteur.executable(), "-p", consigne, *(["--model", modele] if modele else []),
+            "--mcp-config", _json.dumps(mcp), "--strict-mcp-config",
             "--allowedTools", "mcp__chrome,Bash(jobsearch-session:*)",
             "--disallowedTools", ",".join("mcp__chrome__" + o for o in OUTILS_REFUSES),
             "--permission-mode", "dontAsk", "--output-format", "stream-json", "--verbose"]
