@@ -1,24 +1,30 @@
 {# Les champs d'une étape du profil : assistant (profil.html) et tâches de la checklist (premiers_pas.html). #}
+{% from "_macros.html" import champ_puces %}
+{% from "_questions_criteres.html" import champs_criteres %}
 {% set autocomplete = {"identite.prenom": "given-name", "identite.nom": "family-name", "identite.adresse": "street-address",
    "identite.npa": "postal-code", "identite.ville": "address-level2", "identite.pays": "country-name",
    "identite.telephone": "tel", "identite.email": "email", "identite.site": "url",
    "identite.civilite": "honorific-prefix", "identite.date_naissance": "bday"} %}
 {% set clavier = {"email": "email", "tel": "tel", "url": "url", "nombre": "numeric", "date": "numeric"} %}
   {% for c in champs %}
-    <div class="champ{{ ' large' if c.type in ('liste', 'regles') }}">
-      {% if c.type == 'regles' %}
-      {% set cochees = c.valeur.split('\n') %}
-      <fieldset class="cases"{% if c.aide %} aria-describedby="{{ c.cle }}-aide"{% endif %}>
-        <legend>{{ c.libelle }}</legend>
-        {% for groupe, liste in regles %}
-        <div class="groupe-cases"><span class="groupe">{{ groupe }}</span>
-          {% for id, libelle, limite in liste %}
-          <label><input type="checkbox" name="{{ c.cle }}" value="{{ id }}"{% if id in cochees %} checked{% endif %}>{{ libelle }}{% if limite %} <span class="puce">limite</span>{% endif %}</label>
-          {% endfor %}
-        </div>
-        {% endfor %}
-      </fieldset>
-      {% else %}
+    {% if c.type == 'regles' %}
+    {# Une règle par pilule, un champ par groupe (Langue, Niveau, Contrat…). #}
+    {% set cochees = c.valeur.split('\n') %}
+    <p class="champ-intro">{{ c.libelle }}. {{ c.aide }}</p>
+    {% for groupe, liste in regles %}
+    {% set opts = [] %}{% for id, libelle, limite in liste %}{% set _ = opts.append((id, libelle ~ (" · limite" if limite else ""))) %}{% endfor %}
+    {{ champ_puces(c.cle, groupe, opts, cochees, c.cle ~ "-" ~ loop.index) }}
+    {% endfor %}
+    {% elif c.type == 'liste_choix' %}
+    {# Une liste en pilules : décocher retire, le champ du bas ajoute. #}
+    {% set items = c.valeur.split('\n') | map('trim') | select | list %}
+    {% set opts = [] %}{% for x in items + ((options_listes | default({})).get(c.cle) or []) %}{% if x not in opts | map(attribute='0') | list %}{% set _ = opts.append((x, x)) %}{% endif %}{% endfor %}
+    {{ champ_puces(c.cle, c.libelle, opts, items, c.cle, aide=c.aide, ajout=true, exemple=c.exemple, requis=c.requis) }}
+    {% elif c.type == 'criteres' %}
+    <p class="champ-intro">{{ c.libelle }}{% if c.requis %} <span class="requis">*</span>{% endif %} : {{ c.aide }}</p>
+    {{ champs_criteres(criteres_def, c.valeur, id="profil") }}
+    {% else %}
+    <div class="champ{{ ' large' if c.type == 'liste' }}">
       <label for="{{ c.cle }}">{{ c.libelle }}{% if c.requis %} <span class="requis" title="obligatoire">*</span>{% endif %}
         {% if c.par_defaut and c.valeur %}<span class="puce" title="Valeur des fichiers de config/ : enregistrée dans le profil seulement si tu la changes">par défaut</span>{% endif %}</label>
       {% if c.type == 'choix' %}
@@ -87,7 +93,7 @@
         {% if c.requis %}required{% endif %}
         {% if c.aide %}aria-describedby="{{ c.cle }}-aide"{% endif %}>
       {% endif %}
-      {% endif %}
       {% if c.aide %}<div class="aide" id="{{ c.cle }}-aide">{{ c.aide }}</div>{% endif %}
     </div>
+    {% endif %}
   {% endfor %}

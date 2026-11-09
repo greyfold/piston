@@ -24,7 +24,7 @@ import time
 
 from ..fingerprint import empreinte
 from ..moteur.session import SessionClaude as _Session, texte_outil
-from .base import Annonce, RouteCassee, code_canton
+from .base import Annonce, ConfigurationRequise, RouteCassee, code_canton
 
 ETIQUETTE = "indeed:%s"
 _CHAMP = re.compile(r"\*\*(Job Title|Job Id|Company|Location|Posted on|Job Type|Compensation|View Job URL):\*\*[ \t]*(.*)")
@@ -86,7 +86,9 @@ class SessionClaude(_Session):
     routes cassées, et sa limite de débit se lit dans le journal de débogage MCP."""
 
     def __init__(self, commande, cwd=None, journal=None, debogage=None):
-        super().__init__(commande, cwd=cwd, journal=journal, debogage=debogage, erreur=RouteCassee, etiquette="indeed")
+        from ..moteur import environnement_connecteurs
+        super().__init__(commande, cwd=cwd, journal=journal, debogage=debogage, erreur=RouteCassee, etiquette="indeed",
+                         env=environnement_connecteurs())
 
     def attente_conseillee(self):
         """Secondes à attendre selon Indeed (« Rate limit exceeded … Try again in N
@@ -176,7 +178,7 @@ class Indeed:
         l'app Claude ouvertes en même temps comptent aussi, et une tentative refusée
         compte sans doute encore. On attend donc le délai indiqué par Indeed avant
         de rouvrir, `essais` fois au plus."""
-        essais, etat = int(self.r.get("essais", 4)), None
+        essais, etat, absences = int(self.r.get("essais", 4)), None, 0
         for n in range(essais):
             s = self._ouvrir()
             try:
@@ -190,10 +192,18 @@ class Indeed:
             etat = self._etat_connecteur(s)
             s.fermer()
             if etat == "needs-auth":
-                raise RouteCassee("indeed : le connecteur Indeed est à réautoriser sur claude.ai (Réglages, Connecteurs)")
+                raise ConfigurationRequise("Indeed est à réautoriser sur claude.ai (Réglages › Connecteurs)",
+                                           connecteur="indeed")
             if s.outils is not None and etat is None and not any("search_jobs" in o for o in s.outils):
-                raise RouteCassee("indeed : connecteur Indeed absent de Claude Code (activer Indeed dans les "
-                                  "connecteurs de claude.ai)")
+                # Pas d'Indeed dans la session : connecteur pas activé, ou pas encore branché au
+                # premier tour. On ne conclut qu'à la deuxième fois de suite.
+                absences += 1
+                if absences >= 2 or n + 1 >= essais:
+                    raise ConfigurationRequise("le connecteur Indeed n'est pas activé sur ton compte Claude "
+                                               "(claude.ai › Réglages › Connecteurs)", connecteur="indeed")
+                time.sleep(float(self.r.get("pause_absent_s", 10)))
+                continue
+            absences = 0
             conseil = getattr(s, "attente_conseillee", lambda: None)()
             if conseil is not None:
                 etat = "limite de débit d'Indeed, réessayer dans %d s" % conseil

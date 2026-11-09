@@ -30,15 +30,19 @@
     <a href="{{ href }}" class="{{ 'actif' if actif }}"{% if actif %} aria-current="page"{% endif %}>{{ nom }}</a>
     {% endfor %}
   </nav>
-  <a href="/reglages" class="lien-reglages{{ ' actif' if dans_reglages }}"{% if nav == '/reglages' %} aria-current="page"{% endif %}>{{ icone("reglages") }}<span>Réglages</span></a>
+  <a href="/reglages" class="lien-reglages{{ ' actif' if dans_reglages }}">{{ icone("reglages") }}<span>Réglages</span></a>
   {% endif %}
 </div></header>
 {% endblock %}
 <main>
 {% if profil_manquants and not accueil and not premiers_pas_affiches and not nav.startswith(('/profil', '/connexion')) %}<div class="bandeau attention"><span class="point"></span><span>Profil incomplet ({{ profil_manquants | map('last') | join(', ') }}) : <a href="/profil">le compléter</a>.</span></div>{% endif %}
-{% if dans_reglages and nav != '/reglages' and not accueil %}<p class="petit fil"><a href="/reglages">← Réglages</a></p>{% endif %}
+{% if a_configurer and not accueil and nav in ('/', '/sante') %}{% for c in a_configurer %}<div class="bandeau attention"><span class="point"></span><span>{{ c.nom }} n'est pas branché : {{ c.message }}. Les autres sources tournent normalement, et {{ c.nom }} reprendra de lui-même une fois le réglage fait. <a href="/connecteurs#{{ c.id }}">Que faire</a></span></div>{% endfor %}{% endif %}
+{# Réglages : menu à gauche, la page ouverte à droite, sur une seule colonne. #}
+{% set cadre_reglages = dans_reglages and not accueil %}
+{% if cadre_reglages %}<div class="reglages-cadre">{% include "_reglages_nav.html" %}<div class="reglages-contenu">{% endif %}
 {% block message %}{% if msg %}<div class="flash {{ '' if ok else 'ko' }}" role="status">{{ msg }}</div>{% endif %}{% endblock %}
 {% block contenu %}{% endblock %}
+{% if cadre_reglages %}</div></div>{% endif %}
 </main>
 {% include "_connexion_ia.html" %}
 <script>
@@ -72,6 +76,18 @@ document.querySelectorAll("form[data-occupe]").forEach(function (form) {
     b.setAttribute("aria-busy", "true");
     setTimeout(function () { b.disabled = true; });   // une fois l'envoi parti : un second clic ne relance rien
   });
+});
+// Confirmation d'une action destructrice (macro confirmation, Nexus Modal) : le formulaire du bouton est
+// vérifié d'abord (fichier choisi…), puis la modale s'ouvre ; « Annuler » la referme.
+document.querySelectorAll("[data-confirmer-modale]").forEach(function (b) {
+  b.addEventListener("click", function () {
+    var d = document.getElementById(b.dataset.confirmerModale);
+    if (b.form && !b.form.reportValidity()) return;
+    if (d && d.showModal) d.showModal();
+  });
+});
+document.querySelectorAll("dialog [data-fermer-modale]").forEach(function (b) {
+  b.addEventListener("click", function () { b.closest("dialog").close(); });
 });
 // Retour arrière : la page revient du cache avec le bouton bloqué ; on le rend.
 window.addEventListener("pageshow", function (e) {

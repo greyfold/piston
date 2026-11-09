@@ -18,5 +18,9 @@ Lire `README.md` pour l'architecture. Écrire en français.
 - La base (`jobsearch.db` du dossier de données) ne se modifie que par le code de `jobsearch`.
 - Les tests ne lancent jamais `claude`, ne lisent pas le trousseau, n'écrivent pas dans `data/`
   (`tests/conftest.py`).
+- Interface : design system Nexus obligatoire, tel que traduit dans `web/static/style.css` et
+  `web/templates/_macros.html`. Avant de toucher un gabarit, le CSS ou le JS de l'interface, lire et
+  suivre à la lettre `.claude/rules/design-system.md` : réutiliser un composant existant, jamais de
+  couleur en dur, de `style="…"`, de bibliothèque d'interface ni d'icône hors `icone()`.
 - Après une modification : `uv run pytest`, puis `scripts/construire-app.sh --ouvrir` pour voir
   le changement dans l'application.

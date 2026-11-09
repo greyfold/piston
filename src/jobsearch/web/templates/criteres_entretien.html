@@ -1,105 +1,275 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone, fil_entretien, compositeur %}
+{% from "_macros.html" import icone %}
+{% from "_macros.html" import champ_puces %}
+{% from "_questions_criteres.html" import reponse_question, champs_criteres %}
 {% block titre %}Ce qui compte pour toi · Recherche d'emploi{% endblock %}
+{# Mode concentré, comme « Ton parcours » : pas de barre de menu, le questionnaire prend toute la fenêtre ; les
+   réponses rapides et les messages s'affichent dans le fil, sous la question. #}
+{% block barre %}{% endblock %}
+{% block message %}{% endblock %}
+{% block classe_corps %}concentre entretien-fixe{% endblock %}
 {% block contenu %}
-{# Ce qui compte pour toi : l'IA pose quelques questions et propose critères, intérêt, angles et
-   différenciateur ; la personne relit et enregistre (parcours.repondre_criteres). #}
-<div class="parcours-page">
-  <a class="retour" href="/#premiers-pas">{{ icone("precedent") }} Tableau de bord</a>
-  <div class="titre-etape tete-parcours">
-    <span class="pastille">{{ icone("criteres") }}</span>
-    <div>
-      {% if rang is not none %}<p class="surtitre">Bien démarrer · {{ rang + 1 }} sur {{ total }}</p>{% endif %}
+{# Ce qui compte pour toi : un questionnaire fixe, sans IA (ce_qui_compte.py). Une question à la fois dans le fil,
+   les réponses à cliquer ou à écrire en bas. Les réponses remplissent critères, pré-tri et objectifs, relus et
+   enregistrés dans le volet. Un seul appel à l'IA, en arrière-plan : des exemples adaptés au poste, les angles. #}
+{% set q = etat.courante %}
+{% set criteres_lignes = valeurs.lignes %}
+{% set libelles = namespace(gardees=[], ecartees=[]) %}
+{% for groupe, rs in regles %}{% for i, libelle, _ in rs %}
+  {% if i in changes.gardees %}{% set libelles.gardees = libelles.gardees + [(i, groupe ~ " : " ~ libelle)] %}{% endif %}
+  {% if i in changes.ecartees %}{% set libelles.ecartees = libelles.ecartees + [(i, groupe ~ " : " ~ libelle)] %}{% endif %}
+{% endfor %}{% endfor %}
+<div class="salle-entretien">
+  <header class="tete-salle">
+    <div class="bande-page">
+      <a class="retour-salle" href="/#premiers-pas">{{ icone("precedent") }}<span>Tableau de bord</span></a>
       <h1>Ce qui compte pour toi</h1>
-      <p class="intro">Quelques questions, et l'IA en tire ce qu'elle vérifiera dans chaque annonce. Tu relis, tu corriges,
-        tu enregistres. Aucun montant de salaire : le minimum que tu vises n'est écrit nulle part.</p>
+      {% if rang is not none %}<p class="etape-salle">Bien démarrer · {{ rang + 1 }} sur {{ total }}</p>{% endif %}
     </div>
-  </div>
-
-  {% if not ia %}
-  <div class="bandeau attention"><span class="point"></span>
-    <span>L'entretien demande ton IA.
-      <button type="button" class="lien-neutre" data-connexion-ia="claude" data-nom="Claude">Connecter Claude</button>
-      Tu peux aussi remplir la proposition à la main.</span></div>
-  {% elif parcours_vide %}
-  <div class="bandeau info"><span class="point"></span>
-    <span>Ton parcours est encore vide : <a href="/premiers-pas/dossier">importe ton CV</a> d'abord, l'IA en tirera tes angles.</span></div>
-  {% endif %}
-
-  <div class="parcours-grille">
-    <section class="carte-accueil entretien" id="entretien" aria-labelledby="entretien-titre">
-      <p class="surtitre">Entretien</p>
-      <h2 id="entretien-titre">{{ "Quelque chose à ajouter ?" if etat.termine else "Parle-moi de ton prochain poste" }}</h2>
-      {{ fil_entretien(etat.echanges) }}
-      {% if etat.termine %}
-      <div class="etat-tache ok">{{ icone("fin") }}
-        <div><p class="fort">L'IA a ce qu'il lui faut</p><p>Relis la proposition, corrige-la si besoin, puis enregistre.</p></div></div>
-      {% endif %}
-      <form data-repondre>
-        {{ compositeur("Ajoute ce qui manque, si tu veux." if etat.termine else "Réponds avec tes mots.",
-                       "L'IA met la proposition à jour…", desactive=not ia, rows=4,
-                       avert="L'IA peut se tromper. Relis la proposition avant d'enregistrer.") }}
-        <p class="flash ko" data-erreur hidden role="alert"></p>
-        {% if etat.echanges | length > 1 %}
-        <div class="actions-entretien">
-          <button type="submit" form="recommencer" class="lien-neutre" data-confirmer="Effacer cet entretien et recommencer ?">Recommencer</button>
+    <div class="bande-entretien">
+      <div class="dedans-salle">
+        <div class="tete-entretien">
+          <div>
+            <p class="surtitre">Questionnaire · {{ "terminé" if etat.termine else "%d réponse%s sur %d" % (etat.faites, "s" if etat.faites > 1 else "", etat.total) }}</p>
+            <h2 id="entretien-titre">{{ "Ce qui ressort de tes réponses" if etat.termine else "Ton prochain poste, en quelques clics" }}</h2>
+          </div>
+          <button type="button" class="bouton-volet" data-ouvrir-volet="volet-proposition" aria-haspopup="dialog" aria-controls="volet-proposition">
+          {{ icone("criteres") }}<span>Ce qui en ressort</span><span class="compte-volet">{{ criteres_lignes | length }} critère{{ "s" if criteres_lignes | length > 1 }}</span></button>
         </div>
+        <div class="progression" role="progressbar" aria-valuemin="0" aria-valuemax="{{ etat.total }}" aria-valuenow="{{ etat.faites }}" aria-label="Questionnaire">
+          <i style="width: {{ (100 * etat.faites / etat.total) | round | int }}%"></i></div>
+      </div>
+    </div>
+  </header>
+  {% if etat.termine %}
+  {# Fin du questionnaire : un écran de succès, avec ce qui ressort des réponses. Chaque ligne se modifie : la
+     question d'où elle vient se rouvre à sa place ; le reste s'ajuste dans le volet. #}
+  {% set vers_question = {"taux": "taux", "contrat-freelance": "contrat", "contrat-cdd": "contrat",
+     "contrat-api-duree-determinee": "contrat", "titre-allemand": "langues", "langue-allemand": "langues",
+     "allemand-exige": "langues"} %}
+  <section class="corps-salle succes-criteres" aria-labelledby="succes-titre">
+    <div class="dedans-salle">
+      <div class="succes-accueil">
+        <span class="pastille ronde">{{ icone("fin") }}</span>
+        <h2 id="succes-titre">{{ "Enregistré dans ton profil" if enregistre else "Ce qui compte pour toi" }}</h2>
+        <p class="intro">{% if enregistre %}L'IA s'en sert dès maintenant pour noter chaque annonce, et le tri du matin pour
+          écarter ce qui ne te va pas. Une ligne n'est pas juste ? Modifie-la : c'est enregistré aussitôt.
+          {% else %}Voici ce que tes réponses donnent.{% endif %}</p>
+      </div>
+      <div class="carte resume-criteres">
+        <section aria-labelledby="r-criteres">
+          <h3 class="section-base" id="r-criteres">Critères non négociables</h3>
+          {% if prop.lignes %}
+          <ul class="lignes-resume">
+            {% for c in prop.lignes %}
+            <li><span>{{ c }}</span>{% if prop.sources[loop.index0] %}<a class="lien-neutre petit" href="/premiers-pas/criteres?modifier={{ prop.sources[loop.index0] }}#entretien">Modifier<span class="cache"> : {{ c }}</span></a>{% endif %}</li>
+            {% endfor %}
+          </ul>
+          {% else %}<p class="muet">Aucun critère : ajoute-les en détail avant d'enregistrer.</p>{% endif %}
+        </section>
+        <section aria-labelledby="r-interet">
+          <h3 class="section-base" id="r-interet">Ce qui rend un poste intéressant</h3>
+          <ul class="lignes-resume">
+            <li><span>{{ prop.activites | join(", ") or "Aucune activité choisie" }}</span><a class="lien-neutre petit" href="/premiers-pas/criteres?modifier=contenu#entretien">Modifier<span class="cache"> les activités</span></a></li>
+            <li><span>{{ prop.interet_texte or "Rien à ajouter" }}</span><a class="lien-neutre petit" href="/premiers-pas/criteres?modifier=interet#entretien">Modifier<span class="cache"> ce qui rend un poste intéressant</span></a></li>
+          </ul>
+        </section>
+        <section aria-labelledby="r-tri">
+          <h3 class="section-base" id="r-tri">Tri du matin</h3>
+          <ul class="lignes-resume">
+            {# Les règles coupées : leurs annonces restent à trier. #}
+            {% for groupe, rs in regles %}{% for i, lib, _ in rs if i not in prop.regles %}
+            <li><span>Gardées aussi : {{ groupe }} : {{ lib }}</span>{% if i in vers_question %}<a class="lien-neutre petit" href="/premiers-pas/criteres?modifier={{ vers_question[i] }}#entretien">Modifier<span class="cache"> : {{ lib }}</span></a>{% endif %}</li>
+            {% endfor %}{% endfor %}
+            <li><span>Intitulés écartés : {{ prop.mots_titre | join(", ") or "aucun" }}</span><a class="lien-neutre petit" href="/premiers-pas/criteres?modifier=metiers#entretien">Modifier<span class="cache"> les intitulés écartés</span></a></li>
+          </ul>
+        </section>
+        <section aria-labelledby="r-objectifs">
+          <h3 class="section-base" id="r-objectifs">Objectifs de postulations</h3>
+          <ul class="lignes-resume">
+            <li><span>{% if prop.semaine or prop.mois %}{{ prop.semaine or "aucun" }} par semaine · {{ prop.mois or "aucun" }} par mois{% else %}Pas d'objectif{% endif %}</span><a class="lien-neutre petit" href="/premiers-pas/criteres?modifier=rythme#entretien">Modifier<span class="cache"> les objectifs</span></a></li>
+          </ul>
+        </section>
+        {% if etat.contexte and etat.contexte.angles %}
+        <section aria-labelledby="r-angles">
+          <h3 class="section-base" id="r-angles">Angles de candidature <span class="badge-ia">{{ icone("modele") }}Proposés par l'IA</span></h3>
+          <ul class="lignes-resume">
+            {% for a in etat.contexte.angles %}<li><span>{{ a }}</span></li>{% endfor %}
+          </ul>
+          <p class="petit muet">Proposés par l'IA d'après ton parcours. Ajuste-les dans le détail.</p>
+        </section>
         {% endif %}
-      </form>
-      <form id="recommencer" method="post" action="/criteres/recommencer"></form>
-    </section>
-
-    <section class="carte-accueil proposition" aria-labelledby="proposition-titre">
-      <h2 id="proposition-titre">{{ "Ce que l'IA a compris" if etat.proposition else "Ta proposition" }}</h2>
-      <form method="post" action="/premiers-pas/criteres" class="edition">
-        <input type="hidden" name="entretien" value="1">
-        <div class="champ"><label for="p-criteres">Critères non négociables <span class="requis">*</span></label>
-          <textarea id="p-criteres" name="evaluation.criteres" rows="6" required>{{ valeurs.criteres }}</textarea>
-          <span class="aide">Un par ligne ; une précision facultative après « : ». Une annonce qui en viole un clairement est notée 40 au plus.</span></div>
-        <div class="champ"><label for="p-interet">Ce qui rend un poste intéressant</label>
-          <input type="text" id="p-interet" name="evaluation.interet" value="{{ valeurs.interet }}"></div>
-        <div class="champ"><label for="p-angles">Angles de candidature</label>
-          <textarea id="p-angles" name="evaluation.angles" rows="4">{{ valeurs.angles }}</textarea>
-          <span class="aide">Les façons de te présenter, une par ligne : l'IA en propose une par annonce.</span></div>
-        <div class="champ"><label for="p-diff">Différenciateur</label>
-          <input type="text" id="p-diff" name="dossier.differenciateur" value="{{ valeurs.differenciateur }}">
-          <span class="aide">Le troisième paragraphe de chaque lettre le met en avant.</span></div>
-        <div class="actions-accueil">
-          <a class="lien-neutre" href="/#premiers-pas">Plus tard</a>
-          <button class="go grand">Enregistrer</button>
-        </div>
-      </form>
-    </section>
-  </div>
+      </div>
+      {% if msg and not ok %}<div class="flash ko" role="status">{{ msg }}</div>{% endif %}
+      <div class="actions-succes">
+        <button type="button" class="lien-neutre" data-ouvrir-volet="volet-proposition" aria-haspopup="dialog" aria-controls="volet-proposition">Ajuster dans le détail</button>
+        {% if prop.lignes %}<a class="bouton go grand" href="/#premiers-pas">Retour au tableau de bord {{ icone("suivant") }}</a>
+        {% else %}<button type="button" class="go grand" data-ouvrir-volet="volet-proposition">Ajouter mes critères</button>{% endif %}
+      </div>
+    </div>
+  </section>
+  {% else %}
+  <section class="corps-salle" id="fil-entretien" aria-labelledby="entretien-titre">
+    <div class="dedans-salle">
+      <p class="ouverture-salle">{{ etat.total }} questions courtes, à cliquer pour la plupart. Tes réponses remplissent tes
+        critères, ce que le tri du matin écarte d'office et tes objectifs de postulations ; tu relis tout avant d'enregistrer.
+        Aucun montant de salaire : le minimum que tu vises n'est écrit nulle part.</p>
+      <ol class="fil" aria-label="Questions et réponses">
+        {% for x in etat.fil %}
+        {% if x.courante %}
+        <li class="message ia courante"{% if etat.modification %} data-modification{% endif %}><span class="badge-fixe">{{ "Ta réponse à modifier" if etat.modification else "Question" }}</span>
+          <p>{{ q.question }}</p>
+          {% if q.aide %}<span class="aide-question">{{ q.aide }}</span>{% endif %}</li>
+        {# Les réponses rapides, dans le fil, sous la question : à cliquer, ou à écrire dans les champs. #}
+        <li class="message reponses-rapides">
+          {% if msg %}<div class="flash {{ '' if ok else 'ko' }}" role="status">{{ msg }}</div>{% endif %}
+          <form method="post" action="/criteres/repondre" class="reponse-guidee"
+                {% if q.choix and not q.multiple and not q.champs %}data-auto{% endif %}
+                {% if preparer and (q.contexte or q.champs | selectattr("contexte") | list) %}data-attend-contexte{% endif %}>
+            <input type="hidden" name="cle" value="{{ q.cle }}">
+            {{ reponse_question(q, etat.deja, defauts) }}
+            <div class="statut-ia" data-attente role="status" hidden><span class="spinner" aria-hidden="true"></span>
+              <span>L'IA prépare des exemples adaptés à ton poste…</span></div>
+            <p class="flash ko" data-erreur hidden role="alert"></p>
+            <div class="actions-reponse">
+              {% if request.query_params.get("modifier") %}<a class="lien-neutre" href="/premiers-pas/criteres#entretien">Annuler</a>{% endif %}
+              <button class="go">Valider {{ icone("envoyer") }}</button>
+            </div>
+          </form>
+        </li>
+        {% else %}
+        <li class="message ia"><span class="badge-fixe">Question</span><p>{{ x.question.question }}</p></li>
+        <li class="message moi"><span class="cache">Ta réponse : </span><p>{{ x.reponse }}</p>
+          <a class="lien-neutre petit" href="/premiers-pas/criteres?modifier={{ x.question.cle }}#entretien">Modifier<span class="cache"> la réponse à « {{ x.question.question }} »</span></a></li>
+        {% endif %}
+        {% endfor %}
+      </ol>
+    </div>
+  </section>
+  {% endif %}
 </div>
+
+{# Volet latéral : la proposition entière, à relire, corriger et enregistrer. Il s'ouvre seul après un
+   enregistrement refusé, pour montrer ce qui est à corriger. #}
+<dialog class="volet gauche volet-proposition" id="volet-proposition" aria-labelledby="proposition-titre"
+        aria-describedby="proposition-description"{% if msg and not ok and etat.termine %} data-ouvrir-auto{% endif %}>
+  <div class="tete-volet">
+    <div>
+      <h2 id="proposition-titre">Ce qui en ressort</h2>
+      <p class="petit muet" id="proposition-description">Mis à jour à chaque réponse. Corrige ce qui n'est pas juste, puis
+        enregistre : c'est ce que l'IA vérifie dans chaque annonce et ce que le tri du matin applique.
+        <span class="puce">changé</span> : modifié d'après tes réponses au questionnaire.</p>
+    </div>
+    <button type="button" class="fermer-volet" data-fermer-volet><span class="cache">Fermer le volet</span>
+      {{ icone("fermer") }}</button>
+  </div>
+  <form method="post" action="/premiers-pas/criteres" class="edition formulaire-volet" id="form-proposition">
+    <input type="hidden" name="entretien" value="1">
+    <input type="hidden" name="pretri" value="1">
+    <input type="hidden" name="objectifs" value="1">
+    <div class="corps-volet">
+      <h3 class="section-base">Ce qui compte</h3>
+      <p class="champ-intro">Critères non négociables : un champ par critère, laisse vide ce qui t'est égal. Une annonce qui en
+        viole un clairement est notée 40 au plus.</p>
+      {{ champs_criteres(criteres_def, valeurs.criteres, id="p") }}
+      <h3 class="section-base">Ce qui rend un poste intéressant</h3>
+      {% set act = [] %}{% for x in options.activites %}{% set _ = act.append((x, x)) %}{% endfor %}
+      {{ champ_puces("evaluation.activites", "Activités qui doivent occuper l'essentiel du temps", act, valeurs.activites,
+                     "p-activites", ajout=true, exemple="ajouter des activités, séparées par des virgules") }}
+      <div class="champ"><label for="p-interet">En quelques mots</label>
+        <input type="text" id="p-interet" name="evaluation.interet" value="{{ valeurs.interet }}"></div>
+      <h3 class="section-base">Ta candidature</h3>
+      {% set ang = [] %}{% for x in options.angles %}{% set _ = ang.append((x, x)) %}{% endfor %}
+      {{ champ_puces("evaluation.angles", "Angles de candidature", ang, valeurs.angles, "p-angles", ajout=true,
+                     exemple="ajouter un angle",
+                     aide=("Proposés par l'IA d'après ton parcours. " if etat.contexte and etat.contexte.angles else "")
+                          ~ "Les façons de te présenter : l'IA en propose une par annonce.") }}
+      <div class="champ"><label for="p-diff">Différenciateur</label>
+        <input type="text" id="p-diff" name="dossier.differenciateur" value="{{ valeurs.differenciateur }}" aria-describedby="p-diff-aide">
+        <span class="aide" id="p-diff-aide">Le troisième paragraphe de chaque lettre le met en avant.</span></div>
+
+      <h3 class="section-base">Tri du matin</h3>
+      <p class="champ-intro">Annonces écartées d'office. Une pilule décochée désactive la règle : les annonces qu'elle
+        écartait restent à trier. « limite » : écartée, mais montrée dans « Écartées limites ».</p>
+      {% for groupe, liste in regles %}
+      {% set opts = [] %}{% for id, libelle, limite in liste %}{% set _ = opts.append((id, libelle ~ (" · limite" if limite else ""))) %}{% endfor %}
+      {{ champ_puces("exclusions.regles", groupe, opts, valeurs.regles, "p-regles-" ~ loop.index,
+                     marque="changé" if liste | selectattr("0", "in", changes.gardees + changes.ecartees) | list else "") }}
+      {% endfor %}
+      {% set mots = [] %}{% for x in options.mots_titre %}{% set _ = mots.append((x, x)) %}{% endfor %}
+      {{ champ_puces("exclusions.mots_titre", "Autres intitulés à écarter", mots, valeurs.mots_titre, "p-mots", ajout=true,
+                     exemple="ajouter des mots, séparés par des virgules", marque="changé" if changes.mots_titre else "",
+                     aide="Un intitulé qui contient un de ces mots est écarté. Décoche un mot pour le retirer.") }}
+
+      <h3 class="section-base">Objectifs de postulations</h3>
+      <div class="deux">
+        <div class="champ"><label for="p-semaine">Par semaine{% if changes.semaine %} <span class="puce">changé</span>{% endif %}</label>
+          <input type="text" id="p-semaine" name="objectifs.semaine_min" value="{{ valeurs.semaine or '' }}" inputmode="numeric" placeholder="aucun"></div>
+        <div class="champ"><label for="p-mois">Par mois{% if changes.mois %} <span class="puce">changé</span>{% endif %}</label>
+          <input type="text" id="p-mois" name="objectifs.mois_min" value="{{ valeurs.mois or '' }}" inputmode="numeric" placeholder="aucun"></div>
+      </div>
+      <span class="aide">Facultatifs : vide, pas d'objectif. Suivis sur le tableau de bord.</span>
+
+      {% if etat.commence %}
+      <details class="ajout-base">
+        <summary>Recommencer le questionnaire</summary>
+        <p class="petit">Efface tes réponses. Ce qui est déjà enregistré dans ton profil reste.</p>
+        <div class="actions-el"><button type="submit" form="recommencer" class="lien-danger" formnovalidate
+          data-confirmer="Effacer tes réponses et recommencer ?">Recommencer</button></div>
+      </details>
+      {% endif %}
+    </div>
+    <div class="pied-volet">
+      <a class="lien-neutre" href="/#premiers-pas">Plus tard</a>
+      <button class="go grand">Enregistrer</button>
+    </div>
+  </form>
+  <form id="recommencer" method="post" action="/criteres/recommencer"></form>
+</dialog>
+<script src="/static/entretien.js?v={{ version_css() }}"></script>
 <script>
 (function () {
-  var form = document.querySelector("[data-repondre]");
-  if (!form) return;
-  var attente = form.querySelector("[data-attente]"), erreur = form.querySelector("[data-erreur]");
-  var zone = form.querySelector("textarea");
-  form.addEventListener("submit", function (ev) {
-    ev.preventDefault();
-    var corps = new FormData(form);
-    erreur.hidden = true; attente.hidden = false;
-    form.querySelectorAll("button, textarea").forEach(function (b) { b.disabled = true; });
-    fetch("/criteres/repondre", {method: "POST", credentials: "same-origin", body: corps})
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d.ok) throw new Error(d.erreur || "échec");
-        location.href = "/premiers-pas/criteres#entretien";
-        location.reload();
-      })
-      .catch(function (e) {
-        attente.hidden = true; erreur.hidden = false;
-        erreur.textContent = "Ça n'a pas abouti : " + e.message + ". Ta réponse est toujours là : réessaie.";
-        form.querySelectorAll("button, textarea").forEach(function (b) { b.disabled = false; });
+  var E = window.Entretien;
+  var form = document.querySelector(".reponse-guidee");
+  // L'appel unique à l'IA, en arrière-plan dès l'ouverture : les questions qui en ont besoin l'attendent.
+  var prepare = {{ "true" if preparer else "false" }}
+    ? fetch("/criteres/preparer", {method: "POST", credentials: "same-origin"})
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (!d.ok) throw new Error(d.erreur || "échec"); })
+    : null;
+  if (form) {
+    if (form.hasAttribute("data-auto")) {           // un seul choix, rien d'autre à remplir : la réponse part au clic
+      form.querySelectorAll('input[type="radio"]').forEach(function (r) {
+        r.addEventListener("change", function () { form.requestSubmit(); });
       });
-  });
-  document.querySelectorAll("[data-confirmer]").forEach(function (b) {
-    b.addEventListener("click", function (ev) { if (!confirm(b.dataset.confirmer)) ev.preventDefault(); });
-  });
-  if (location.hash === "#entretien") zone.focus();
+    }
+    if (prepare && form.hasAttribute("data-attend-contexte")) {
+      var attente = form.querySelector("[data-attente]"), erreur = form.querySelector("[data-erreur]");
+      var champs = form.querySelectorAll("input, textarea, button");
+      attente.hidden = false;
+      champs.forEach(function (c) { c.disabled = true; });
+      prepare.then(function () { location.reload(); }).catch(function (e) {
+        attente.hidden = true;
+        champs.forEach(function (c) { c.disabled = false; });
+        erreur.hidden = false;
+        erreur.textContent = "Exemples génériques : l'IA n'a pas répondu (" + e.message + ").";
+      });
+    }
+    var premier = form.querySelector("input:not([type=hidden]), textarea");
+    if (premier && location.hash === "#entretien") premier.focus({preventScroll: true});
+  }
+  // Une réponse modifiée sur place : la page se place sur elle ; sinon, comme une conversation, tout en bas.
+  var modifiee = document.querySelector(".fil .courante[data-modification]");
+  if (modifiee) {
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+    var aller = function () { modifiee.scrollIntoView({block: "center"}); };
+    aller(); window.addEventListener("load", aller);
+  } else if (!document.querySelector(".succes-criteres")) {
+    E.salle();                                       // l'écran de succès, lui, se lit depuis le haut
+  }
+  var volet = E.volet("volet-proposition", "#proposition");
+  if (volet && volet.element.hasAttribute("data-ouvrir-auto")) volet.ouvrir();
+  E.confirmer();
 })();
 </script>
 {% endblock %}

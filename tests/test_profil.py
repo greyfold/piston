@@ -293,7 +293,7 @@ def test_erreur_garde_la_saisie(web, profil_de_test):
 def test_page_pre_tri_et_cases_postees(web, profil_de_test):
     page = web.get("/profil/pretri").text
     assert 'type="checkbox" name="exclusions.regles" value="allemand-exige" checked' in page
-    assert "<legend>Annonces écartées d" in page and "Autres intitulés à écarter" in page
+    assert "<legend>Langue" in page and "Annonces écartées d" in page and "Autres intitulés à écarter" in page
     assert "Lieux Indeed" in web.get("/profil/recherche").text
     actives = [i for i in profil.effectif("exclusions.regles") if i != "taux"]
     r = web.post("/profil/pretri", data={"exclusions.regles": actives, "exclusions.mots_titre": ""},
@@ -339,3 +339,46 @@ def test_objectifs_facultatifs(profil_de_test):
     with pytest.raises(profil.ProfilInvalide):
         profil.enregistrer_objectifs("trois", "")
     assert profil.objectifs_rythme()["semaine"] == base["semaine_min"]
+
+
+def test_criteres_structures_et_ancien_format():
+    """Un champ par critère ; un profil d'avant (une phrase par critère) se relit champ par champ."""
+    d = {"trajet": "45", "trajet_depuis": "Morges", "teletravail": "2", "taux_min": 80, "taux_max": 100,
+         "contrats": ["cdi", "cdd-long"], "langues": ["français", "anglais"], "encadrement": "non",
+         "organisations": ["PME", "ONG ou associatif"], "secteurs_exclus": ["tabac", "armement"], "heures_max": 42,
+         "vacances_min": 5, "deplacements": "occasionnels", "a_eviter": "trop de réunions",
+         "autres": ["présence : 3 jours au bureau"]}
+    lignes = profil.lignes_criteres(d)
+    assert lignes[0] == "trajet : 45 minutes au plus depuis Morges" and lignes[-1] == "présence : 3 jours au bureau"
+    assert "organisation : PME ou ONG ou associatif" in lignes
+    assert profil.criteres_depuis_lignes(lignes) == d                       # aller-retour sans perte
+    assert profil.normaliser_criteres(d) == d
+    # Tout coché, 100 % : rien à vérifier, pas de phrase.
+    assert profil.lignes_criteres({"contrats": list(profil.CONTRATS), "taux_min": 100, "taux_max": 100}) == []
+    for mauvais in ({"trajet": "120"}, {"taux_max": "80"}, {"taux_min": "90", "taux_max": "80"}, {"heures_max": "beaucoup"}):
+        with pytest.raises(profil.ProfilInvalide):
+            profil.normaliser_criteres(mauvais)
+    assert profil.normaliser_criteres({"langues": ["klingon", "anglais"], "autres": ["a", "a", " "]}) == {
+        "langues": ["anglais"], "autres": ["a"]}
+    assert "120" not in str(profil.normaliser_criteres({"a_eviter": "moins de 120k"}))      # aucun montant
+
+
+def test_etape_criteres_un_champ_par_critere(web, profil_de_test):
+    page = web.get("/profil/criteres").text
+    assert 'name="critere.trajet"' in page and 'name="critere.contrats" value="cdi"' in page
+    assert 'name="evaluation.criteres"' not in page
+    # Le profil de test, d'avant les champs : ses phrases restent, cochées, dans « Autres critères ».
+    assert 'name="critere.autres" value="dimension IA" checked' in page
+    assert 'name="evaluation.angles" value="UX leadership" checked' in page
+    form = {"critere.teletravail": "1", "critere.langues": ["français"], "critere.autres": ["dimension IA"],
+            "evaluation.angles": ["UX leadership"], "evaluation.angles.ajout": "Pont métier-IA",
+            "evaluation.interet": "", "evaluation.activites.ajout": ""}
+    r = web.post("/profil/criteres", data=form, follow_redirects=False)
+    assert r.status_code == 303
+    p = _lire(profil_de_test)
+    assert p["evaluation"]["criteres"] == {"teletravail": "1", "langues": ["français"], "autres": ["dimension IA"]}
+    assert p["evaluation"]["angles"] == ["UX leadership", "Pont métier-IA"]
+    assert profil.criteres_evaluation() == [("télétravail", "1 jour par semaine au moins"),
+                                            ("langues de travail", "français"), ("dimension IA", "")]
+    r = web.post("/profil/criteres", data={"critere.trajet": "120"}, follow_redirects=False)
+    assert "choisir dans la liste" in r.text or "msg=" in r.headers.get("location", "")

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icone, etat_vide %}
 {% block titre %}Santé · Recherche d'emploi{% endblock %}
 {% block contenu %}
 <div class="bandeau {{ etat.niveau }}"><span class="point"></span><span>{{ etat.texte }}</span></div>
@@ -57,5 +58,10 @@
   </details>
 {% endfor %}
 </div>
-{% else %}<p class="vide">Aucun passage pour l'instant. Lance <code>uv run jobsearch passage</code>.</p>{% endif %}
+{% else %}
+{% call etat_vide("systeme", "Aucun passage pour le moment", titre_balise="h3", compact=true, id="passages-vide",
+     description="Un passage lit tes sources, trie les annonces et prépare ta journée. L'application les lance d'elle-même ; leur journal s'affichera ici.") %}
+    <a class="bouton" href="/sources">Voir mes sources</a>
+{% endcall %}
+{% endif %}
 {% endblock %}

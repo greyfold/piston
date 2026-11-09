@@ -98,7 +98,7 @@ def consigne():
     prenom = profil_mod.prenom()
     niveau, region = profil_mod.lire(p, "recherche.niveau"), profil_mod.lire(p, "recherche.region")
     criteres = profil_mod.criteres_evaluation()
-    interet = profil_mod.lire(p, "evaluation.interet")
+    interet = profil_mod.interet_evaluation(p)
     return CONSIGNE % {
         "nom": profil_mod.nom_complet(), "prenom": prenom,
         "poste": "un poste" + (" " + niveau if niveau else "") + (" en " + region if region else ""),

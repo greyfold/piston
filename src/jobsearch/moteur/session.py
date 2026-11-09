@@ -32,13 +32,14 @@ class SessionClaude:
     """`erreur` : l'exception levée quand le tour échoue (RouteCassee pour une source) ;
     `etiquette` : le nom qui la préfixe."""
 
-    def __init__(self, commande, cwd=None, journal=None, debogage=None, erreur=MoteurImpossible, etiquette="claude"):
+    def __init__(self, commande, cwd=None, journal=None, debogage=None, erreur=MoteurImpossible, etiquette="claude",
+                 env=None):
         self.journal = open(journal, "a", encoding="utf-8") if journal else None
         self.debogage = debogage
         self.erreur, self.etiquette = erreur, etiquette
         self.proc = subprocess.Popen(commande, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=subprocess.PIPE, text=True, cwd=cwd or tempfile.gettempdir(),
-                                     env=environnement())
+                                     env=env or environnement())
         self.lignes = queue.Queue()
         self.outils, self.serveurs = None, {}
         threading.Thread(target=self._lire, daemon=True).start()

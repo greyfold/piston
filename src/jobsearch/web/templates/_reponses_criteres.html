@@ -1,0 +1,21 @@
+{# Réglages, étape Critères : les questions de « Ce qui compte pour toi », toutes à la fois, avec leurs réponses.
+   Enregistrer réécrit critères, tri du matin et objectifs (ce_qui_compte.enregistrer) ; le détail suit. #}
+{% from "_macros.html" import icone %}
+{% from "_questions_criteres.html" import reponse_question %}
+<form method="post" action="/profil/criteres/reponses" class="carte profil reponses-criteres" id="reponses">
+  <div class="titre-etape">
+    <span class="pastille">{{ icone("criteres") }}</span>
+    <div><h2>Tes réponses</h2>
+      <p class="muet">Les questions de « Ce qui compte pour toi », toutes ici. Enregistrer réécrit tes critères, le tri du
+        matin et tes objectifs d'après ces réponses ; le détail se règle ensuite plus bas.</p></div>
+  </div>
+  {% for x in questions_criteres %}
+  <section class="question-reglage" aria-labelledby="q-{{ x.question.cle }}">
+    <h3 id="q-{{ x.question.cle }}">{{ x.question.question }}</h3>
+    {% if x.question.aide %}<p class="aide">{{ x.question.aide }}</p>{% endif %}
+    {{ reponse_question(x.question, x.deja, defauts_criteres, nom_choix="choix." ~ x.question.cle,
+                        prefixe="champ." ~ x.question.cle ~ ".", id="q-" ~ x.question.cle) }}
+  </section>
+  {% endfor %}
+  <div class="boutons pied"><button class="go">Enregistrer mes réponses</button></div>
+</form>

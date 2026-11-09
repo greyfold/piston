@@ -1,8 +1,18 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icone, etat_vide %}
 {% block titre %}Candidatures · Recherche d'emploi{% endblock %}
 {% block contenu %}
+{# Comme le tableau de bord : une section vide ne s'affiche pas ; rien du tout, un état vide remplace la page. #}
+{% if not (en_cours or a_classer or sans_reponse or refus) %}
+{% call etat_vide("envoyer", "Aucune candidature pour le moment", titre_balise="h1",
+     description="Une annonce arrive ici dès que tu lui donnes ton Go ; l'envoi, les relances et les réponses y sont suivis jusqu'au bout.") %}
+    <a class="bouton" href="/offres">Voir les offres</a>
+    <a class="bouton go" href="/">Aujourd'hui {{ icone("suivant") }}</a>
+{% endcall %}
+{% else %}
 <h1>Candidatures</h1>
 
+{% if en_cours %}
 <h2>En cours <span class="compte">{{ en_cours | length }}</span></h2>
 <div class="tableau"><table>
   <thead><tr><th>Annonce</th><th>Statut</th><th>Envoyée</th><th>Prochaine action</th><th>Échéance</th></tr></thead>
@@ -19,9 +29,10 @@
   {% endfor %}
   </tbody>
 </table></div>
+{% endif %}
 
-<h2 id="sans-suite">Deux relances, toujours rien <span class="compte">{{ a_classer | length }}</span></h2>
 {% if a_classer %}
+<h2 id="sans-suite">Deux relances, toujours rien <span class="compte">{{ a_classer | length }}</span></h2>
 <div class="tableau"><table><tbody>
 {% for f in a_classer %}
   <tr><td><a href="/annonce/{{ f.empreinte }}">{{ f.entreprise }}</a><div class="muet petit">{{ f.titre }}</div></td>
@@ -29,18 +40,19 @@
       <td><form method="post" action="/action"><input type="hidden" name="empreinte" value="{{ f.empreinte }}"><input type="hidden" name="type" value="sans_suite"><input type="hidden" name="retour" value="/candidatures#sans-suite"><button class="discret">Classer sans suite</button></form></td></tr>
 {% endfor %}
 </tbody></table></div>
-{% else %}<p class="vide">Aucune.</p>{% endif %}
+{% endif %}
 
-<h2>Sans réponse depuis 21 jours <span class="compte">{{ sans_reponse | length }}</span></h2>
 {% if sans_reponse %}
+<h2>Sans réponse depuis 21 jours <span class="compte">{{ sans_reponse | length }}</span></h2>
 <div class="tableau"><table><tbody>
 {% for f in sans_reponse %}
   <tr><td><a href="/annonce/{{ f.empreinte }}">{{ f.entreprise }}</a><div class="muet petit">{{ f.titre }}</div></td>
       <td class="nb">{{ f._jours }} j</td><td class="petit">{{ "accusé reçu" if f.accuse_le else "pas d'accusé" }}{% if f.flag_rh %} · flag RH{% endif %}</td></tr>
 {% endfor %}
 </tbody></table></div>
-{% else %}<p class="vide">Aucune.</p>{% endif %}
+{% endif %}
 
+{% if refus %}
 <h2>Refus <span class="compte">{{ refus | length }}</span></h2>
 <div class="tableau"><table><tbody>
 {% for f in refus %}
@@ -48,4 +60,6 @@
       <td class="petit">{{ f.reponse_le | date_fr(True) }}</td><td class="petit">{{ f.motif_refus or f.motif or "" }}</td></tr>
 {% endfor %}
 </tbody></table></div>
+{% endif %}
+{% endif %}
 {% endblock %}

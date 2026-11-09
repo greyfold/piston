@@ -1,0 +1,35 @@
+{# Menu des réglages (Nexus ResponsiveNavLink) : une liste verticale, groupes séparés par un trait ;
+   le lien de la page ouverte porte la bordure verte et aria-current. Sous 760 px, il défile en ligne.
+   Sur une page du profil, ses étapes s'ouvrent en sous-liens sous « Ma recherche ». #}
+{% from "_macros.html" import icone %}
+{% set groupes = [
+  [("/profil", "Ma recherche", "identite"), ("/reglages/parcours", "Ton parcours", "base"),
+   ("/interface", "Interface et objectifs", "objectifs")],
+  [("/sources", "Sources", "globe"), ("/ia", "Fournisseur d'IA", "ia"),
+   ("/connecteurs", "Connecteurs", "prise"), ("/confidentialite", "Confidentialité", "cadenas")],
+  [("/sante", "Système", "systeme")],
+] %}
+{% set ids_manquants = profil_manquants | map('first') | list %}
+<nav class="reglages-nav" aria-label="Réglages">
+  {% for groupe in groupes %}
+  <ul>
+    {% for href, nom, ic in groupe %}
+    {% set ouvert = nav == href or nav.startswith(href ~ "/") %}
+    {% if href == "/profil" and etapes_profil %}
+    <li><a href="{{ href }}" class="parent">{{ icone(ic) }}<span>{{ nom }}</span></a>
+      <ul class="sous-liens">
+        {% for x in etapes_profil %}
+        {% set actif = nav == "/profil/" ~ x.id %}
+        <li><a href="/profil/{{ x.id }}" class="{{ 'actif' if actif }}"{% if actif %} aria-current="step"{% endif %}><span>{{ x.titre }}</span>{% if x.id in ids_manquants %}<span class="a-remplir" title="À remplir"><span class="cache">, à remplir</span></span>{% endif %}</a></li>
+        {% endfor %}
+        {% set actif = nav == "/profil/fin" %}
+        <li><a href="/profil/fin" class="{{ 'actif' if actif }}"{% if actif %} aria-current="step"{% endif %}><span>Récapitulatif</span></a></li>
+      </ul>
+    </li>
+    {% else %}
+    <li><a href="{{ href }}" class="{{ 'actif' if ouvert }}"{% if ouvert %} aria-current="page"{% endif %}>{{ icone(ic) }}<span>{{ nom }}</span></a></li>
+    {% endif %}
+    {% endfor %}
+  </ul>
+  {% endfor %}
+</nav>

@@ -12,7 +12,7 @@ import httpx
 
 from .. import moteur
 from ..config import reglages
-from ..sources.base import Annonce, RouteCassee
+from ..sources.base import Annonce, ConfigurationRequise, RouteCassee
 from . import jeton
 
 ADRESSE = "http://127.0.0.1:8776"
@@ -64,6 +64,8 @@ class Distant:
             d = r.json()
             if erreur is moteur.MoteurImpossible:
                 raise erreur(d.get("erreur") or "refus du travailleur", bloquant=bool(d.get("bloquant")))
+            if "a_configurer" in d and erreur is RouteCassee:
+                raise ConfigurationRequise(d.get("erreur") or "réglage à faire", connecteur=d["a_configurer"] or None)
             raise erreur(d.get("erreur") or "refus du travailleur")
         if r.status_code >= 400:
             raise erreur("travailleur : HTTP %d" % r.status_code)

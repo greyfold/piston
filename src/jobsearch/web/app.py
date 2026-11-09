@@ -12,13 +12,13 @@ from urllib.parse import quote
 
 import markdown as md
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
 from .. import moteur as moteur_mod
-from .. import actions, ajout, cles, courrier, dossier, doublons, entretiens, evaluation, followups, parcours
+from .. import actions, ajout, ce_qui_compte, cles, courrier, dossier, doublons, entretiens, evaluation, followups, parcours
 from .. import profil as profil_mod
 from .. import repertoire as repertoire_mod
 from ..formatage import annonce_html
@@ -86,7 +86,7 @@ tpl.env.filters.update(date_fr=date_fr, jour_fr=jour_fr, il_y_a=il_y_a, texte_ht
 tpl.env.globals.update(TYPES=actions.TYPES, STATUTS=STATUTS, libelle_dossier=dossier.libelle)
 # La feuille de style porte sa date dans son adresse : un navigateur (ou la vue web de
 # l'application Mac) ne garde jamais une ancienne version en cache.
-tpl.env.globals["version_css"] = lambda: int(max((ICI / "static" / f).stat().st_mtime for f in ("style.css", "champs.js", "compositeur.js")))
+tpl.env.globals["version_css"] = lambda: int(max((ICI / "static" / f).stat().st_mtime for f in ("style.css", "champs.js", "compositeur.js", "entretien.js")))
 
 
 def _decomposer_tel(numero, defaut):
@@ -127,11 +127,28 @@ def page(request, nom, **ctx):
     ctx["raisons"] = criteres().get("raisons") or {}
     ctx["aujourdhui"] = dt.date.today().isoformat()
     ctx["profil_manquants"] = profil_mod.manquants()
+    # Les étapes du profil, en sous-liens de « Ma recherche » dans le menu des réglages.
+    ctx["etapes_profil"] = profil_mod.etapes() if ctx["nav"].startswith("/profil") else []
     ctx["accueil"] = request.url.path.startswith("/bienvenue") and profil_mod.en_accueil()   # sans menu
     p = profil_mod.charger()
     ctx["premiers_pas_affiches"] = p.get(profil_mod.PREMIERS_PAS) == "affichee"
     ctx["fonctions"] = profil_mod.fonctions(p, ia_connectee() if profil_mod.progressif(p) else True)
+    if "a_configurer" not in ctx:            # le bandeau ne paraît que sur ces pages (base.html)
+        ctx["a_configurer"] = _a_configurer() if ctx["nav"] in ("/", "/sante") else []
     return tpl.TemplateResponse(request, nom, ctx)
+
+
+def _a_configurer():
+    """Les connecteurs actifs qu'un passage n'a pas pu utiliser faute de réglage (bandeau commun)."""
+    from .. import connecteurs
+    try:
+        reg = _reg()
+        try:
+            return connecteurs.a_configurer(reg)
+        finally:
+            reg.fermer()
+    except Exception:
+        return []
 
 
 # --- Santé du système (bandeau commun) ----------------------------------------
@@ -188,6 +205,8 @@ def accueil(request: Request, tri: str = "urgence"):
         p = profil_mod.charger()
         premiers = (profil_mod.premiers_pas(p, ia_connectee=bool(etat_claude().get("connecte")))
                     if p.get(profil_mod.PREMIERS_PAS) == "affichee" else [])
+        if all(t[5] for t in premiers):            # tout est fait : « Bien démarrer » disparaît
+            premiers = []
         return page(request, "accueil.html", etat=etat_passage(reg), a_trancher=a_trancher, evals=evals, tri=tri,
                     premiers_pas=premiers,
                     taches=taches, tache_jobroom=tache_jobroom, etats_taches=agent_claude.ETATS,
@@ -719,8 +738,10 @@ def api_etat():
 def connecteurs_page(request: Request):
     from .. import connecteurs
     from ..travailleur import client as travailleur
+    a_faire = _a_configurer()
     return page(request, "connecteurs.html", connecteurs=connecteurs.liste(), roles=connecteurs.ROLES,
-                moteur=etat_claude(), distant=travailleur.distant())
+                moteur=etat_claude(), distant=travailleur.distant(), a_configurer=a_faire,
+                etats={c["id"]: c for c in a_faire})
 
 
 _ETAT_CLAUDE = {"t": 0.0, "v": None}
@@ -767,6 +788,11 @@ def connecteurs_action(nom: str, action: str):
     if action == "tester":
         ok, msg = connecteurs.tester(nom)
         msg = "%s : %s" % (c["nom"], msg)
+        reg = _reg()
+        try:
+            connecteurs.noter_test(reg, nom, ok)
+        finally:
+            reg.fermer()
     else:
         connecteurs.activer(nom, action == "activer")
         ok, msg = True, "%s %s." % (c["nom"], "activé" if action == "activer" else "désactivé")
@@ -822,24 +848,68 @@ def confidentialite_page(request: Request):
 
 
 # Pages de réglage : rangées sous « Réglages » dans la barre (elles gardent leur adresse).
-REGLAGES = ("/reglages", "/profil", "/interface", "/sources", "/ia", "/connecteurs", "/sante")
+REGLAGES = ("/reglages", "/profil", "/interface", "/sources", "/ia", "/connecteurs", "/confidentialite", "/sante")
 
 
-@app.get("/reglages", response_class=HTMLResponse)
-def reglages_page(request: Request):
-    from .. import connecteurs
-    reg = _reg()
+@app.get("/reglages")
+def reglages_page():
+    """Le bouton Réglages ouvre la première page du menu (pas de vue d'ensemble)."""
+    return RedirectResponse("/profil", status_code=303)
+
+
+@app.get("/reglages/parcours", response_class=HTMLResponse)
+def reglages_parcours_page(request: Request):
+    """Ton parcours, côté réglages : ce que contient la base, l'export et l'import d'un fichier."""
+    reg = parcours.ouvrir()
     try:
-        etat = etat_passage(reg)
-        nb_sources = len(repertoire_mod.lister(reg))
+        tous = parcours.elements(reg)
     finally:
-        reg.fermer()
-    p = profil_mod.charger()
-    cles_ = [cles.etat(n) for n in cles.SERVICES]
-    actifs = [c["nom"] for c in connecteurs.liste() if c["actif"]]
-    return page(request, "reglages.html", passage=etat, nb_sources=nb_sources, claude=ia_connectee(),
-                connecteurs_actifs=actifs, nb_cles=sum(c["presente"] for c in cles_), total_cles=len(cles_),
-                options=[(o["titre"], profil_mod.option(o["id"], p)) for o in profil_mod.OPTIONS])
+        reg.cx.close()
+    comptes = [(parcours.GENRES[g], sum(1 for e in tous if e["genre"] == g)) for g in parcours.GENRES]
+    return page(request, "reglages_parcours.html", parcours_total=len(tous),
+                parcours_comptes=[(g, n) for g, n in comptes if n])
+
+
+@app.get("/reglages/parcours/exporter")
+def reglages_parcours_exporter():
+    reg = parcours.ouvrir()
+    try:
+        contenu = parcours.exporter_json(reg)
+    finally:
+        reg.cx.close()
+    nom = "parcours-%s.json" % dt.date.today().isoformat()
+    return Response(contenu, media_type="application/json; charset=utf-8",
+                    headers={"Content-Disposition": 'attachment; filename="%s"' % nom})
+
+
+@app.post("/reglages/parcours/importer")
+async def reglages_parcours_importer(request: Request):
+    form = await request.form()
+    fichier, remplacer = form.get("fichier"), form.get("mode") == "remplacer"
+    if fichier is None or not getattr(fichier, "filename", ""):
+        return _retour_parcours("Choisis un fichier exporté (parcours-….json).", False)
+    reg = parcours.ouvrir()
+    try:
+        export = parcours.lire_export(await fichier.read(parcours.EXPORT_MAX + 1))
+        b = parcours.importer_export(reg, export, remplacer=remplacer)
+    except parcours.ParcoursInvalide as e:
+        return _retour_parcours("Rien n'a été importé : %s." % e, False)
+    finally:
+        reg.cx.close()
+    s = lambda n: "s" if n > 1 else ""
+    morceaux = ["%d élément%s importé%s" % (b["ajoutes"], s(b["ajoutes"]), s(b["ajoutes"]))]
+    if b["doublons"]:
+        morceaux.append("%d déjà dans ta base" % b["doublons"])
+    if b["documents"]:
+        morceaux.append("%d CV d'origine" % b["documents"])
+    if b["ecartes"]:
+        morceaux.append("%d écarté%s (rangement impossible) : %s" % (
+            len(b["ecartes"]), s(len(b["ecartes"])), ", ".join(b["ecartes"][:5])))
+    return _retour_parcours(("Base remplacée : " if remplacer else "Import terminé : ") + " · ".join(morceaux) + ".", True)
+
+
+def _retour_parcours(msg, ok):
+    return RedirectResponse("/reglages/parcours?msg=%s&ok=%d" % (quote(msg), int(ok)), status_code=303)
 
 
 @app.post("/cles/{nom}/{action}")
@@ -874,8 +944,16 @@ def _champs(etapes, p, saisi=None):
     champs = []
     for e in etapes:
         for c in e["champs"]:
-            champs.append(dict(c, valeur=saisi.get(c["cle"], "") if saisi is not None
-                               else profil_mod.en_saisie(c, _en_texte(profil_mod.effectif(c["cle"], p))),
+            if c["type"] == "criteres":                 # un dictionnaire : un champ par critère
+                valeur = (profil_mod.criteres_du_formulaire(saisi) if saisi is not None
+                          else profil_mod.criteres_structures(p))
+            elif c["type"] == "liste_choix" and saisi is not None:    # cochées et ajoutées, gardées telles quelles
+                valeur = "\n".join(profil_mod.valeurs_formulaire(saisi, c["cle"])
+                                   + profil_mod.ajouts_formulaire(saisi, c["cle"], c["virgules"]))
+            else:
+                valeur = saisi.get(c["cle"], "") if saisi is not None \
+                    else profil_mod.en_saisie(c, _en_texte(profil_mod.effectif(c["cle"], p)))
+            champs.append(dict(c, valeur=valeur,
                                par_defaut=c["cle"] in profil_mod.SUPERPOSES and profil_mod.lire(p, c["cle"]) is None))
     return champs
 
@@ -895,6 +973,17 @@ def _page_profil(request, ident, saisi=None, **ctx):
               for x in profil_mod.etapes()] if ident == "fin" else []
     for k, v in _ctx_champs().items():
         ctx.setdefault(k, v)
+    if ident == "criteres":                      # les questions de « Ce qui compte pour toi », toutes ici
+        reg = parcours.ouvrir()
+        try:
+            ctx.update(questions_criteres=ce_qui_compte.questions(reg), defauts_criteres=_defauts_criteres(p))
+            contexte = ce_qui_compte.reponses(reg).get(ce_qui_compte.CONTEXTE) or {}
+            contenu = ce_qui_compte.resolue(ce_qui_compte.PAR_CLE["contenu"], contexte)
+            ctx["options_listes"] = {"evaluation.activites": [v for v, _ in contenu.get("choix", [])],
+                                     "evaluation.angles": contexte.get("angles") or []}
+        finally:
+            reg.cx.close()
+    ctx.setdefault("criteres_def", profil_mod.CRITERES)
     return page(request, "profil.html", etapes=profil_mod.etapes(), etape=e, ident=ident, champs=champs,
                 precedente=ids[i - 1] if i else None, resume=resume, regles=profil_mod.regles_au_choix() if e else [],
                 cles=[cles.etat(n) for n in cles.SERVICES] if ident == "fin" else [],
@@ -1248,33 +1337,130 @@ def parcours_vider(confirmer: str = Form("")):
     return _sur_parcours(parcours.vider, "Parcours vidé : tu peux importer un CV.", ancre="")
 
 
+def _defauts_criteres(p):
+    """Ce que les champs du questionnaire reprennent du profil quand ils n'ont pas encore de réponse."""
+    o = profil_mod.objectifs_rythme()
+    return {"ville": profil_mod.identite(p).get("ville", ""), "semaine": o["semaine"] or "", "mois": o["mois"] or ""}
+
+
+def _union(*listes):
+    return list(dict.fromkeys(x for liste in listes for x in liste or [] if x))
+
+
 def page_criteres(request: Request, msg=None, ok=None):
+    """Ce qui compte pour toi : le questionnaire (ce_qui_compte.py), une question à la fois dans le fil,
+    et la proposition entière dans le volet, à relire avant d'enregistrer."""
     reg = parcours.ouvrir()
     try:
-        etat = parcours.etat_criteres(reg)
+        etat = ce_qui_compte.etat(reg, modifier=request.query_params.get("modifier"))
         p = profil_mod.charger()
-        prop = etat["proposition"]
+        actuel = {"criteres": profil_mod.criteres_structures(p),
+                  "activites": profil_mod.lire(p, "evaluation.activites") or [],
+                  "interet": profil_mod.lire(p, "evaluation.interet") or "",
+                  "regles": profil_mod.effectif("exclusions.regles", p),
+                  "mots_titre": profil_mod.lire(p, "exclusions.mots_titre") or [], **profil_mod.objectifs_rythme()}
+        prop = ce_qui_compte.proposition(etat["reponses"], p) if etat["commence"] else None
+        ctx = etat["contexte"] or {}
+        criteres = prop["criteres"] if prop and prop["lignes"] else actuel["criteres"]
+        activites = prop["activites"] if prop and prop["activites"] is not None else actuel["activites"]
+        angles = ctx.get("angles") or profil_mod.lire(p, "evaluation.angles") or []
+        mots = prop["mots_titre"] if prop else actuel["mots_titre"]
+        contenu = ce_qui_compte.resolue(ce_qui_compte.PAR_CLE["contenu"], ctx)
         valeurs = {
-            "criteres": "\n".join(prop.criteres if prop else profil_mod.lire(p, "evaluation.criteres") or []),
-            "interet": prop.interet if prop else profil_mod.lire(p, "evaluation.interet") or "",
-            "angles": "\n".join(prop.angles if prop else profil_mod.lire(p, "evaluation.angles") or []),
-            "differenciateur": prop.differenciateur if prop else profil_mod.lire(p, "dossier.differenciateur") or "",
+            "criteres": criteres, "lignes": profil_mod.lignes_criteres(criteres),
+            "activites": activites, "interet": prop["interet_texte"] if prop and prop["interet_texte"] is not None
+            else actuel["interet"],
+            "angles": angles,
+            "differenciateur": ctx.get("differenciateur") or profil_mod.lire(p, "dossier.differenciateur") or "",
+            "regles": prop["regles"] if prop else actuel["regles"],
+            "mots_titre": mots,
+            "semaine": prop["semaine"] if prop else actuel["semaine"],
+            "mois": prop["mois"] if prop else actuel["mois"],
         }
+        # Les options des listes à pilules : ce qui est retenu, plus ce qu'on peut cocher en plus (exemples des
+        # questions, angles du profil et de l'IA, mots que le profil écartait jusqu'ici).
+        options = {
+            "activites": _union(activites, [v for v, _ in contenu.get("choix", [])]),
+            "angles": _union(angles, ctx.get("angles") or [], profil_mod.lire(p, "evaluation.angles") or []),
+            "mots_titre": _union(mots, actuel["mots_titre"]),
+        }
+        # Ce que les réponses changent par rapport au profil : signalé dans le volet et résumé en fin de fil.
+        changes = {
+            "gardees": [i for i in actuel["regles"] if i not in valeurs["regles"]],
+            "ecartees": [i for i in valeurs["regles"] if i not in actuel["regles"]],
+            "mots_titre": valeurs["mots_titre"] != actuel["mots_titre"],
+            "semaine": valeurs["semaine"] != actuel["semaine"], "mois": valeurs["mois"] != actuel["mois"],
+        }
+        defauts = _defauts_criteres(p)
         rang, total = _rang_tache("criteres")
-        ctx = {k: v for k, v in (("msg", msg), ("ok", ok)) if v is not None}
-        return page(request, "criteres_entretien.html", etat=etat, valeurs=valeurs, ia=ia_connectee(),
-                    parcours_vide=parcours.vide(reg), rang=rang, total=total, t=profil_mod.TACHES["criteres"], **ctx)
+        extra = {k: v for k, v in (("msg", msg), ("ok", ok)) if v is not None}
+        ia = ia_connectee()
+        return page(request, "criteres_entretien.html", etat=etat, valeurs=valeurs, options=options, changes=changes,
+                    ia=ia, prop=prop, criteres_def=profil_mod.CRITERES,
+                    defauts=defauts, preparer=ia and etat["contexte"] is None,
+                    enregistre=request.query_params.get("enregistre") == "1" or (prop is not None and etat["termine"]
+                               and prop["criteres"] == actuel["criteres"]),
+                    regles=profil_mod.regles_au_choix(), parcours_vide=parcours.vide(reg),
+                    rang=rang, total=total, t=profil_mod.TACHES["criteres"], **extra)
     finally:
         reg.cx.close()
 
 
 @app.post("/criteres/repondre")
-def criteres_repondre(reponse: str = Form("")):
+async def criteres_repondre(request: Request):
+    form = await request.form()
+    cle = form.get("cle", "")
+    champs = {k[len("champ."):]: v for k, v in form.items() if k.startswith("champ.")}
     reg = parcours.ouvrir()
     try:
-        r = parcours.repondre_criteres(reg, reponse)
-        return JSONResponse({"ok": True, "suivant": r["suivant"], "proposition": r["proposition"].model_dump()})
-    except (parcours.ParcoursInvalide, moteur_mod.MoteurImpossible) as e:
+        ce_qui_compte.repondre(reg, cle, form.getlist("choix"), champs, passer=form.get("passer") == "1")
+        if not ce_qui_compte.etat(reg)["termine"]:
+            return RedirectResponse("/premiers-pas/criteres#entretien", status_code=303)
+        # Dernière réponse, ou une réponse modifiée une fois tout répondu : enregistré tout de suite,
+        # avant l'écran de succès.
+        try:
+            ce_qui_compte.enregistrer(reg)
+        except profil_mod.ProfilInvalide as e:
+            return RedirectResponse("/premiers-pas/criteres?msg=%s" % quote("Pas encore enregistré : %s." % e), status_code=303)
+        return RedirectResponse("/premiers-pas/criteres?ok=1&enregistre=1", status_code=303)
+    except ce_qui_compte.ReponseInvalide as e:
+        return RedirectResponse("/premiers-pas/criteres?modifier=%s&msg=%s#entretien" % (quote(cle), quote("À compléter : %s." % e)),
+                                status_code=303)
+    finally:
+        reg.cx.close()
+
+
+@app.post("/profil/criteres/reponses")
+async def profil_criteres_reponses(request: Request):
+    """Réglages : toutes les réponses de « Ce qui compte pour toi » à la fois, puis le profil réécrit."""
+    form = await request.form()
+    valeurs = {q["cle"]: (form.getlist("choix." + q["cle"]),
+                          {c["nom"]: form.get("champ.%s.%s" % (q["cle"], c["nom"]), "") for c in q.get("champs", [])})
+               for q in ce_qui_compte.QUESTIONS}
+    reg = parcours.ouvrir()
+    try:
+        erreurs = ce_qui_compte.repondre_tout(reg, valeurs)
+        if erreurs:
+            return RedirectResponse("/profil/criteres?msg=%s#reponses" % quote("À compléter : %s." % " ; ".join(erreurs)),
+                                    status_code=303)
+        try:
+            ce_qui_compte.enregistrer(reg)
+        except profil_mod.ProfilInvalide as e:
+            return RedirectResponse("/profil/criteres?msg=%s#reponses" % quote("Pas enregistré : %s." % e), status_code=303)
+    finally:
+        reg.cx.close()
+    return RedirectResponse("/profil/criteres?ok=1&msg=%s#reponses" % quote(
+        "Réponses enregistrées : critères, tri du matin et objectifs mis à jour."), status_code=303)
+
+
+@app.post("/criteres/preparer")
+def criteres_preparer():
+    """Le seul appel à l'IA du questionnaire : des exemples adaptés au poste, les angles, le différenciateur."""
+    reg = parcours.ouvrir()
+    try:
+        ce_qui_compte.preparer(reg)
+        return JSONResponse({"ok": True})
+    except moteur_mod.MoteurImpossible as e:
         return _refus_ia(e)
     finally:
         reg.cx.close()
@@ -1284,7 +1470,7 @@ def criteres_repondre(reponse: str = Form("")):
 def criteres_recommencer():
     reg = parcours.ouvrir()
     try:
-        parcours.recommencer_criteres(reg)
+        ce_qui_compte.recommencer(reg)
     finally:
         reg.cx.close()
     return RedirectResponse("/premiers-pas/criteres", status_code=303)
@@ -1300,6 +1486,12 @@ async def premiers_pas_enregistrer(request: Request, tache: str):
             profil_mod.enregistrer(e, form)
         if "dossier.differenciateur" in form:            # proposé par l'entretien « Ce qui compte pour toi »
             profil_mod.poser_valeur("dossier.differenciateur", form.get("dossier.differenciateur"))
+        # L'entretien nourrit aussi le pré-tri et les objectifs : seulement si le volet les a envoyés
+        # (sans eux, une absence de cases cochées désactiverait toutes les règles).
+        if form.get("pretri") == "1":
+            profil_mod.enregistrer("pretri", form)
+        if form.get("objectifs") == "1":
+            profil_mod.enregistrer_objectifs(form.get("objectifs.semaine_min", ""), form.get("objectifs.mois_min", ""))
     except profil_mod.ProfilInvalide as e:
         if form.get("entretien") == "1":
             return page_criteres(request, msg="À corriger : %s." % e, ok=False)

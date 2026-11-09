@@ -28,11 +28,13 @@ from . import config, pays, telephone
 
 
 def champ(cle, libelle, type="texte", requis=False, aide="", exemple="", choix=None, prefixe="",
-          en_tete=None, vide="—"):
+          en_tete=None, vide="—", virgules=False):
     """Un champ de l'assistant. `choix` : la liste d'une liste déroulante, `en_tete` : les choix
-    proposés d'abord, `vide` : le libellé de l'option sans valeur, `prefixe` : le début fixe d'une adresse."""
+    proposés d'abord, `vide` : le libellé de l'option sans valeur, `prefixe` : le début fixe d'une adresse.
+    Types de liste : « liste » (une par ligne), « liste_choix » (pilules à cocher et un champ pour en ajouter,
+    séparées par des virgules si `virgules`), « criteres » (les critères structurés, CRITERES)."""
     return {"cle": cle, "libelle": libelle, "type": type, "requis": requis, "aide": aide, "exemple": exemple,
-            "choix": choix or [], "prefixe": prefixe, "en_tete": en_tete or [], "vide": vide}
+            "choix": choix or [], "prefixe": prefixe, "en_tete": en_tete or [], "vide": vide, "virgules": virgules}
 
 
 LINKEDIN = "https://www.linkedin.com/in/"
@@ -94,19 +96,23 @@ ETAPES = [
      "champs": [
          champ("exclusions.regles", "Annonces écartées d'office", type="regles",
                aide="« limite » : écartée, mais montrée dans « Écartées limites » pour vérifier le filtre."),
-         champ("exclusions.mots_titre", "Autres intitulés à écarter", type="liste",
-               aide="Un intitulé qui contient un de ces mots est écarté comme métier exclu. Un mot ou une "
-                    "expression par ligne, sans accents ni majuscules."),
+         champ("exclusions.mots_titre", "Autres intitulés à écarter", type="liste_choix", virgules=True,
+               exemple="ajouter des mots, séparés par des virgules",
+               aide="Un intitulé qui contient un de ces mots est écarté comme métier exclu. Décoche un mot pour "
+                    "le retirer."),
      ]},
     {"id": "criteres", "titre": "Critères",
      "intro": "Ce que Claude vérifie en notant chaque annonce. Aucun montant ici : le salaire minimum "
               "visé n'est écrit nulle part.",
      "champs": [
-         champ("evaluation.criteres", "Critères non négociables", type="liste", requis=True,
-               aide="Un par ligne ; une précision facultative après « : » (trajet : depuis Lausanne)."),
-         champ("evaluation.interet", "Ce qui rend un poste intéressant", exemple="mandat de cadrage, dimension IA, structure"),
-         champ("evaluation.angles", "Angles de candidature", type="liste",
-               aide="Les façons de te présenter, une par ligne : Claude en propose une par annonce."),
+         champ("evaluation.criteres", "Critères non négociables", type="criteres", requis=True,
+               aide="Un champ par critère ; laisse vide ce qui t'est égal. Une annonce qui en viole un clairement "
+                    "est notée 40 au plus."),
+         champ("evaluation.activites", "Activités qui doivent occuper l'essentiel du temps", type="liste_choix",
+               virgules=True, exemple="ajouter des activités, séparées par des virgules"),
+         champ("evaluation.interet", "Ce qui rend un poste intéressant", exemple="un produit utile, de l'autonomie…"),
+         champ("evaluation.angles", "Angles de candidature", type="liste_choix", exemple="ajouter un angle",
+               aide="Les façons de te présenter : Claude en propose une par annonce."),
      ]},
     {"id": "dossier", "titre": "Dossier",
      "intro": "Ce que Claude suit en écrivant le CV et la lettre, en plus de la méthode de base.",
@@ -299,8 +305,8 @@ def _taches_checklist(p, ia_connectee):
         ("identite", "Tes coordonnées", "En tête de tes CV et lettres, et pour les formulaires", "2 min", "/premiers-pas/identite", saisie("identite")),
         ("dossier", "Ton parcours", "Ton CV, puis un entretien avec l'IA sur chaque poste : des CV et des lettres "
          "fidèles à ton expérience", "15 min", "/premiers-pas/dossier", saisie("dossier") or _parcours_termine()),
-        ("criteres", "Ce qui compte pour toi", "Quelques questions de l'IA, pour qu'elle note les annonces comme tu "
-         "le ferais", "5 min", "/premiers-pas/criteres", saisie("criteres")),
+        ("criteres", "Ce qui compte pour toi", "Quelques questions à cliquer, pour que l'IA note les annonces "
+         "comme tu le ferais", "5 min", "/premiers-pas/criteres", saisie("criteres")),
     ]
 
 
@@ -565,6 +571,8 @@ def affiche(c, p=None):
     if c["type"] == "regles":
         off = [libelle for _, rs in regles_au_choix() for i, libelle, _ in rs if i not in v]
         return "toutes" if not off else "toutes sauf : " + ", ".join(off)
+    if c["type"] == "criteres":
+        return lignes_criteres(criteres_structures(p))
     return v
 
 
@@ -572,7 +580,8 @@ def manquants(p=None):
     """[(étape, libellé)] des champs obligatoires encore vides."""
     p = charger() if p is None else p
     return [(e["id"], c["libelle"]) for e in etapes() for c in e["champs"]
-            if c["requis"] and effectif(c["cle"], p) in ("", [], None)]
+            if c["requis"] and (effectif(c["cle"], p) in ("", [], None, {}) or
+                                c["type"] == "criteres" and not lignes_criteres(criteres_structures(p)))]
 
 
 # --- Ce que les consignes et les fichiers en tirent ---------------------------------
@@ -588,12 +597,238 @@ def nom_complet():
 
 
 def criteres_evaluation():
-    """[(nom, précision)] : « trajet : depuis Lausanne » → ("trajet", "depuis Lausanne")."""
+    """[(nom, précision)] : « trajet : 45 minutes au plus » → ("trajet", "45 minutes au plus")."""
     out = []
-    for ligne in lire(charger(), "evaluation.criteres") or []:
-        nom, _, precision = str(ligne).partition(":")
+    for ligne in lignes_criteres(criteres_structures()):
+        nom, _, precision = ligne.partition(":")
         out.append((nom.strip(), precision.strip()))
     return out
+
+
+def interet_evaluation(p=None):
+    """Ce qui rend un poste intéressant, pour la consigne : les activités, puis le texte libre."""
+    p = charger() if p is None else p
+    morceaux = [", ".join(lire(p, "evaluation.activites") or []), lire(p, "evaluation.interet") or ""]
+    return " ; ".join(x for x in morceaux if x)
+
+
+# --- Critères structurés : un champ par élément ------------------------------------
+#
+# Ce que l'IA vérifie en notant chaque annonce. Chaque critère a son champ : un seul choix (« un »), plusieurs
+# (« plusieurs »), un nombre, un texte ou une liste libre. Le profil les garde sous `evaluation.criteres`,
+# {clé: valeur}, seulement ceux qui sont remplis ; `lignes_criteres` les écrit en phrases pour la consigne de
+# notation. Un profil d'avant (une liste de phrases) se relit avec `criteres_depuis_lignes`.
+
+# Formes de contrat : (libellé de la question, libellé court du critère).
+CONTRATS = {
+    "cdi": ("CDI, durée indéterminée", "CDI"),
+    "cdd-2ans": ("CDD de 2 ans ou plus", "CDD de 2 ans ou plus"),
+    "cdd-long": ("CDD de 12 à 24 mois", "CDD de 12 à 24 mois"),
+    "cdd-moyen": ("CDD de 6 à 12 mois", "CDD de 6 à 12 mois"),
+    "cdd-court": ("CDD de moins de 6 mois", "CDD de moins de 6 mois"),
+    "cdd-cdi": ("CDD pouvant déboucher sur un CDI", "CDD pouvant déboucher sur un CDI"),
+    "remplacement": ("Remplacement (congé maternité, longue absence)", "remplacement"),
+    "mission": ("Mission ou intérim", "mission ou intérim"),
+    "freelance": ("Freelance ou mandat", "freelance ou mandat"),
+}
+LANGUES = [("français", "Français"), ("anglais", "Anglais"), ("allemand", "Allemand"), ("italien", "Italien")]
+ORGANISATIONS = [("start-up", "Start-up"), ("PME", "PME"), ("grande entreprise", "Grande entreprise"),
+                 ("secteur public", "Secteur public"), ("ONG ou associatif", "ONG ou associatif")]
+TRAJETS = [("30", "30 minutes"), ("45", "45 minutes"), ("60", "1 heure"), ("90", "1 h 30")]
+
+CRITERES = [
+    {"cle": "trajet", "libelle": "Trajet au plus, porte à porte", "type": "un", "vide": "Peu importe",
+     "choix": TRAJETS},
+    {"cle": "trajet_depuis", "libelle": "Trajet depuis", "type": "texte", "exemple": "ta localité"},
+    {"cle": "teletravail", "libelle": "Télétravail, au moins", "type": "un", "vide": "Pas d'exigence",
+     "choix": [("1", "1 jour par semaine"), ("2", "2 jours par semaine"), ("3", "3 jours par semaine"),
+               ("5", "Entièrement à distance")]},
+    {"cle": "taux_min", "libelle": "Taux d'activité, au moins (%)", "type": "nombre", "exemple": "80"},
+    {"cle": "taux_max", "libelle": "Taux d'activité, au plus (%)", "type": "nombre", "exemple": "100"},
+    {"cle": "contrats", "libelle": "Formes de contrat acceptées", "type": "plusieurs",
+     "choix": [(k, v[1]) for k, v in CONTRATS.items()], "aide": "Aucune ou toutes cochées : pas de critère."},
+    {"cle": "langues", "libelle": "Langues de travail", "type": "plusieurs", "choix": LANGUES},
+    {"cle": "encadrement", "libelle": "Encadrement", "type": "un", "vide": "Peu importe",
+     "choix": [("non", "Pas d'équipe à encadrer"), ("oui", "Une équipe à encadrer")]},
+    {"cle": "organisations", "libelle": "Types d'organisation", "type": "plusieurs", "choix": ORGANISATIONS,
+     "aide": "Aucun ou tous cochés : peu importe."},
+    {"cle": "secteurs_exclus", "libelle": "Secteurs exclus", "type": "liste", "virgules": True,
+     "exemple": "ajouter des secteurs, séparés par des virgules"},
+    {"cle": "heures_max", "libelle": "Heures par semaine, au plus", "type": "nombre", "exemple": "42"},
+    {"cle": "vacances_min", "libelle": "Semaines de vacances, au moins", "type": "nombre", "exemple": "5"},
+    {"cle": "deplacements", "libelle": "Déplacements", "type": "un", "vide": "Peu importe",
+     "choix": [("non", "Aucun"), ("occasionnels", "Occasionnels seulement")]},
+    {"cle": "a_eviter", "libelle": "À éviter", "type": "texte", "exemple": "trop de réunions, un management distant…"},
+    {"cle": "autres", "libelle": "Autres critères", "type": "liste",
+     "exemple": "ajouter un critère ; une précision facultative après « : »"},
+]
+CRITERE = {c["cle"]: c for c in CRITERES}
+
+
+def _propre(v, n=300):
+    from .parcours import sans_montants
+    return sans_montants(re.sub(r"\s+", " ", str(v or "")).strip())[:n]
+
+
+def valeurs_formulaire(f, nom):
+    """Les valeurs d'un nom de formulaire : plusieurs cases (formulaire web) ou une par ligne (dictionnaire)."""
+    brut = f.getlist(nom) if hasattr(f, "getlist") else f.get(nom, [])
+    brut = [brut] if isinstance(brut, str) else list(brut or [])
+    return [x for v in brut for x in str(v).splitlines()]
+
+
+def ajouts_formulaire(f, nom, virgules=False):
+    """Ce que le champ « ajouter » d'une liste à pilules apporte (`nom.ajout`)."""
+    return [x for v in valeurs_formulaire(f, nom + ".ajout") for x in re.split(r"[;,]" if virgules else r";", v)]
+
+
+def criteres_du_formulaire(f):
+    """Les champs `critere.<clé>` d'un formulaire → {clé: valeur brute}, à valider par normaliser_criteres."""
+    d = {}
+    for c in CRITERES:
+        nom = "critere." + c["cle"]
+        if c["type"] in ("plusieurs", "liste"):
+            d[c["cle"]] = valeurs_formulaire(f, nom) + (ajouts_formulaire(f, nom, c.get("virgules"))
+                                                         if c["type"] == "liste" else [])
+        else:
+            d[c["cle"]] = (valeurs_formulaire(f, nom) or [""])[0]
+    return d
+
+
+def normaliser_criteres(d):
+    """{clé: valeur} validé : seulement les critères remplis, chacun dans sa forme. Lève ProfilInvalide."""
+    out, erreurs = {}, []
+    for c in CRITERES:
+        k, t, v = c["cle"], c["type"], (d or {}).get(c["cle"])
+        if t == "un":
+            v = str(v if v is not None else "").strip()
+            if v and v not in dict(c["choix"]):
+                erreurs.append("%s : choisir dans la liste" % c["libelle"])
+            elif v:
+                out[k] = v
+        elif t == "plusieurs":
+            vus = {str(x) for x in (v if isinstance(v, list) else [v] if v else [])}
+            if (gardes := [x for x, _ in c["choix"] if x in vus]):
+                out[k] = gardes
+        elif t == "nombre":
+            v = str(v if v is not None else "").strip()
+            if v and (not v.isdigit() or int(v) > 500):
+                erreurs.append("%s : un nombre entier" % c["libelle"])
+            elif v:
+                out[k] = int(v)
+        elif t == "texte":
+            if (v := _propre(v)):
+                out[k] = v
+        else:                                                  # liste libre
+            items = v if isinstance(v, list) else str(v or "").splitlines()
+            if (items := [x for x in dict.fromkeys(_propre(x, 200) for x in items) if x][:20]):
+                out[k] = items
+    if "taux_min" in out or "taux_max" in out:
+        mini, maxi = out.get("taux_min"), out.setdefault("taux_max", 100)
+        if mini is None:
+            erreurs.append("taux d'activité : indique le minimum")
+        elif not 10 <= mini <= maxi <= 100:
+            erreurs.append("taux d'activité : entre 10 et 100 %, le minimum avant le maximum")
+    if erreurs:
+        raise ProfilInvalide(" ; ".join(erreurs))
+    return out
+
+
+def lignes_criteres(d, avec_cles=False):
+    """Les critères en phrases, pour la consigne de notation : « trajet : 45 minutes au plus depuis … ».
+    Un critère qui laisse tout passer (tous les contrats, 100 %) n'en donne pas. `avec_cles` : [(clé, phrase)]."""
+    d, out = d or {}, []
+    noms = lambda cle: dict(CRITERE[cle]["choix"])
+    if d.get("trajet") in noms("trajet"):
+        out.append(("trajet", "trajet : %s au plus%s" % (noms("trajet")[d["trajet"]],
+                                                         " depuis " + d["trajet_depuis"] if d.get("trajet_depuis") else "")))
+    if (t := d.get("teletravail")) in noms("teletravail"):
+        out.append(("teletravail", "télétravail : entièrement à distance" if t == "5" else
+                    "télétravail : %s au moins" % noms("teletravail")[t]))
+    if (mini := d.get("taux_min")) and (mini, d.get("taux_max", 100)) != (100, 100):
+        maxi = d.get("taux_max", 100)
+        out.append(("taux_min", "taux d'activité : %s" % ("%d %%" % mini if mini == maxi else "%d à %d %%" % (mini, maxi))))
+    if (vs := [c for c in CONTRATS if c in (d.get("contrats") or [])]) and len(vs) < len(CONTRATS):
+        out.append(("contrats", "contrat : durée indéterminée seulement" if vs == ["cdi"] else
+                    "contrat : %s" % ", ".join(CONTRATS[c][1] for c in vs)))
+    if d.get("langues"):
+        out.append(("langues", "langues de travail : %s" % ", ".join(d["langues"])))
+    if d.get("encadrement") in ("non", "oui"):
+        out.append(("encadrement", "encadrement : pas d'équipe à encadrer" if d["encadrement"] == "non" else
+                    "encadrement : une équipe à encadrer"))
+    if (vs := d.get("organisations")) and len(vs) < len(ORGANISATIONS):
+        out.append(("organisations", "organisation : %s" % " ou ".join(vs)))
+    if d.get("secteurs_exclus"):
+        out.append(("secteurs_exclus", "secteurs exclus : %s" % ", ".join(d["secteurs_exclus"])))
+    if d.get("heures_max"):
+        out.append(("heures_max", "temps de travail : %s heures par semaine au plus" % d["heures_max"]))
+    if d.get("vacances_min"):
+        out.append(("vacances_min", "vacances : %s semaines au moins" % d["vacances_min"]))
+    if d.get("deplacements") in ("non", "occasionnels"):
+        out.append(("deplacements", "déplacements : aucun" if d["deplacements"] == "non" else
+                    "déplacements : occasionnels seulement"))
+    if d.get("a_eviter"):
+        out.append(("a_eviter", "à éviter : %s" % d["a_eviter"]))
+    out += [("autres", x) for x in d.get("autres") or []]
+    return out if avec_cles else [x for _, x in out]
+
+
+_ORGS = "|".join(re.escape(v) for v, _ in sorted(ORGANISATIONS, key=lambda o: -len(o[0])))
+
+
+def criteres_depuis_lignes(lignes):
+    """Un profil d'avant les champs (une phrase par critère) → {clé: valeur}. Les phrases que les champs ne
+    savent pas dire restent telles quelles dans « Autres critères »."""
+    d, autres = {}, []
+    inverse = lambda cle: {lib: v for v, lib in CRITERE[cle]["choix"]}
+    contrats = {v[1]: k for k, v in CONTRATS.items()}
+    for ligne in (str(x).strip() for x in lignes or []):
+        nom, _, reste = (x.strip() for x in ligne.partition(":"))
+        m = None
+        if nom == "trajet" and (m := re.fullmatch(r"(.+?) au plus(?: depuis (.+))?", reste)) \
+                and m.group(1) in inverse("trajet"):
+            d["trajet"] = inverse("trajet")[m.group(1)]
+            if m.group(2):
+                d["trajet_depuis"] = m.group(2)
+        elif nom == "télétravail" and reste == "entièrement à distance":
+            d["teletravail"] = "5"
+        elif nom == "télétravail" and (m := re.fullmatch(r"([123]) jours? par semaine au moins", reste)):
+            d["teletravail"] = m.group(1)
+        elif nom == "taux d'activité" and (m := re.fullmatch(r"(\d+)(?: à (\d+))? %", reste)):
+            d["taux_min"], d["taux_max"] = int(m.group(1)), int(m.group(2) or m.group(1))
+        elif nom == "contrat" and reste == "durée indéterminée seulement":
+            d["contrats"] = ["cdi"]
+        elif nom == "contrat" and reste and all(x in contrats for x in reste.split(", ")):
+            d["contrats"] = [contrats[x] for x in reste.split(", ")]
+        elif nom == "langues de travail" and reste and all(x in dict(LANGUES) for x in reste.split(", ")):
+            d["langues"] = reste.split(", ")
+        elif nom == "encadrement" and reste in ("pas d'équipe à encadrer", "une équipe à encadrer"):
+            d["encadrement"] = "non" if reste.startswith("pas") else "oui"
+        elif nom == "organisation" and re.fullmatch("(?:%s)(?: ou (?:%s))*" % (_ORGS, _ORGS), reste):
+            d["organisations"] = [v for v, _ in ORGANISATIONS if v in re.findall(_ORGS, reste)]
+        elif nom == "secteurs exclus" and reste:
+            d["secteurs_exclus"] = [x.strip() for x in reste.split(",") if x.strip()]
+        elif nom == "temps de travail" and (m := re.fullmatch(r"(\d+) heures par semaine au plus", reste)):
+            d["heures_max"] = int(m.group(1))
+        elif nom == "vacances" and (m := re.fullmatch(r"(\d+) semaines au moins", reste)):
+            d["vacances_min"] = int(m.group(1))
+        elif nom == "déplacements" and reste in ("aucun", "occasionnels seulement"):
+            d["deplacements"] = "non" if reste == "aucun" else "occasionnels"
+        elif nom == "à éviter" and reste:
+            d["a_eviter"] = reste
+        elif ligne:
+            autres.append(ligne)
+    if autres:
+        d["autres"] = autres
+    return d
+
+
+def criteres_structures(p=None):
+    """Les critères du profil, {clé: valeur} ; un profil d'avant les champs est relu phrase par phrase."""
+    v = lire(charger() if p is None else p, "evaluation.criteres")
+    if isinstance(v, list):
+        return criteres_depuis_lignes(v)
+    return dict(v) if isinstance(v, dict) else {}
 
 
 def liste_ou(items):
@@ -620,7 +855,7 @@ def _convertir(c, brut):
     if t == "regles":                              # cases cochées : liste (formulaire) ou une par ligne
         cochees = set(brut if isinstance(brut, list) else str(brut or "").split())
         return [i for i in _ids_au_choix() if i in cochees]
-    if t == "liste":
+    if t in ("liste", "liste_choix"):
         vus, out = set(), []
         for ligne in str(brut or "").splitlines():
             ligne = re.sub(r"\s+", " ", ligne).strip()
@@ -714,7 +949,16 @@ def enregistrer(ident, formulaire):
     for c in e["champs"]:
         multiple = c["type"] == "regles" and hasattr(formulaire, "getlist")
         try:
-            v = _convertir(c, formulaire.getlist(c["cle"]) if multiple else formulaire.get(c["cle"], ""))
+            if c["type"] == "criteres":
+                brut = formulaire.get(c["cle"])            # un dictionnaire (questionnaire), sinon les champs
+                v = normaliser_criteres(brut if isinstance(brut, dict) else
+                                        criteres_depuis_lignes(str(brut).splitlines()) if isinstance(brut, str)
+                                        else criteres_du_formulaire(formulaire))
+            elif c["type"] == "liste_choix":
+                v = _convertir(c, "\n".join(valeurs_formulaire(formulaire, c["cle"])
+                                            + ajouts_formulaire(formulaire, c["cle"], c["virgules"])))
+            else:
+                v = _convertir(c, formulaire.getlist(c["cle"]) if multiple else formulaire.get(c["cle"], ""))
         except ProfilInvalide as err:
             erreurs.append(str(err))
             continue
@@ -724,11 +968,11 @@ def enregistrer(ident, formulaire):
                 _poser(p, "exclusions.desactivees", off)
             else:
                 _retirer(p, "exclusions.desactivees")
-        elif c["requis"] and v in ("", [], None):
+        elif c["requis"] and (v in ("", [], None) or c["type"] == "criteres" and not lignes_criteres(v)):
             erreurs.append("%s : obligatoire" % c["libelle"])
         elif c["cle"] in SUPERPOSES and _egal_base(c["cle"], v):
             _retirer(p, c["cle"])               # même valeur que config/ : le fichier de config reste maître
-        elif v in ("", None) or (v == [] and c["cle"] not in SUPERPOSES):
+        elif v in ("", None, {}) or (v == [] and c["cle"] not in SUPERPOSES):
             _retirer(p, c["cle"])
         else:
             _poser(p, c["cle"], v)

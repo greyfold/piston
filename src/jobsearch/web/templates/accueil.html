@@ -1,9 +1,16 @@
 {% extends "base.html" %}
-{% from "_macros.html" import bouton_action, meta, decision, notes, alertes, delais, adequation, annuler_go, preremplir, claude, etat_tache %}
+{% from "_macros.html" import icone, etat_vide, bouton_action, meta, decision, notes, alertes, delais, adequation, annuler_go, preremplir, claude, etat_tache %}
 {% block contenu %}
+{# Par défaut, une section vide ne s'affiche pas. Le courrier des employeurs ne compte qu'une fois une candidature
+   envoyée. Rien du tout à faire : un état vide remplace la page (la checklist « Bien démarrer » reste au-dessus). #}
+{% set courrier_utile = ouvertes and (courrier_a_trancher or courrier_recent) %}
+{% set jobroom_utile = fonctions.jobroom and (jobroom.a_saisir or jobroom.refus_a_reporter or jobroom.a_verifier
+                                              or (tache_jobroom and tache_jobroom.active)) %}
+{% set rien = not (a_trancher or retenues or entretiens or courrier_utile or jobroom_utile or relances.dues
+                   or relances.a_classer or limites) %}
 <div class="bandeau {{ etat.niveau }}"><span class="point"></span><span>{{ etat.texte }} <a href="/sante">Système</a></span></div>
 
-{% if rythme.alerte %}<div class="bandeau alerte"><span class="point"></span><span>{{ rythme.semaine.n }} postulation{{ 's' if rythme.semaine.n > 1 }} cette semaine, l'objectif est {{ rythme.semaine.min }} : il en manque {{ rythme.semaine.manque }} d'ici dimanche.</span></div>{% endif %}
+{% if rythme.alerte and not rien %}<div class="bandeau alerte"><span class="point"></span><span>{{ rythme.semaine.n }} postulation{{ 's' if rythme.semaine.n > 1 }} cette semaine, l'objectif est {{ rythme.semaine.min }} : il en manque {{ rythme.semaine.manque }} d'ici dimanche.</span></div>{% endif %}
 
 {% if premiers_pas %}{% set faits = premiers_pas | selectattr(5) | list | length %}
 {# Checklist Nexus du premier tableau de bord : ce qui reste du profil, pourquoi et en combien de temps ; masquable. #}
@@ -28,6 +35,13 @@
 </section>
 {% endif %}
 
+{% if rien %}
+{% call etat_vide("recherche", "Aucun poste identifié pour le moment", titre_balise="h1",
+     description="Le tri n'a encore retenu aucune annonce pour toi ; le prochain passage en cherchera de nouvelles. L'onglet Offres montre tout ce qui a été trouvé, et ce que le tri a écarté.") %}
+    <a class="bouton" href="/offres/ajouter">Ajouter une annonce trouvée ailleurs</a>
+    <a class="bouton go" href="/offres">Voir les offres {{ icone("suivant") }}</a>
+{% endcall %}
+{% else %}
 <h1>À faire aujourd'hui</h1>
 {% if rythme.actif %}{# option « Objectifs », et au moins un objectif : seules les périodes qui en ont un #}
 <div class="chiffres rythme">
@@ -68,13 +82,13 @@
 </div>
 {% endif %}
 
+{% if a_trancher %}
 <h2 id="trancher">À trancher <span class="compte">{{ a_trancher | length }}</span></h2>
 <nav class="tri" aria-label="Trier">
   Trier par
   {% for k, v in [("urgence", "urgence"), ("note", "note"), ("recence", "date de publication"), ("statut", "statut")] %}
   <a href="/?tri={{ k }}#trancher" class="{{ 'actif' if tri == k }}">{{ v }}</a>{% endfor %}
 </nav>
-{% if a_trancher %}
 <div class="cartes deux">
 {% for f in a_trancher %}
   <article class="carte" id="a-{{ f.empreinte }}">
@@ -96,11 +110,11 @@
   </article>
 {% endfor %}
 </div>
-{% else %}<p class="vide">Rien à trancher. Le prochain passage cherchera de nouvelles annonces.</p>{% endif %}
 <p class="petit"><a href="/offres/ajouter">Ajouter une annonce trouvée ailleurs</a></p>
+{% endif %}
 
-<h2 id="retenues">Go donné, à envoyer <span class="compte">{{ retenues | length }}</span></h2>
 {% if retenues %}
+<h2 id="retenues">Go donné, à envoyer <span class="compte">{{ retenues | length }}</span></h2>
 <div class="cartes deux">
 {% for f in retenues %}
   <article class="carte">
@@ -136,8 +150,9 @@
   </article>
 {% endfor %}
 </div>
-{% else %}<p class="vide">Aucun Go en attente d'envoi.</p>{% endif %}
+{% endif %}
 
+{% if courrier_utile %}
 <h2 id="courrier">Courrier des employeurs <span class="compte">{{ courrier_a_trancher | length }} à trancher</span></h2>
 {% if courrier_a_trancher %}
 <div class="cartes">
@@ -174,14 +189,15 @@
   </article>
 {% endfor %}
 </div>
-{% else %}<p class="vide">Aucun courrier à trancher.</p>{% endif %}
+{% endif %}
 {% if courrier_recent %}
 <details class="petit" style="margin-top:.5rem"><summary>{{ courrier_recent | length }} réponse(s) appliquée(s) ces 14 derniers jours</summary>
   <ul>{% for c in courrier_recent %}<li>{{ c.recu_le | date_fr(True) }} · <a href="/annonce/{{ c.empreinte }}">{{ c.entreprise }}</a> · {{ c.classe }}{% if c.message %} ({{ c.message }}){% endif %}</li>{% endfor %}</ul>
 </details>
 {% endif %}
+{% endif %}
 
-{% if fonctions.jobroom %}{# option « Preuves de recherche Job-Room » #}
+{% if jobroom_utile %}{# option « Preuves de recherche Job-Room », et quelque chose à saisir ou vérifier #}
 <h2 id="jobroom">Preuves Job-Room <span class="compte">{{ jobroom.a_saisir | length }} à saisir</span></h2>
 <div class="boutons" style="margin:-.3rem 0 .6rem">
   {% if jobroom.a_saisir or (tache_jobroom and tache_jobroom.active) %}{{ claude(none, "jobroom", "Saisir par Claude", "/#jobroom", "go", tache_jobroom) }}{% endif %}
@@ -212,10 +228,11 @@
   </tbody>
 </table></div>
 <p class="petit muet">À saisir sur <a href="https://www.job-room.ch/work-efforts/create" target="_blank" rel="noopener noreferrer">job-room.ch</a> : résultat « en suspens », assignation ORP « non ». Vérifier d'abord la liste du mois (anti-doublon).</p>
-{% else %}<p class="vide">Rien à saisir pour l'instant.</p>{% endif %}
+{% endif %}
 {% if jobroom.a_verifier %}<p class="petit muet">{{ jobroom.a_verifier | length }} candidatures plus anciennes n'ont pas de preuve inscrite au registre (délai passé) : à vérifier dans Job-Room, voir <a href="/candidatures">Candidatures</a>.</p>{% endif %}
 {% endif %}
 
+{% if relances.dues or relances.a_classer %}
 <h2 id="relances">Relances dues <span class="compte">{{ relances.dues | length }}</span></h2>
 {% if relances.dues %}
 <div class="tableau"><table>
@@ -232,12 +249,13 @@
   </tbody>
 </table></div>
 {% if relances.dues | length > 25 %}<p class="petit muet">… et {{ relances.dues | length - 25 }} autres dans <a href="/candidatures">Candidatures</a>.</p>{% endif %}
-{% else %}<p class="vide">Aucune relance due.</p>{% endif %}
+{% endif %}
 {% if relances.a_classer %}<p class="petit muet">{{ relances.a_classer | length }} candidatures ont eu leurs deux relances sans réponse : à classer (refus ou sans suite) depuis <a href="/candidatures#sans-suite">Candidatures</a>.</p>{% endif %}
+{% endif %}
 
+{% if limites %}
 <h2 id="limites">Écartées limites <span class="compte">{{ limites | length }} sur 14 jours</span></h2>
 <p class="petit muet" style="margin-top:-.4rem">Écartées par une règle de montage (régie, CDD de moins de deux ans). À parcourir pour savoir si le filtre est trop dur.</p>
-{% if limites %}
 <div class="tableau"><table><tbody>
 {% for f in limites %}
   <tr><td><a href="/annonce/{{ f.empreinte }}">{{ f.titre }}</a><div class="muet petit">{{ f.entreprise }} · {{ f.lieu }}</div></td>
@@ -245,5 +263,6 @@
       <td>{{ bouton_action(f, "remettre_b", "Remettre en B", "/#limites") }}</td></tr>
 {% endfor %}
 </tbody></table></div>
-{% else %}<p class="vide">Aucune annonce limite récente.</p>{% endif %}
+{% endif %}
+{% endif %}{# rien à faire #}
 {% endblock %}

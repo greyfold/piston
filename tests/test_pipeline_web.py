@@ -1,3 +1,4 @@
+from html import unescape
 import datetime as dt
 from urllib.parse import unquote
 
@@ -140,8 +141,32 @@ def web(reg, monkeypatch):
 
 def test_pages(web, reg):
     e = annonce(reg, statut="A", texte=FR)
-    for u in ("/", "/candidatures", "/offres?q=exemple", "/reglages", "/sources", "/sante", "/annonce/" + e[:6]):
+    for u in ("/", "/candidatures", "/offres?q=exemple", "/reglages/parcours", "/sources", "/sante", "/annonce/" + e[:6]):
         assert web.get(u).status_code == 200, u
+
+
+def test_etats_vides(web, reg):
+    """L'état vide Nexus (EmptyState, macro etat_vide), le même partout, adapté à chaque page."""
+    offres, cands, sante, accueil = (web.get(u).text for u in ("/offres", "/candidatures", "/sante", "/"))
+    assert '<h1 class="titre-vide" id="etat-vide-titre">Aucune annonce pour le moment</h1>' in offres
+    assert "<table" not in offres and 'class="filtres"' not in offres and 'href="/offres/ajouter"' in offres
+    assert '<h1 class="titre-vide" id="etat-vide-titre">Aucune candidature pour le moment</h1>' in cands
+    assert "<table" not in cands
+    assert '<div class="etat-vide compact">' in sante and '<h3 class="titre-vide" id="passages-vide">' in sante
+    for html in (offres, cands, sante, accueil):
+        assert 'class="etat-vide' in html and 'class="pastille-vide" aria-hidden="true"' in html
+        assert 'class="vide"' not in html and "page-vide" not in html
+    annonce(reg, statut="A", texte=FR)
+    filtre = web.get("/offres?q=introuvable").text
+    assert '<h2 class="titre-vide" id="etat-vide-titre">Aucun résultat pour « introuvable »</h2>' in filtre
+    assert 'class="filtres"' in filtre and "<table" not in filtre
+    assert "Aucune annonce avec ces filtres" in web.get("/offres?statut=refus").text
+    offres = web.get("/offres").text
+    assert "<table" in offres and "etat-vide" not in offres
+    annonce(reg, titre="UX Lead", statut="candidature", postulee_le="2026-11-02")
+    cands = web.get("/candidatures").text
+    assert "etat-vide" not in cands and "<table" in cands and "<h2>En cours" in cands
+    assert "<h2>Refus" not in cands and 'id="sans-suite"' not in cands        # sections vides masquées
 
 
 def test_anciennes_adresses_redirigees(web, reg):
@@ -155,13 +180,19 @@ def test_barre_et_reglages(web, reg):
     for href in ('href="/offres"', 'href="/candidatures"', 'href="/reglages"'):
         assert href in html
     assert 'href="/connecteurs"' not in html.split("</header>")[0]      # rangés sous Réglages
+    r = web.get("/reglages", follow_redirects=False)                     # pas de vue d'ensemble :
+    assert r.status_code == 303 and r.headers["location"] == "/profil"    # Réglages ouvre Ma recherche
     reglages = web.get("/reglages").text
-    for href in ("/profil", "/interface", "/sources", "/ia", "/connecteurs", "/sante#cles", "/sante"):
+    for href in ("/profil", "/reglages/parcours", "/interface", "/sources", "/ia", "/connecteurs",
+                 "/confidentialite", "/sante"):
         assert 'href="%s"' % href in reglages
-    assert "Fournisseur d'IA" in reglages and "Connexions" not in reglages      # IA à part des connecteurs
+    assert "Vue d&#39;ensemble" not in reglages and "Vue d'ensemble" not in reglages
+    assert "Fournisseur d'IA" in unescape(reglages) and "Connexions" not in reglages      # IA à part des connecteurs
     assert 'class="lien-reglages actif"' in web.get("/ia").text
     sources = web.get("/sources").text
-    assert 'class="lien-reglages actif"' in sources and "← Réglages" in sources
+    assert 'class="lien-reglages actif"' in sources and 'aria-label="Réglages"' in sources   # menu des réglages
+    assert '<a href="/sources" class="actif" aria-current="page">' in sources
+    assert 'aria-label="Réglages"' not in html                                    # pas hors des réglages
 
 
 def test_registre_montre_la_source(web, reg):
@@ -370,6 +401,9 @@ def test_accueil_montre_le_rythme(web, reg):
 
 
 def test_objectifs_choisis_par_periode(web, reg, sans_notification):
+    assert "Aucun poste identifié pour le moment" in web.get("/").text      # rien à faire : l'état vide, pas d'objectifs
+    annonce(reg, statut="A")
+    reg.commit()
     r = web.post("/objectifs", data={"semaine": "", "mois": "10"}, follow_redirects=False)
     assert r.status_code == 303 and "ok=1" in r.headers["location"]
     html = web.get("/").text

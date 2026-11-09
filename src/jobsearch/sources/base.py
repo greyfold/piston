@@ -42,6 +42,16 @@ class RouteCassee(Exception):
     pass
 
 
+class ConfigurationRequise(RouteCassee):
+    """La source n'est pas en panne : il lui manque un réglage que seule la personne peut
+    faire (un connecteur à activer ou à réautoriser sur claude.ai). Le passage ne la compte
+    pas comme un échec ; il le signale une fois et la page Connecteurs dit quoi faire."""
+
+    def __init__(self, message, connecteur=None):
+        super().__init__(message)
+        self.connecteur = connecteur
+
+
 class Client:
     def __init__(self, pause=0.8, timeout=20.0, transport=None):
         self.pause = pause

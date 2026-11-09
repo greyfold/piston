@@ -66,8 +66,8 @@
     <div>
       {% if rang is not none %}<p class="surtitre">Bien démarrer · {{ rang + 1 }} sur {{ total }}</p>{% endif %}
       <h1>Ton parcours</h1>
-      <p class="intro">Ton CV d'abord, puis l'IA te pose des questions, poste après poste, pour faire ressortir tes projets
-        et tes réalisations. Tout est gardé dans l'application, avec tes mots : c'est cette base, en entier, qui sert
+      <p class="intro">Ton CV d'abord, puis l'IA te pose des questions, expérience après expérience, pour faire ressortir
+        tes projets et tes réalisations ; tes formations restent une simple ligne. Tout est gardé dans l'application, avec tes mots : c'est cette base, en entier, qui sert
         ensuite à noter les annonces et à écrire tes CV et tes lettres.</p>
     </div>
   </div>
@@ -81,8 +81,9 @@
   {% if vide %}
   <section class="carte-accueil import-cv" aria-labelledby="import-titre">
     <h2 id="import-titre">Importe ton CV</h2>
-    <p class="intro">PDF, Word ou texte. L'IA le range en postes, formations, projets et réalisations, sans rien résumer :
-      chaque puce devient une réalisation, mot pour mot, et le texte d'origine est gardé tel quel.</p>
+    <p class="intro">PDF, Word ou texte. L'IA le range en expériences, projets et réalisations, sans rien résumer :
+      chaque puce devient une réalisation, mot pour mot, et le texte d'origine est gardé tel quel. Tes formations
+      restent une ligne : intitulé, école, dates.</p>
     <form data-import enctype="multipart/form-data" class="formulaire-import">
       <label class="depot">
         <input type="file" name="fichier" accept=".pdf,.docx,.txt,.md,application/pdf" data-fichier>
@@ -135,7 +136,7 @@
           Corrige ou retire ce qui n'est pas juste.</p>
       </div>
       <button type="button" class="fermer-volet" data-fermer-volet><span class="cache">Fermer le volet</span>
-        <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true"><path d="M6 18 18 6M6 6l12 12"/></svg></button>
+        {{ icone("fermer") }}</button>
     </div>
     <div class="corps-volet">
       {% for genre, titre, noeuds in arbre %}
@@ -157,7 +158,7 @@
               {% if n.citation and n.origine != "saisie" and n.citation != n.titre %}<blockquote>« {{ n.citation }} »</blockquote>{% endif %}
               <form method="post" action="/parcours/{{ n.id }}/modifier" class="edition">
                 <div class="champ"><label for="t{{ n.id }}">Intitulé</label><input type="text" id="t{{ n.id }}" name="titre" value="{{ n.titre }}" required></div>
-                {% if n.genre in cadres or n.genre == "certification" %}
+                {% if n.genre in cadres or n.genre in ("formation", "certification") %}
                 <div class="champ"><label for="o{{ n.id }}">Organisation</label><input type="text" id="o{{ n.id }}" name="organisation" value="{{ n.organisation }}"></div>
                 <div class="champ"><label for="l{{ n.id }}">Lieu</label><input type="text" id="l{{ n.id }}" name="lieu" value="{{ n.lieu }}"></div>
                 {% endif %}
@@ -167,7 +168,9 @@
                   <div class="champ"><label for="f{{ n.id }}">Fin</label><input type="text" id="f{{ n.id }}" name="fin" value="{{ n.fin }}" placeholder="vide : en cours"></div>
                 </div>
                 {% endif %}
+                {% if n.genre != "formation" %}
                 <div class="champ"><label for="x{{ n.id }}">{{ "Niveau" if n.genre == "langue" else "Description" }}</label><textarea id="x{{ n.id }}" name="detail" rows="3">{{ n.detail }}</textarea></div>
+                {% endif %}
                 {% if n.genre == "realisation" %}
                 <div class="champ"><label for="r{{ n.id }}">Résultat</label><input type="text" id="r{{ n.id }}" name="resultat" value="{{ n.resultat }}"></div>
                 {% endif %}

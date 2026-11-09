@@ -1,0 +1,57 @@
+{% from "_macros.html" import champ_puces %}
+{# Les réponses possibles à une question de « Ce qui compte pour toi » (ce_qui_compte.py) : choix à cliquer et
+   champs. Le même rendu dans le questionnaire (une question à la fois) et dans les réglages (toutes à la fois) :
+   `nom_choix` et `prefixe` nomment les entrées, `id` les distingue d'une question à l'autre. #}
+{% macro reponse_question(q, deja, defauts, nom_choix="choix", prefixe="champ.", id="r") -%}
+{% set coches = (deja.choix if deja.choix is not string else [deja.choix]) if deja and deja.choix is defined and deja.choix is not none else [] %}
+{% if q.choix %}
+<fieldset class="choix-reponse">
+  <legend class="cache">{{ q.question }}</legend>
+  <div class="puces-cantons">
+    {% for v, lib in q.choix %}
+    <label class="puce-canton"><input type="{{ 'checkbox' if q.multiple else 'radio' }}" name="{{ nom_choix }}" value="{{ v }}"{% if v in coches %} checked{% endif %}><span>{{ lib }}</span></label>
+    {% endfor %}
+  </div>
+  {% if q.adaptee %}<p class="petit muet adaptee">Exemples adaptés à ton poste, préparés par l'IA.</p>{% endif %}
+</fieldset>
+{% endif %}
+{% if q.champs %}
+<div class="champs-reponse">
+  {% for c in q.champs %}
+  {% set v = deja.champs[c.nom] if deja and deja.champs and c.nom in deja.champs else (defauts[c.defaut] if c.defaut else c.valeur or "") %}
+  <div class="champ{{ ' large' if c.long }}"><label for="{{ id }}-{{ c.nom }}">{{ c.libelle }}</label>
+    {% if c.long %}<textarea id="{{ id }}-{{ c.nom }}" name="{{ prefixe }}{{ c.nom }}" rows="2" placeholder="{{ c.exemple }}">{{ v }}</textarea>
+    {% else %}<input type="text" id="{{ id }}-{{ c.nom }}" name="{{ prefixe }}{{ c.nom }}" value="{{ v }}" placeholder="{{ c.exemple }}"
+      {% if c.type == "nombre" %}inputmode="numeric" spellcheck="false"{% endif %}>{% endif %}</div>
+  {% endfor %}
+</div>
+{% endif %}
+{%- endmacro %}
+
+{# Les critères non négociables (profil.CRITERES), un champ par élément : choix simple ou multiple en pilules,
+   nombres, textes, listes libres à compléter. Mêmes noms (`critere.<clé>`) dans le volet du questionnaire et
+   dans les réglages ; `v` : {clé: valeur}. #}
+{% macro champs_criteres(criteres, v, id="c") -%}
+<div class="grille-champs">
+  {% for c in criteres %}
+  {% set val = v[c.cle] if v and c.cle in v else none %}
+  {% if c.type == "un" %}
+  {{ champ_puces("critere." ~ c.cle, c.libelle, [("", c.vide)] + c.choix, [val | string if val is not none else ""],
+                 id ~ "-" ~ c.cle, multiple=false, aide=c.aide or "") }}
+  {% elif c.type == "plusieurs" %}
+  {{ champ_puces("critere." ~ c.cle, c.libelle, c.choix, val or [], id ~ "-" ~ c.cle, aide=c.aide or "") }}
+  {% elif c.type == "liste" %}
+  {% set items = (val.split("\n") if val is string else val) or [] %}
+  {% set paires = [] %}{% for x in items if x %}{% set _ = paires.append((x, x)) %}{% endfor %}
+  {{ champ_puces("critere." ~ c.cle, c.libelle, paires, items, id ~ "-" ~ c.cle, aide=c.aide or "", ajout=true,
+                 exemple=c.exemple) }}
+  {% else %}
+  <div class="champ{{ ' large' if c.type == 'texte' and not c.cle.endswith('_depuis') }}">
+    <label for="{{ id }}-{{ c.cle }}">{{ c.libelle }}</label>
+    <input type="text" id="{{ id }}-{{ c.cle }}" name="critere.{{ c.cle }}" value="{{ val if val is not none else '' }}"
+      placeholder="{{ c.exemple }}"{% if c.type == "nombre" %} inputmode="numeric" spellcheck="false"{% endif %}>
+  </div>
+  {% endif %}
+  {% endfor %}
+</div>
+{%- endmacro %}

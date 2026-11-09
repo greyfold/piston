@@ -5,6 +5,7 @@
   --texte: #1c2326; --texte-2: #4d5b63; --texte-3: #7b878d;
   --alerte: #b42318; --alerte-pale: #fdecea; --attention: #9a6700; --attention-pale: #fff4d6;
   --ok-pale: #e3f3ec; --rayon: 10px; --ombre: 0 1px 2px rgba(20, 30, 35, .06);
+  --hauteur-barre: 3.25rem;        /* barre du haut : ce qui colle dessous (menu des réglages) s'y aligne */
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -35,7 +36,8 @@ h3 { font-size: 1rem; margin: 0; line-height: 1.35; }
 header.barre {
   position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--bord);
 }
-header.barre .dedans { display: flex; align-items: center; gap: 1rem; max-width: 1120px; margin: 0 auto; padding: .6rem 16px; }
+header.barre .dedans { display: flex; align-items: center; gap: 1rem; max-width: 1120px; margin: 0 auto; padding: .6rem 16px;
+  min-height: var(--hauteur-barre); }
 .marque { font-weight: 700; color: var(--marine); white-space: nowrap; }
 .marque span { color: var(--vert); }
 nav.onglets { display: flex; gap: .25rem; overflow-x: auto; scrollbar-width: none; }
@@ -77,6 +79,9 @@ main { max-width: 1120px; margin: 0 auto; padding: 1.25rem 16px 4rem; }
 .carte .tete { display: flex; justify-content: space-between; gap: .75rem; align-items: flex-start; }
 .carte .meta { color: var(--texte-3); font-size: .85rem; margin-top: .15rem; }
 .carte .extrait { color: var(--texte-2); font-size: .9rem; margin: .5rem 0 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+/* Ligne d'une carte sous son en-tête (connecteurs) : un peu d'air ; une liste numérotée alignée sur le texte. */
+.carte .ligne-carte { margin: .35rem 0 0; }
+.carte ol.ligne-carte { padding-left: 1.1rem; }
 .carte ul.exig { margin: .4rem 0 0; padding-left: 1.1rem; font-size: .9rem; color: var(--texte-2); }
 
 .puce { display: inline-block; padding: .05rem .5rem; border-radius: 999px; font-size: .76rem; font-weight: 600; background: var(--surface-2); color: var(--texte-2); white-space: nowrap; }
@@ -149,6 +154,19 @@ dl.champs dd { margin: 0; overflow-wrap: anywhere; }
 .calendrier span.fait { background: var(--vert); }
 .filtres { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .75rem; }
 .vide { color: var(--texte-3); background: var(--surface); border: 1px dashed var(--bord); border-radius: var(--rayon); padding: .9rem 1rem; }
+/* État vide (Nexus EmptyState) : centré, sans bordure ; cercle neutre de 48 px et icône de 24 px, titre en
+   taille de texte semi-gras, une ou deux phrases sur 24rem au plus, actions centrées. Compact : moins d'air.
+   La description prend --texte-2 (et non --texte-3) pour garder un contraste AA sur le fond de page. */
+.etat-vide { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 3rem 1rem; }
+.etat-vide.compact { padding: 2rem 1rem; }
+.etat-vide .pastille-vide { display: grid; place-items: center; width: 3rem; height: 3rem; margin-bottom: 1rem;
+  border-radius: 50%; background: var(--surface-2); color: var(--texte-3); }
+.etat-vide .pastille-vide .icone { width: 1.5rem; height: 1.5rem; }
+.etat-vide .titre-vide { display: block; margin: 0; font-size: 1rem; font-weight: 600; line-height: 1.5; color: var(--texte); letter-spacing: 0; }
+.etat-vide p { margin: .25rem auto 0; max-width: 24rem; font-size: .88rem; line-height: 1.45; color: var(--texte-2); }
+.etat-vide .actions-vide { display: flex; flex-wrap: wrap; justify-content: center; gap: .75rem; margin-top: 1.5rem; }
+.etat-vide .actions-vide form { display: inline; margin: 0; }
+.etat-vide .bouton .icone { width: 1rem; height: 1rem; }
 code { font-size: .85em; background: var(--surface-2); padding: .05rem .3rem; border-radius: 4px; }
 
 .notes { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin-top: .6rem; }
@@ -211,12 +229,6 @@ details.annuler { margin-top: .6rem; border-top: 1px dashed var(--bord); padding
 details.annuler summary { cursor: pointer; color: var(--texte-3); font-size: .85rem; }
 
 /* Profil : l'assistant de configuration */
-.etapes { list-style: none; display: flex; gap: .3rem; padding: 0; margin: 1rem 0; overflow-x: auto; scrollbar-width: none; }
-.etapes a { display: flex; align-items: center; gap: .45rem; padding: .35rem .7rem .35rem .4rem; border-radius: 999px; color: var(--texte-2); white-space: nowrap; font-size: .9rem; }
-.etapes a:hover { text-decoration: none; background: var(--surface-2); }
-.etapes .num { display: grid; place-items: center; width: 1.45rem; height: 1.45rem; border-radius: 50%; background: var(--surface-2); color: var(--texte-2); font-size: .78rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.etapes li.actif a { background: var(--vert-pale); color: var(--vert-fonce); font-weight: 600; }
-.etapes li.actif .num { background: var(--vert); color: #fff; }
 form.profil { max-width: 760px; }
 form.profil h2 { margin-top: 0; }
 .grille-champs { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .9rem 1rem; margin-top: 1rem; }
@@ -402,6 +414,7 @@ button.go.grand .icone, a.bouton.go.grand .icone { width: 1.05rem; height: 1.05r
 .lien-neutre { border: 0; background: none; padding: .3rem 0; color: var(--texte-2); font-weight: 500; font-size: .92rem; text-decoration: underline;
   text-underline-offset: 3px; text-decoration-color: var(--bord); cursor: pointer; }
 .lien-neutre:hover { color: var(--texte); text-decoration-color: currentColor; border: 0; }
+.lien-neutre:focus-visible, .lien-danger:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; border-radius: 3px; }
 a.bouton:hover { text-decoration: none; border-color: var(--texte-3); }
 
 .etat-tache { display: flex; gap: .85rem; align-items: flex-start; margin-top: 1.5rem; padding: 1rem; border: 1px solid var(--bord); border-radius: 10px; }
@@ -435,6 +448,16 @@ a.bouton:hover { text-decoration: none; border-color: var(--texte-3); }
 .puce-canton:hover span { border-color: var(--texte-3); }
 .puce-canton input:checked + span { border-color: var(--vert); background: var(--vert); color: #fff; font-weight: 600; }
 .puce-canton input:focus-visible + span { outline: 2px solid var(--vert); outline-offset: 2px; }
+
+/* Champ à pilules (Nexus Choix, pilules à cocher) : un champ à choix simple ou multiple en pilules, avec au
+   besoin un champ pour ajouter des valeurs à une liste libre (macro champ_puces). */
+.champ-puces { border: 0; padding: 0; margin: 0; min-width: 0; }
+.champ-puces legend { font-weight: 600; font-size: .9rem; padding: 0; }
+.champ-puces .puces-cantons { margin-top: .4rem; }
+.champ .champ-puces .puce-canton { font-weight: 400; display: inline-flex; }
+.champ .champ-puces .ajout-puces { margin-top: .5rem; }
+.champ-intro { grid-column: 1 / -1; margin: 0; font-size: .85rem; color: var(--texte-2); }
+.grille-champs .grille-champs { grid-column: 1 / -1; margin-top: 0; }      /* critères dans une étape du profil */
 .autres-cantons { margin-top: .55rem; }
 .autres-cantons summary { cursor: pointer; color: var(--texte-2); font-size: .88rem; }
 .apercu-accueil { border: 1px dashed var(--bord); border-radius: 10px; padding: .9rem 1rem; background: var(--surface-2); }
@@ -508,7 +531,7 @@ dialog.modale .etat-tache { margin-top: 1rem; }
 .ligne-code { display: flex; gap: .5rem; }
 .ligne-code input { flex: 1; min-width: 0; height: 42px; box-sizing: border-box; padding: 0 .85rem; font-family: ui-monospace, Menlo, monospace; }
 .ligne-code button { height: 42px; }
-.actions-modale { display: flex; justify-content: flex-end; margin-top: 1rem; }
+.actions-modale { display: flex; justify-content: flex-end; align-items: center; gap: 1rem; margin-top: 1rem; }
 .pied-modale { display: flex; justify-content: flex-end; margin-top: .75rem; }
 dialog.modale .aide-accueil { margin-top: 1rem; }
 
@@ -578,13 +601,61 @@ a.lien-reglages.actif { background: var(--vert-pale); color: var(--vert-fonce); 
 }
 p.fil { margin: 0 0 .5rem; }
 
-/* Réglages : une carte par domaine, avec son état. */
-.reglages .lien-dossier { border-color: var(--bord); align-items: flex-start; }
-.reglages .lien-dossier:hover { border-color: var(--vert); }
-.reglages .lien-dossier > span:first-child { gap: .35rem; }
-.reglages .puce { align-self: flex-start; white-space: normal; }
-.reglages .meta { margin-bottom: .4rem; }
-ul.liens-reglages { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .3rem; }
+/* Réglages : menu vertical à gauche (Nexus ResponsiveNavLink), la page ouverte à droite, en une colonne. */
+.reglages-cadre { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 2rem; align-items: start; }
+.reglages-nav { position: sticky; top: calc(var(--hauteur-barre) + 1rem); }
+.reglages-nav ul { list-style: none; margin: 0; padding: 0 0 .6rem; }
+.reglages-nav ul + ul { border-top: 1px solid var(--bord); padding-top: .6rem; }
+.reglages-nav a {
+  display: flex; align-items: center; gap: .6rem; padding: .45rem .75rem .45rem .65rem; margin: 1px 0;
+  border-left: 3px solid transparent; border-radius: 0 8px 8px 0;
+  color: var(--texte-2); font-weight: 500; font-size: .92rem; line-height: 1.3;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+.reglages-nav a .icone { width: 1.05rem; height: 1.05rem; flex: none; }
+.reglages-nav a:hover { text-decoration: none; background: var(--surface-2); color: var(--texte); border-left-color: var(--texte-3); }
+.reglages-nav a.actif { background: var(--vert-pale); color: var(--vert-fonce); border-left-color: var(--vert); font-weight: 600; }
+.reglages-nav a:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .reglages-nav a { transition: none; } }
+/* Sous-liens (étapes du profil) : sous leur page parente, en retrait ; la page parente reste en texte fort. */
+.reglages-nav a.parent { color: var(--texte); font-weight: 600; }
+.reglages-nav ul.sous-liens { padding: 0 0 .2rem; border-top: 0; }
+.reglages-nav ul.sous-liens a { padding-left: 2.3rem; font-size: .88rem; }
+.reglages-nav .a-remplir { width: .45rem; height: .45rem; border-radius: 50%; background: var(--attention); flex: none; margin-left: auto; }
+.reglages-contenu { min-width: 0; max-width: 52rem; }
+.reglages-contenu .tache { max-width: none; margin: 0; }
+.reglages-contenu .cartes.deux { grid-template-columns: minmax(0, 1fr); }     /* une seule colonne */
+@media (max-width: 760px) {
+  .reglages-cadre { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+  .reglages-nav { position: static; display: flex; overflow-x: auto; gap: .25rem; padding-bottom: .25rem;
+    border-bottom: 1px solid var(--bord); }
+  .reglages-nav ul { display: flex; gap: .25rem; padding: 0; }
+  .reglages-nav ul + ul { border-top: 0; padding-top: 0; }
+  .reglages-nav a { white-space: nowrap; border-left: 0; border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0; }
+  .reglages-nav a.actif, .reglages-nav a:hover { border-left-color: transparent; }
+  .reglages-nav a.actif { border-bottom-color: var(--vert); }
+  .reglages-nav li:has(> .sous-liens) { display: flex; gap: .25rem; }
+  .reglages-nav ul.sous-liens a { padding-left: .75rem; }
+}
+
+/* Lignes de réglage : titre et explication à gauche, état ou action à droite, un trait entre deux. */
+ul.reglages-liste { list-style: none; margin: 1rem 0 0; padding: 0; background: var(--surface);
+  border: 1px solid var(--bord); border-radius: var(--rayon); box-shadow: var(--ombre); overflow: hidden; }
+ul.reglages-liste > li + li { border-top: 1px solid var(--bord); }
+.reglage-ligne { display: flex; align-items: center; gap: 1rem; padding: .85rem 1.1rem; color: var(--texte); }
+.reglage-ligne .texte { display: flex; flex-direction: column; gap: .15rem; flex: 1 1 auto; min-width: 0; }
+.reglage-ligne .titre { font-weight: 600; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.reglage-ligne .description { font-size: .85rem; color: var(--texte-3); }
+.reglage-ligne > .bouton { flex: none; }
+.import-parcours { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem 1rem; align-items: center; width: 100%; }
+.import-parcours .texte { grid-column: 1 / -1; }
+.import-parcours input[type=file] { font-size: .85rem; max-width: 100%; }
+.import-parcours .boutons { margin: 0; justify-content: flex-end; }
+@media (max-width: 560px) {
+  .reglage-ligne { flex-wrap: wrap; }
+  .import-parcours { grid-template-columns: minmax(0, 1fr); }
+  .import-parcours .boutons { justify-content: flex-start; }
+}
 
 /* Ton parcours et ce qui compte : entretiens guidés par l'IA (parcours.html, criteres_entretien.html) */
 .cache { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -685,6 +756,55 @@ dialog.volet::backdrop { background: rgba(10, 14, 16, .45); backdrop-filter: blu
 .corps-volet { flex: 1; overflow-y: auto; padding: .5rem 1.5rem 1.5rem; }
 .entretien .etat-tache { margin-top: 1rem; }
 
+/* Ce qui compte pour toi (criteres_entretien.html) : la même salle de discussion ; la proposition entière se
+   relit dans le volet, enregistrer en bas. */
+.ouverture-salle { margin: .9rem 0 0; color: var(--texte-2); font-size: .88rem; line-height: 1.5; }
+.corps-salle .bandeau { margin: .75rem 0 0; }
+.formulaire-volet { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0; margin: 0; }
+.formulaire-volet .corps-volet { display: flex; flex-direction: column; gap: .75rem; }
+.formulaire-volet .section-base { margin: 1rem 0 0; }
+.pied-volet { display: flex; align-items: center; justify-content: flex-end; gap: 1rem; padding: .85rem 1.5rem;
+  border-top: 1px solid var(--bord); background: var(--surface); }
+/* Questionnaire (criteres_entretien.html) : la question dans le fil, les réponses à cliquer ou à écrire en bas ;
+   chaque réponse donnée se modifie d'un lien sous sa bulle. */
+.fil .aide-question { font-size: .78rem; color: var(--texte-3); line-height: 1.45; }
+.reponse-guidee { display: flex; flex-direction: column; gap: .7rem; }
+.fil .reponses-rapides { align-self: stretch; padding-left: 1rem; border-left: 2px solid var(--bord); }
+.fil .reponses-rapides .flash { margin: 0 0 .6rem; }
+.fil .reponses-rapides .champ label { font-size: .82rem; }
+.fil .reponses-rapides .actions-reponse { justify-content: flex-end; }
+/* Fin du questionnaire : écran de succès (pastille, titre), puis le résumé par sections ; chaque ligne a son
+   « Modifier », qui rouvre la question d'où elle vient. */
+.succes-criteres { padding: 2rem 0 3rem; }
+.succes-criteres .succes-accueil h2 { margin: 0; font-size: 1.45rem; }
+.succes-criteres .succes-accueil .intro { margin: .5rem 0 0; max-width: 34rem; color: var(--texte-2); line-height: 1.5; }
+/* Le résumé est une .carte ; ses titres de section, des .section-base (avec l'étiquette IA à côté). */
+.resume-criteres { display: flex; flex-direction: column; gap: 1.25rem; margin-top: 1.75rem; }
+.resume-criteres .section-base { display: flex; align-items: center; gap: .5rem; margin: 0 0 .45rem; }
+.resume-criteres section > .petit { margin: .35rem 0 0; }
+.lignes-resume { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.lignes-resume li { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: .45rem 0;
+  border-bottom: 1px solid var(--bord); font-size: .92rem; line-height: 1.5; }
+.lignes-resume li:last-child { border-bottom: 0; }
+.lignes-resume .lien-neutre { flex: none; }
+.actions-succes { display: flex; align-items: center; justify-content: flex-end; gap: 1.25rem; margin-top: 1.25rem; }
+.succes-criteres .flash { margin: 1rem 0 0; }
+/* Réglages, étape Critères : toutes les questions du questionnaire, l'une sous l'autre. */
+.reponses-criteres { margin-bottom: 1.25rem; }
+.question-reglage { display: flex; flex-direction: column; gap: .55rem; padding: 1rem 0; border-top: 1px solid var(--bord); }
+.question-reglage h3 { margin: 0; font-size: .95rem; }
+.question-reglage .aide { margin: -.25rem 0 0; }
+.choix-reponse { border: 0; margin: 0; padding: 0; min-width: 0; }
+.choix-reponse .puces-cantons { margin-top: 0; }
+.choix-reponse .adaptee { margin: .45rem 0 0; }
+.champs-reponse { display: flex; flex-wrap: wrap; gap: .6rem; }
+.champs-reponse .champ { flex: 1 1 12rem; margin: 0; }
+.champs-reponse .champ.large { flex-basis: 100%; }
+.champs-reponse textarea { width: 100%; }
+.reponse-guidee .statut-ia { margin: 0; }
+.actions-reponse { display: flex; align-items: center; justify-content: flex-end; gap: 1rem; }
+.actions-reponse .icone { width: 1rem; height: 1rem; }
+
 /* Fil de l'entretien (Nexus, règles AI) : la question de l'IA est du texte étiqueté « Question de l'IA »
    (pilule à contour, glyphe monochrome, jamais de violet ni d'étincelle) ; la réponse est une bulle neutre. */
 .fil { list-style: none; margin: 1rem 0; padding: 0 .25rem 0 0; display: flex; flex-direction: column; gap: .9rem;
@@ -693,11 +813,13 @@ dialog.volet::backdrop { background: rgba(10, 14, 16, .45); backdrop-filter: blu
 .fil .ia { align-self: stretch; display: flex; flex-direction: column; align-items: flex-start; gap: .35rem; }
 .fil .ia p { color: var(--texte); }
 .fil .ia.courante p { font-weight: 600; }
-.fil .moi { align-self: flex-end; max-width: 85%; padding: .6rem .85rem; border-radius: 12px; border-bottom-right-radius: 4px;
+.fil .moi { align-self: flex-end; display: flex; flex-direction: column; align-items: flex-end; gap: .2rem;
+  max-width: 85%; padding: .6rem .85rem; border-radius: 12px; border-bottom-right-radius: 4px;
   background: var(--surface-2); }
 .fil .moi p { color: var(--texte); }
 .badge-ia { display: inline-flex; align-items: center; gap: .25rem; padding: .05rem .5rem; border: 1px solid var(--vert);
-  border-radius: 999px; color: var(--vert-fonce); font-size: .72rem; font-weight: 600; line-height: 1.5; }
+  border-radius: 999px; color: var(--vert-fonce); font-size: .72rem; font-weight: 600; line-height: 1.5;
+  text-transform: none; letter-spacing: 0; }        /* même dans un titre en capitales */
 .badge-ia .icone { width: .85rem; height: .85rem; }
 
 .badge-fixe { display: inline-flex; align-items: center; padding: .05rem .5rem; border: 1px solid var(--bord); border-radius: 999px;

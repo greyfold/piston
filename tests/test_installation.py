@@ -276,10 +276,38 @@ def test_interface_qui_s_ouvre_et_options(neuve, monkeypatch, reg):
     r = web.post("/action", data={"empreinte": emp, "type": "go", "retour": "/"}, follow_redirects=False)
     assert "postuler" in unquote(r.headers["location"]) and reg.get(emp)["statut"] == "A"   # refusé côté serveur aussi
     web.post("/interface/jobroom", data={"actif": "1"})
-    assert profil.option("jobroom") and 'id="jobroom"' in web.get("/").text
+    page = web.get("/").text                                       # option ouverte : le compteur ; rien à saisir :
+    assert profil.option("jobroom") and "preuves Job-Room" in page and 'id="jobroom"' not in page   # pas de section vide
     assert "Ton interface" in web.get("/interface").text
     # Le profil de Camille (d'avant l'accueil) garde tout.
     assert all(profil.fonctions({"identite": {"prenom": "J"}})[k] for k in ("offres", "noter", "postuler", "jobroom", "objectifs"))
 
 
 from urllib.parse import unquote  # noqa: E402
+
+
+def test_bien_demarrer_disparait_une_fois_tout_fait_et_etat_vide(neuve, monkeypatch, reg):
+    """Les cinq étapes faites : plus de checklist. Rien à trancher : un état vide qui renvoie aux Offres."""
+    from fastapi.testclient import TestClient
+    from conftest import annonce
+    from jobsearch.web import app as appmod
+    monkeypatch.setattr(appmod, "_reg", lambda: type(reg)(reg.chemin))
+    profil.ecrire({profil.PREMIERS_PAS: "affichee", "recherche": {"requetes": ["Product designer"], "cantons": ["GE"]}})
+    etapes = ["ia", "recherche", "identite", "dossier", "criteres"]
+    faites = lambda n: [(i, i, "", "1 min", "/", k < n) for k, i in enumerate(etapes)]
+    web = TestClient(appmod.app)
+    monkeypatch.setattr(profil, "premiers_pas", lambda p=None, ia_connectee=False: faites(4))
+    assert "Bien démarrer" in web.get("/").text
+    monkeypatch.setattr(profil, "premiers_pas", lambda p=None, ia_connectee=False: faites(5))
+    page = web.get("/").text
+    assert "Bien démarrer" not in page
+    assert "Aucun poste identifié pour le moment" in page and 'href="/offres">Voir les offres' in page
+    # Rien à faire : l'état vide remplace la page ; aucune section vide, pas de courrier sans candidature.
+    for titre in ("À faire aujourd'hui", "À trancher", "Go donné", "Courrier des employeurs", "Relances dues",
+                  "Écartées limites", 'class="chiffres"'):
+        assert titre not in page
+    annonce(reg, statut="A")
+    reg.commit()
+    page = web.get("/").text
+    assert "À trancher" in page and "Aucun poste identifié" not in page
+    assert "Go donné" not in page and "Courrier des employeurs" not in page and "Relances dues" not in page

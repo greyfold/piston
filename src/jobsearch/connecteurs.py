@@ -138,8 +138,32 @@ def etat_connecteur(c, ouvrir=None):
 
 
 def _session_vide(c):
-    from .moteur import executable
+    from .moteur import environnement_connecteurs, executable
     from .moteur.session import SessionClaude
     return SessionClaude([executable(), "-p", "--input-format", "stream-json", "--output-format", "stream-json",
                           "--verbose", "--no-session-persistence", "--tools", "", "--model", "haiku",
-                          "--permission-mode", "dontAsk"])
+                          "--permission-mode", "dontAsk"], env=environnement_connecteurs())
+
+
+# --- À configurer ------------------------------------------------------------------------
+
+A_CONFIGURER = "à configurer"
+
+
+def a_configurer(reg):
+    """Les connecteurs actifs que le dernier passage n'a pas pu utiliser faute d'un réglage
+    que seule la personne peut faire (Indeed pas activé sur claude.ai, par exemple)."""
+    a = actifs()
+    return [dict(id=r["id"], nom=CATALOGUE[r["id"]]["nom"], message=r["remarques"] or "",
+                 activer=CATALOGUE[r["id"]]["activer"], le=r["dernier_test_le"])
+            for r in reg.cx.execute("SELECT id, remarques, dernier_test_le FROM sources WHERE etat=? ORDER BY id",
+                                    (A_CONFIGURER,))
+            if r["id"] in CATALOGUE and r["id"] in a]
+
+
+def noter_test(reg, nom, ok):
+    """Un test réussi sur la page Connecteurs lève l'état « à configurer » sans attendre le passage."""
+    if ok:
+        reg.cx.execute("UPDATE sources SET etat='en service', dernier_test_ok=1, remarques=NULL "
+                       "WHERE id=? AND etat=?", (nom, A_CONFIGURER))
+        reg.commit()

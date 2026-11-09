@@ -131,6 +131,15 @@ def environnement():
     return env
 
 
+def environnement_connecteurs():
+    """Pour une session qui se sert d'un connecteur claude.ai (Indeed, Gmail) : Claude Code
+    attend que les connecteurs soient branchés avant le premier tour. Par défaut il les
+    branche en arrière-plan, et un premier tour parti trop tôt ne voit pas leurs outils :
+    Indeed paraissait « absent » alors qu'il se connectait une demi-seconde plus tard
+    (machine virtuelle, 09.11)."""
+    return dict(environnement(), MCP_CONNECTION_NONBLOCKING="false")
+
+
 def connecte(executer=subprocess.run):
     """Vrai si Claude Code est connecté à un compte Claude (sinon les sessions s'arrêtent
     sur « Not logged in »)."""

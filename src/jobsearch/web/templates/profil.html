@@ -2,21 +2,11 @@
 {% from "_macros.html" import icone %}
 {% block titre %}Profil · Recherche d'emploi{% endblock %}
 {% block contenu %}
-{% set ids_manquants = manquants | map('first') | list %}
-
-
 <h1>Profil</h1>
 <p class="muet">Ce que la plateforme sait de toi pour chercher, trier et écrire tes dossiers. Gardé sur ton ordinateur seulement. <a href="/interface">Personnaliser l'interface</a></p>
 
-<ol class="etapes">
-  {% for x in etapes %}
-  <li class="{{ 'actif' if x.id == ident }}{{ ' manque' if x.id in ids_manquants }}">
-    <a href="/profil/{{ x.id }}"{% if x.id == ident %} aria-current="step"{% endif %}><span class="num">{{ loop.index }}</span>{{ x.titre }}</a></li>
-  {% endfor %}
-  <li class="{{ 'actif' if ident == 'fin' }}"><a href="/profil/fin"{% if ident == 'fin' %} aria-current="step"{% endif %}><span class="num">✓</span>Récapitulatif</a></li>
-</ol>
-
 {% if etape %}
+{% if ident == "criteres" %}{% include "_reponses_criteres.html" %}{% endif %}
 <form method="post" action="/profil/{{ ident }}" class="carte profil" autocomplete="on">
   <div class="titre-etape">
     <span class="pastille">{{ icone(ident) }}</span>

@@ -17,13 +17,18 @@ from dataclasses import asdict
 
 from . import courrier, dossier, doublons, evaluation, followups, ingest, moteur, originaux, prefilter, profil
 from .config import DATA, criteres, reglages
+from .connecteurs import A_CONFIGURER, CATALOGUE
 from .db import maintenant
 from .notify import notifier
-from .sources.base import Client
+from .sources.base import Client, ConfigurationRequise
 
 
 class Delai(Exception):
     pass
+
+
+def _libelle(nom):
+    return (CATALOGUE.get(nom) or {}).get("nom") or nom
 
 
 class Passage:
@@ -37,6 +42,7 @@ class Passage:
         self.notifier_fin = notifier_fin
         self._sources = sources
         self.echecs = []
+        self.a_configurer = []       # (source, message, nouveau) : un réglage à faire, pas une panne
         self.resume = {}
 
     # --- Mécanique des étages ---------------------------------------------
@@ -133,11 +139,14 @@ class Passage:
             n["fichier"] = sauvegarder(self.reg).name
 
         with self.etape("test_routes") as n:
+            self._etats_avant = {r[0]: r[1] for r in self.reg.cx.execute("SELECT id, etat FROM sources")}
             for nom, src in self.sources().items():
                 try:
                     src.tester()
                     routes_ok.append(nom)
                     self._noter_source(nom, True)
+                except ConfigurationRequise as e:
+                    self._noter_a_configurer(nom, e)
                 except Exception as e:
                     self._noter_source(nom, False, str(e))
                     self.echecs.append(("route %s" % nom, str(e)))
@@ -171,6 +180,10 @@ class Passage:
                             kw["jours"] = jours
                         try:
                             res = src.offres(**kw)
+                        except ConfigurationRequise as e:
+                            self._noter_a_configurer(nom, e)
+                            n[nom] = "à configurer"
+                            continue
                         except Exception as e:
                             self._noter_source(nom, False, str(e)[:300])
                             self.echecs.append(("source %s" % nom, str(e)[:200]))
@@ -324,12 +337,21 @@ class Passage:
             out += src.chercher(mots, lieu, jours, requete=etiquette)
         return out
 
-    def _noter_source(self, nom, ok, remarque=None):
+    def _noter_a_configurer(self, nom, e):
+        """Une source qui attend un réglage de la personne (connecteur à activer sur claude.ai) :
+        le passage reste complet, la source est marquée « à configurer » et la personne n'est
+        prévenue qu'une fois, la première fois que ça arrive. Dès que le réglage est fait, le
+        passage suivant la retrouve en service tout seul."""
+        nouveau = (getattr(self, "_etats_avant", None) or {}).get(nom) != A_CONFIGURER
+        self.a_configurer.append((nom, str(e)[:200], nouveau))
+        self._noter_source(nom, False, str(e)[:300], etat=A_CONFIGURER)
+
+    def _noter_source(self, nom, ok, remarque=None, etat=None):
         self.reg.cx.execute(
             "INSERT INTO sources (id, nom, dernier_test_le, dernier_test_ok, etat, remarques) "
             "VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET dernier_test_le=excluded.dernier_test_le, "
             "dernier_test_ok=excluded.dernier_test_ok, etat=excluded.etat, remarques=excluded.remarques",
-            (nom, nom, maintenant(), int(ok), "en service" if ok else "en panne", remarque))
+            (nom, nom, maintenant(), int(ok), etat or ("en service" if ok else "en panne"), remarque))
         self.reg.commit()
 
     def _maj_sources_reussies(self, brutes):
@@ -345,6 +367,9 @@ class Passage:
         lignes = []
         if self.echecs:
             lignes.append("⚠ " + " ; ".join("%s : %s" % e for e in self.echecs)[:300])
+        for nom, message, _ in self.a_configurer:
+            lignes.append("À configurer : %s, %s. La source reprendra d'elle-même une fois le "
+                          "réglage fait (page Connecteurs)." % (_libelle(nom), message))
         lignes.append("%d nouvelles annonces, %d écartées au pré-tri (dont %d limites), %d à trancher."
                       % (ing.get("nouvelles", 0), pt.get("ecartees", 0), pt.get("limites", 0),
                          pt.get("a_trier", 0)))
@@ -373,6 +398,11 @@ class Passage:
             notifier("Recherche d'emploi · passage %s" % ("complet" if statut == "complet" else "partiel"),
                      texte, urgent=bool(self.echecs), lien="/sante",
                      telephone=False)    # le téléphone reçoit l'alerte du matin, pas ce bilan technique
+        for nom, message, nouveau in self.a_configurer:
+            if nouveau and self.notifier_fin:        # une seule fois, pas à chaque passage
+                notifier("Recherche d'emploi · %s à brancher" % _libelle(nom),
+                         "%s n'a pas pu être lu : %s. Le reste du passage s'est fait normalement."
+                         % (_libelle(nom), message), lien="/connecteurs")
         return {"id": self.id, "statut": statut, "resume": texte, "dossier": str(self.dossier)}
 
 

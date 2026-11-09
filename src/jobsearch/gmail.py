@@ -83,7 +83,7 @@ def message(m, lien_fil=None, longueur=1500):
 
 
 def _session():
-    from .moteur import executable
+    from .moteur import environnement_connecteurs, executable
     from .moteur.session import SessionClaude
     from .config import DATA
     (DATA / "logs").mkdir(parents=True, exist_ok=True)
@@ -91,7 +91,7 @@ def _session():
                           "--verbose", "--no-session-persistence", "--tools", "", "--model", "haiku",
                           "--permission-mode", "dontAsk", "--allowedTools", ",".join(connecteurs.outils("gmail"))],
                          journal=DATA / "logs" / ("gmail-%s.jsonl" % dt.date.today().isoformat()),
-                         erreur=GmailImpossible, etiquette="gmail")
+                         erreur=GmailImpossible, etiquette="gmail", env=environnement_connecteurs())
 
 
 def lire(mots, depuis, limite=40, ouvrir=None, delai_s=300, longueur=1500):

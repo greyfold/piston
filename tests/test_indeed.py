@@ -5,11 +5,11 @@ import pytest
 from conftest import fixture
 from jobsearch.fingerprint import empreinte
 from jobsearch.sources import indeed
-from jobsearch.sources.base import RouteCassee
+from jobsearch.sources.base import ConfigurationRequise, RouteCassee
 
 AUJ = dt.date(2026, 10, 26)
 REGLAGES = {"actif": True, "lieux": ["Genève"], "recherches_max": 40, "details_max": 25,
-            "anciennete_max_jours": 120, "duree_max_s": 600, "pause_tours_s": 0}
+            "anciennete_max_jours": 120, "duree_max_s": 600, "pause_tours_s": 0, "pause_absent_s": 0}
 
 
 class FausseSession:
@@ -100,15 +100,40 @@ def test_budget_de_recherches():
 def test_connecteur_absent_de_claude_code():
     s = FausseSession(outils=["mcp__claude_ai_Gmail__search"])
     s.serveurs, s.tour = {"claude.ai Gmail": "connected"}, lambda message, delai: []
-    with pytest.raises(RouteCassee, match="absent"):
+    with pytest.raises(ConfigurationRequise, match="pas activé"):
         _src(s).offres()
     assert s.ferme
+
+
+def test_indeed_pas_encore_branche_au_premier_tour_puis_present():
+    """Le connecteur se branche en arrière-plan : un premier tour trop tôt ne voit pas Indeed
+    (machine virtuelle, 09.11). On rouvre une fois avant de conclure qu'il manque."""
+    absente = FausseSession(outils=[])
+    absente.serveurs, absente.tour = {}, lambda message, delai: []
+    presente = FausseSession()
+    sessions = iter([absente, presente])
+    src = indeed.Indeed(REGLAGES, ("Head of Product",), ("VD", "GE"), ouvrir=lambda: next(sessions),
+                        connecte=lambda: True, aujourdhui=AUJ)
+    assert src.offres() and absente.ferme
+
+
+def test_les_sessions_indeed_attendent_les_connecteurs(monkeypatch):
+    from jobsearch.moteur import session
+    vus = {}
+    class Faux:
+        def __init__(self, cmd, **kw):
+            vus.update(kw.get("env") or {})
+            raise RuntimeError("arrêt")
+    monkeypatch.setattr(session.subprocess, "Popen", Faux)
+    with pytest.raises(RuntimeError):
+        indeed.SessionClaude(["claude"])
+    assert vus.get("MCP_CONNECTION_NONBLOCKING") == "false"
 
 
 def test_connecteur_a_reautoriser():
     s = FausseSession()
     s.serveurs, s.tour = {"claude.ai Indeed": "needs-auth"}, lambda message, delai: []
-    with pytest.raises(RouteCassee, match="réautoriser"):
+    with pytest.raises(ConfigurationRequise, match="réautoriser"):
         _src(s).offres()
 
 

@@ -64,6 +64,9 @@ async def autoriser(request: Request, suite):
 
 
 def _refus(e, **k):
+    from ..sources.base import ConfigurationRequise
+    if isinstance(e, ConfigurationRequise):          # un réglage à faire, pas une panne : le Mac le saura
+        k.setdefault("a_configurer", e.connecteur or "")
     return JSONResponse(dict({"erreur": str(e)}, **k), status_code=422)
 
 

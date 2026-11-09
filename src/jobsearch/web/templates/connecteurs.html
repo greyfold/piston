@@ -12,10 +12,21 @@
 {% for c in connecteurs if c.role == role %}
   <section class="carte" id="{{ c.id }}">
     <div class="tete"><b>{{ c.nom }}</b>
-      <span class="puce {{ 'B' if c.actif else '' }}">{{ "actif" if c.actif else "inactif" }}</span></div>
+      {% if etats[c.id] %}<span class="puce retard">à configurer</span>
+      {% else %}<span class="puce {{ 'B' if c.actif else '' }}">{{ "actif" if c.actif else "inactif" }}</span>{% endif %}</div>
     <div class="meta">{{ c.lieu_libelle }} · {{ c.usage }}</div>
-    <div class="petit muet" style="margin-top:.35rem">Pour l'activer : {{ c.activer }}</div>
-    <div class="boutons" style="margin-top:.6rem">
+    {% if etats[c.id] %}
+    <div class="petit ligne-carte"><b>Pas encore branché</b> (le {{ (etats[c.id].le or '')[:10] | date_suisse }}) : {{ etats[c.id].message }}.
+      Les passages continuent sans {{ c.nom }} et le reprendront d'eux-mêmes.</div>
+    <ol class="petit ligne-carte">
+      <li>{{ c.activer }}</li>
+      <li>Revenir ici et cliquer « Tester ».</li>
+    </ol>
+    <div class="petit muet ligne-carte">Tu ne veux pas de {{ c.nom }} ? « Désactiver » et il ne sera plus tenté.</div>
+    {% else %}
+    <div class="petit muet ligne-carte">Pour l'activer : {{ c.activer }}</div>
+    {% endif %}
+    <div class="boutons">
       <form method="post" action="/connecteurs/{{ c.id }}/{{ 'desactiver' if c.actif else 'activer' }}">
         <button class="{{ 'discret' if c.actif else 'go' }}">{{ "Désactiver" if c.actif else "Activer" }}</button></form>
       <form method="post" action="/connecteurs/{{ c.id }}/tester"><button class="discret">Tester</button></form>

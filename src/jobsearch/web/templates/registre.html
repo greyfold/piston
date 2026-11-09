@@ -1,6 +1,14 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icone, etat_vide %}
 {% block titre %}Offres · Recherche d'emploi{% endblock %}
 {% block contenu %}
+{% if not stats.total %}
+{% call etat_vide("recherche", "Aucune annonce pour le moment", titre_balise="h1",
+     description="Chaque passage lit tes sources et range ici toutes les annonces trouvées, retenues ou écartées par le tri.") %}
+    <a class="bouton" href="/sources">Voir mes sources</a>
+    <a class="bouton go" href="/offres/ajouter">Ajouter une annonce {{ icone("suivant") }}</a>
+{% endcall %}
+{% else %}
 <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap">
   <h1>Offres <span class="muet" style="font-weight:500">{{ stats.total }} annonces</span></h1>
   <a class="bouton" href="/offres/ajouter">Ajouter une annonce</a>
@@ -17,6 +25,12 @@
   </select>
   <button>Filtrer</button>
 </form>
+{% if not fiches %}
+{% call etat_vide("recherche", ("Aucun résultat pour « %s »" % q) if q else "Aucune annonce avec ces filtres",
+     titre_balise="h2", description="Essaie un autre mot, ou retire un filtre.") %}
+    <a class="bouton go" href="/offres">Tout afficher</a>
+{% endcall %}
+{% else %}
 <p class="petit muet">{{ total }} résultat{{ 's' if total != 1 }}{% if total > 400 %} (400 affichés){% endif %}.</p>
 <div class="tableau"><table>
   <thead><tr><th>Annonce</th><th>Source</th><th>Statut</th><th>Motif</th><th>Vue le</th></tr></thead>
@@ -32,4 +46,6 @@
   {% endfor %}
   </tbody>
 </table></div>
+{% endif %}
+{% endif %}
 {% endblock %}
