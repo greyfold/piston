@@ -30,10 +30,22 @@ def confiees():
     return list(reglage().get("sources") or ["indeed"])
 
 
+_HTTP = None
+
+
+def _http():
+    """Un seul client HTTP vers le travailleur, réutilisé : un client par appel laissait ses
+    connexions ouvertes (une de plus toutes les 30 s, à chaque lecture de l'état)."""
+    global _HTTP
+    if _HTTP is None:
+        _HTTP = httpx.Client(timeout=30)
+    return _HTTP
+
+
 class Distant:
     def __init__(self, adresse=ADRESSE, jeton_=None, http=None):
         self.adresse = adresse.rstrip("/")
-        self.http = http or httpx.Client(timeout=30)
+        self.http = http or _http()
         self.entetes = {"Authorization": "Bearer %s" % (jeton_ or jeton.lire())}
 
     @classmethod

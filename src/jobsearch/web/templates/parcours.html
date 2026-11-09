@@ -210,7 +210,15 @@
         .then(function (r) { return r.json(); })
         .then(function (d) {
           if (!d.ok) throw new Error(d.erreur || "échec");
-          location.href = quand(d);
+          // Même adresse à l'ancre près (deux tours de suite sans rien de rangé) : le navigateur
+          // ne ferait que défiler jusqu'à l'ancre, et la page resterait sur « L'IA range… ».
+          var cible = new URL(quand(d), location.href);
+          if (cible.pathname + cible.search === location.pathname + location.search) {
+            history.replaceState(null, "", cible.href);
+            location.reload();
+          } else {
+            location.href = cible.href;
+          }
         })
         .catch(function (e) {
           attente.hidden = true; erreur.hidden = false;
