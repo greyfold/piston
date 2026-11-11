@@ -361,3 +361,52 @@ def test_l_export_n_emporte_pas_ce_qui_est_cache_sous_une_formation(base):
     base.commit()
     master = json.loads(parcours.exporter_json(base))["elements"][0]
     assert master["titre"] == "Master" and "detail" not in master and "enfants" not in master
+
+
+def test_import_remplit_certifications_et_langues_du_profil(base):
+    """Les certifications et les langues du CV remplissent leur onglet des réglages ; ce qui y est déjà reste."""
+    cv = CV + "\nCertifications\nScrum Master certifié — Scrum Alliance, 05.2021\nAllemand : notions\n"
+    imp = _import()
+    imp.elements += [
+        ElementCV(ref="C7", genre="certification", titre="Scrum Master certifié", organisation="Scrum Alliance",
+                  fin="05.2021", citation="Scrum Master certifié — Scrum Alliance, 05.2021"),
+        ElementCV(ref="C8", genre="langue", titre="Allemand", detail="notions", citation="Allemand : notions"),
+    ]
+    profil.enregistrer("langues", {"dossier.langues": "anglais | C1, corrigé à la main"})
+    bilan = parcours.importer_cv(base, cv, c=moteur.FauxMoteur([imp]))
+    assert bilan["profil"] == {"certification": 1, "langue": 1}
+    p = profil.charger()
+    assert profil.lire(p, "dossier.certifications") == ["Scrum Master certifié | Scrum Alliance | 05.2021"]
+    assert profil.lire(p, "dossier.langues") == ["anglais | C1, corrigé à la main", "Allemand | notions"]
+    # Le même CV une deuxième fois : rien de plus.
+    assert parcours.importer_cv(base, cv, c=moteur.FauxMoteur([imp]))["profil"] == {}
+
+
+def test_onglet_reprend_le_parcours_deja_importe(base, monkeypatch):
+    """Un CV importé avant les onglets : la page propose d'ajouter ce que le parcours contient."""
+    from jobsearch.web import app as appmod
+    web = TestClient(appmod.app)
+    parcours.importer_cv(base, CV, c=moteur.FauxMoteur([_import()]))
+    profil.enregistrer("langues", {"dossier.langues": ""})
+    page = web.get("/profil/langues").text
+    assert "Ton parcours contient 1 langue absente de cette liste." in page
+    assert "Récapitulatif" not in page and 'href="/profil/certifications"' in page
+    r = web.post("/profil/langues/reprendre", follow_redirects=False)
+    assert r.status_code == 303 and "1%20langue%20ajout" in r.headers["location"]
+    assert profil.lire(profil.charger(), "dossier.langues") == ["Anglais | courant"]
+    assert "absente de cette liste" not in web.get("/profil/langues").text
+    assert "Section langues : celles de la liste ci-dessous" in __import__("jobsearch.dossier").dossier.pieces_a_ecrire()["cv"]
+
+
+def test_import_deduit_le_niveau_vise_sans_ecraser_celui_ecrit(base):
+    """Le niveau que le CV permet de viser devient celui de la recherche ; un niveau déjà écrit reste."""
+    p = profil.charger()
+    p.setdefault("recherche", {}).pop("niveau", None)
+    profil.ecrire(p)
+    imp = _import()
+    imp.niveau = "Senior"
+    assert parcours.importer_cv(base, CV, c=moteur.FauxMoteur([imp]))["niveau"] == "Senior"
+    assert profil.lire(profil.charger(), "recherche.niveau") == "Senior"
+    imp.niveau = "Cadre"
+    assert parcours.importer_cv(base, CV, c=moteur.FauxMoteur([imp]))["niveau"] == ""
+    assert profil.lire(profil.charger(), "recherche.niveau") == "Senior"

@@ -96,7 +96,7 @@ def consigne():
     """La consigne de notation, écrite pour la personne du profil (page Profil)."""
     p = profil_mod.charger()
     prenom = profil_mod.prenom()
-    niveau, region = profil_mod.lire(p, "recherche.niveau"), profil_mod.lire(p, "recherche.region")
+    niveau, region = str(profil_mod.lire(p, "recherche.niveau") or "").lower(), profil_mod.region(p)
     criteres = profil_mod.criteres_evaluation()
     interet = profil_mod.interet_evaluation(p)
     return CONSIGNE % {

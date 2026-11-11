@@ -32,7 +32,7 @@ def test_valeurs_personnelles_vides(neuve):
     for cle, v in PERSONNELS["criteres.yaml"].items():
         assert profil.lire(c, cle) == v
     assert "coffre" not in s
-    assert profil.effectif("recherche.cantons") == [] and profil.effectif("recherche.requetes") == []
+    assert profil.effectif("recherche.cantons") == [] and profil.effectif("recherche.postes") == []
     # Le reste des réglages (passage, moteur, sources de base) est gardé.
     assert s["passage"] and s["moteur"]
 
@@ -99,10 +99,12 @@ def test_accueil_recherche_ia_offres_puis_checklist(neuve, monkeypatch, reg):
     assert set(catalogue.construire()) >= {"job-room", "jobs-ch"} and "jobup" not in catalogue.construire()
     assert "romande-energie" not in catalogue.construire()                          # pas les pages carrière de Camille
     p = profil.charger()
-    assert p["recherche"]["requetes"] == ["Product designer"] and p["recherche"]["cantons"] == ["GE", "VD"]
-    assert p["recherche"]["jobup_lieux"] == ["Genève", "Vaud"] and profil.objectif(p) == "partiel"
+    assert p["recherche"]["postes"] == [{"intitule": "Product designer", "variantes": []}]
+    assert p["recherche"]["cantons"] == ["GE", "VD"]
+    assert "jobup_lieux" not in p["recherche"] and profil.objectif(p) == "partiel"
+    assert config.criteres()["sourcing"]["jobup_lieux"] == ["Genève", "Vaud"]      # déduits des cantons
     assert set(p["exclusions"]["desactivees"]) == {"taux", "contrat-freelance"}
-    assert p["recherche"]["familles"] == ["product", "designer"]
+    assert "familles" not in p["recherche"] and profil.mots_postes(profil.postes(p)) == ["product", "designer"]
     assert profil.mots_intitule("Responsable de la communication (H/F)") == ["responsable", "communication"]
 
     # L'IA est connectée (conftest) : l'étape est déjà faite, on passe aux offres.
@@ -269,18 +271,21 @@ def test_interface_qui_s_ouvre_et_options(neuve, monkeypatch, reg):
     assert f["offres"] and not f["postuler"] and not f["noter"] and not f["jobroom"] and not f["objectifs"]
     assert [i for i, _, _ in f["manque"]["postuler"]] == ["identite", "dossier"]
     web = TestClient(appmod.app)
-    page = web.get("/").text
+    tri = web.get("/").text                                  # à l'ouverture : d'abord le tri
+    assert "Pour postuler, il reste" in tri and 'disabled aria-describedby="verrou-tri"' in tri   # voir, pas postuler
+    page = web.get("/?ensuite=1").text
     assert 'href="/candidatures"' not in page and 'href="/offres"' in page and 'id="jobroom"' not in page and "preuves Job-Room" not in page
-    assert "Pour postuler, il reste" in page and 'value="go"' not in page                # voir, pas postuler
+    assert 'value="go"' not in page
     emp = reg.liste(["A"])[0]["empreinte"]
     r = web.post("/action", data={"empreinte": emp, "type": "go", "retour": "/"}, follow_redirects=False)
     assert "postuler" in unquote(r.headers["location"]) and reg.get(emp)["statut"] == "A"   # refusé côté serveur aussi
-    web.post("/interface/jobroom", data={"actif": "1"})
+    web.post("/fonctions/jobroom", data={"actif": "1"})
     page = web.get("/").text                                       # option ouverte : le compteur ; rien à saisir :
     assert profil.option("jobroom") and "preuves Job-Room" in page and 'id="jobroom"' not in page   # pas de section vide
-    assert "Ton interface" in web.get("/interface").text
-    # Le profil de Camille (d'avant l'accueil) garde tout.
-    assert all(profil.fonctions({"identite": {"prenom": "J"}})[k] for k in ("offres", "noter", "postuler", "jobroom", "objectifs"))
+    assert "<h1>Fonctions</h1>" in web.get("/fonctions").text
+    assert web.get("/interface", follow_redirects=False).headers["location"] == "/fonctions"   # ancienne page
+    # Le profil de Camille (d'avant l'accueil) garde tout ; le suivi des objectifs suit les objectifs saisis.
+    assert all(profil.fonctions({"identite": {"prenom": "J"}})[k] for k in ("offres", "noter", "postuler", "jobroom"))
 
 
 from urllib.parse import unquote  # noqa: E402

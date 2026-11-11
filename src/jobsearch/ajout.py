@@ -28,7 +28,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from pydantic import BaseModel, Field
 
-from . import evaluation, ingest, prefilter
+from . import doublons, evaluation, ingest, prefilter
 from .db import Registre, aujourdhui
 from .sources.base import Annonce, Client, RouteCassee
 
@@ -256,7 +256,19 @@ def ajouter(reg, url="", texte="", entreprise="", titre="", lieu="", client=None
     reg.maj(emp, extra=extra)
     reg.noter(emp, "ajoutée à la main · %s" % origine)
 
-    remise = f["statut"] == "C" and f.get("passe_ecart") in (0, 1)
+    # Le même poste déjà retenu ou postulé sous une autre fiche (l'employeur écrit autrement,
+    # « OMPI » pour « World Intellectual Property Organization », 05.11) : la fiche ajoutée
+    # rejoint la candidature au lieu de repartir à trancher.
+    if nouvelle:
+        meme = doublons.meme_poste_engage(reg, f)
+        if meme:
+            g, raison = meme[0]
+            doublons.fusionner(reg, g["empreinte"], emp, "ajout manuel : " + raison)
+            return {"empreinte": g["empreinte"], "nouvelle": False, "statut": g["statut"], "pre_tri": None,
+                    "message": "Même poste déjà au registre : %s. Rien n'est dupliqué, l'annonce ajoutée "
+                               "rejoint cette fiche." % doublons.decrire(g)}
+
+    remise =f["statut"] == "C" and f.get("passe_ecart") in (0, 1)
     if remise:                                # écartée par le pré-tri, voulue par la personne
         reg.maj(emp, statut="nouvelle", passe_ecart=None, motif=None, limite=False)
         reg.noter(emp, "remise à trancher : ajoutée à la main (était écartée : %s)" % (f.get("motif") or "pré-tri"))

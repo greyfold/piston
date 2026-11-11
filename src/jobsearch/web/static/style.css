@@ -456,8 +456,33 @@ a.bouton:hover { text-decoration: none; border-color: var(--texte-3); }
 .champ-puces .puces-cantons { margin-top: .4rem; }
 .champ .champ-puces .puce-canton { font-weight: 400; display: inline-flex; }
 .champ .champ-puces .ajout-puces { margin-top: .5rem; }
+/* Lignes répétables (Nexus TextField, répété en lignes) : un élément par ligne de deux champs, une croix pour
+   retirer la ligne, « Ajouter » pour en ouvrir une autre (macro champ_lignes, champs.js). */
+.champ-lignes { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; }
+.champ-lignes legend { font-weight: 600; font-size: .9rem; padding: 0; }
+.lignes { display: flex; flex-direction: column; gap: .5rem; margin-top: .4rem; }
+.ligne-entete, .ligne-champs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 42px; gap: .5rem; align-items: center; }
+.ligne-entete { font-size: .82rem; color: var(--texte-2); }
+.trois-colonnes .ligne-entete, .trois-colonnes .ligne-champs {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) 42px; }
+.trois-colonnes.date-fin .ligne-entete, .trois-colonnes.date-fin .ligne-champs {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 7.5rem 42px; }       /* certifications : date étroite */
+.retirer-ligne { width: 42px; height: 42px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  border-color: transparent; background: transparent; color: var(--texte-3); }
+.retirer-ligne:hover { border-color: transparent; background: var(--surface-2); color: var(--texte); }
+.retirer-ligne:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
+.ajouter-ligne { align-self: flex-start; display: inline-flex; align-items: center; gap: .35rem; margin-top: .5rem; }
+@media (max-width: 640px) {
+  .ligne-entete { display: none; }
+  .ligne-champs, .trois-colonnes .ligne-champs, .trois-colonnes.date-fin .ligne-champs {
+    grid-template-columns: minmax(0, 1fr) 42px; padding-bottom: .5rem; border-bottom: 1px solid var(--bord); }
+  .ligne-champs input, .ligne-champs select { grid-column: 1; }
+  .ligne-champs .retirer-ligne { grid-column: 2; grid-row: 1; }
+}
 .champ-intro { grid-column: 1 / -1; margin: 0; font-size: .85rem; color: var(--texte-2); }
 .grille-champs .grille-champs { grid-column: 1 / -1; margin-top: 0; }      /* critères dans une étape du profil */
+.grille-champs > .section-base { grid-column: 1 / -1; margin: .75rem 0 -.35rem; }   /* titre d'un groupe de champs */
+.grille-champs > .section-base:first-child { margin-top: 0; }
 .autres-cantons { margin-top: .55rem; }
 .autres-cantons summary { cursor: pointer; color: var(--texte-2); font-size: .88rem; }
 .apercu-accueil { border: 1px dashed var(--bord); border-radius: 10px; padding: .9rem 1rem; background: var(--surface-2); }
@@ -546,22 +571,10 @@ dialog.modale .aide-accueil { margin-top: 1rem; }
 .plus-tard p { margin: 0 0 .35rem; }
 .plus-tard ul { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: .25rem; }
 
-/* Fonctions verrouillées et page « Ton interface » */
+/* Fonctions verrouillées et interrupteur (page « Fonctions ») */
 .verrou { margin: .45rem 0 0; font-size: .82rem; color: var(--texte-3); }
 .boutons-tete { display: flex; gap: .9rem; align-items: center; }
 .boutons-tete form { margin: 0; }
-.reglages-interface { margin-top: 1.25rem; padding: 1.1rem 1.2rem; }
-.reglages-interface h2 { margin: 0 0 .6rem; }
-.interrupteurs { list-style: none; margin: 0; padding: 0; }
-.interrupteurs li { display: flex; gap: 1rem; align-items: center; justify-content: space-between; padding: .75rem 0; border-bottom: 1px solid var(--bord); }
-.interrupteurs li:last-child { border-bottom: 0; padding-bottom: 0; }
-.interrupteurs .texte { display: flex; flex-direction: column; gap: .15rem; font-size: .9rem; }
-.interrupteurs form { margin: 0; flex: none; }
-.interrupteurs li:has(.objectifs-rythme) { flex-wrap: wrap; }
-.interrupteurs li:has(.objectifs-rythme) .texte { flex: 1 1 0; }
-.interrupteurs form.objectifs-rythme { flex: 1 1 100%; }
-.objectifs-rythme .grille-champs { margin-top: .25rem; }
-.objectifs-rythme .boutons.pied { margin-top: .9rem; }
 button.interrupteur { position: relative; width: 2.75rem; height: 1.5rem; padding: 0; border-radius: 999px; border: 0; background: var(--bord); }
 button.interrupteur .curseur { position: absolute; top: .2rem; left: .2rem; width: 1.1rem; height: 1.1rem; border-radius: 50%; background: #fff;
   box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .16s ease-out; }
@@ -647,6 +660,10 @@ ul.reglages-liste > li + li { border-top: 1px solid var(--bord); }
 .reglage-ligne .titre { font-weight: 600; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
 .reglage-ligne .description { font-size: .85rem; color: var(--texte-3); }
 .reglage-ligne > .bouton { flex: none; }
+.reglage-ligne > form { flex: none; margin: 0; }          /* un interrupteur à droite */
+/* Postes proposés par l'IA (Nexus : lignes de réglage) : un bouton à icône par poste, à droite. */
+.reglage-ligne > button { flex: none; }
+.reglage-ligne > button, button.proposer-postes { display: inline-flex; align-items: center; gap: .35rem; }
 .import-parcours { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem 1rem; align-items: center; width: 100%; }
 .import-parcours .texte { grid-column: 1 / -1; }
 .import-parcours input[type=file] { font-size: .85rem; max-width: 100%; }
@@ -790,10 +807,6 @@ dialog.volet::backdrop { background: rgba(10, 14, 16, .45); backdrop-filter: blu
 .actions-succes { display: flex; align-items: center; justify-content: flex-end; gap: 1.25rem; margin-top: 1.25rem; }
 .succes-criteres .flash { margin: 1rem 0 0; }
 /* Réglages, étape Critères : toutes les questions du questionnaire, l'une sous l'autre. */
-.reponses-criteres { margin-bottom: 1.25rem; }
-.question-reglage { display: flex; flex-direction: column; gap: .55rem; padding: 1rem 0; border-top: 1px solid var(--bord); }
-.question-reglage h3 { margin: 0; font-size: .95rem; }
-.question-reglage .aide { margin: -.25rem 0 0; }
 .choix-reponse { border: 0; margin: 0; padding: 0; min-width: 0; }
 .choix-reponse .puces-cantons { margin-top: 0; }
 .choix-reponse .adaptee { margin: .45rem 0 0; }
@@ -922,3 +935,49 @@ button.go.envoyer .icone { width: .95rem; height: .95rem; }
 .ajout-base { margin-top: 1rem; padding: .75rem 1rem; border: 1px dashed var(--bord); border-radius: var(--rayon); }
 .cv-origine { white-space: pre-wrap; font: .8rem/1.5 ui-monospace, Menlo, monospace; max-height: 20rem; overflow: auto; background: var(--surface-2); padding: .75rem; border-radius: 8px; }
 .proposition .edition { gap: 1rem; margin-top: 1rem; }
+
+/* Pile de tri (Nexus Card) : les annonces à trancher en pile, une carte à la fois, qui se tire à droite (Go)
+   ou à gauche (Pas go) ; les suivantes dépassent dessous. La salle (en-tête, pied collé en bas) est celle des
+   entretiens ; les boutons de décision sont en bas à gauche (trier.html, tri.js). */
+.salle-tri .progression { margin: .6rem 0 .7rem; }
+.salle-tri .progression i { width: 0; transition: width .22s ease-out; }
+.pile-tri { position: relative; max-width: 40rem; margin: 1.25rem 0 2.5rem; }
+.carte-tri { position: relative; z-index: 3; padding: 1.25rem 1.35rem; border-radius: 12px; cursor: grab; touch-action: pan-y;
+  transform-origin: 50% 100%; transition: transform .22s ease-out, opacity .22s ease-out; }
+.carte-tri.tiree { transition: none; cursor: grabbing; user-select: none; }
+.carte-tri + .carte-tri { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none;
+  transform: translateY(.6rem) scale(.97); }
+.carte-tri + .carte-tri + .carte-tri { z-index: 1; transform: translateY(1.2rem) scale(.94); }
+.carte-tri + .carte-tri > * { visibility: hidden; }
+.carte-tri + .carte-tri + .carte-tri + .carte-tri { display: none; }
+/* La carte qui s'envole sort du rang : la suivante monte aussitôt, sans attendre la réponse du serveur. */
+.carte-tri.sortante { position: absolute; inset: 0 0 auto; z-index: 5; pointer-events: none; }
+.carte-tri.sortante + .carte-tri { position: relative; z-index: 3; overflow: visible; pointer-events: auto; transform: none; }
+.carte-tri.sortante + .carte-tri > * { visibility: visible; }
+.carte-tri.sortante + .carte-tri + .carte-tri { z-index: 2; transform: translateY(.6rem) scale(.97); }
+.carte-tri.sortante + .carte-tri + .carte-tri + .carte-tri { display: block; z-index: 1; transform: translateY(1.2rem) scale(.94); }
+.carte-tri h2 { display: block; margin: 0; font-size: 1.3rem; line-height: 1.25; }
+.carte-tri .entreprise-tri { margin: .25rem 0 0; font-weight: 600; color: var(--texte-2); }
+.carte-tri .delais { margin-top: .6rem; }
+.tampon-tri { position: absolute; top: 1rem; z-index: 4; padding: .15rem .65rem; border: 2px solid currentColor; border-radius: 8px;
+  background: var(--surface); font-size: 1.3rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  opacity: 0; pointer-events: none; }
+.tampon-tri.go { left: 1rem; color: var(--vert); transform: rotate(-10deg); }
+.tampon-tri.non { right: 1rem; color: var(--alerte); transform: rotate(10deg); }
+.pied-carte-tri { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem 1rem;
+  margin-top: 1rem; padding-top: .75rem; border-top: 1px solid var(--bord); }
+.pied-carte-tri details.raisons { flex: 1 1 16rem; }
+.boutons-tri { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.boutons-tri button { display: inline-flex; align-items: center; gap: .45rem; min-height: 42px; padding: .6rem 1.2rem; font-size: 1rem;
+  transition: transform .15s ease-out; }
+.boutons-tri button .icone { width: 1.15rem; height: 1.15rem; }
+.boutons-tri button.non { border-color: var(--alerte); }
+.boutons-tri button.non:hover { background: var(--alerte-pale); }
+.boutons-tri button.discret { padding-inline: .7rem; font-size: .92rem; }
+.boutons-tri button:active:not(:disabled) { transform: scale(.96); }
+.boutons-tri button:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
+.boutons-tri .raccourcis-tri { margin-left: auto; }
+.pied-salle .verrou { margin: .5rem 0 0; }
+@media (prefers-reduced-motion: reduce) {
+  .carte-tri, .salle-tri .progression i, .boutons-tri button { transition: none; }
+}

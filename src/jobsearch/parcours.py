@@ -607,6 +607,8 @@ class ElementCV(BaseModel):
 
 class ImportCV(BaseModel):
     elements: list[ElementCV]
+    niveau: Literal["", "Junior", "Confirmé", "Senior", "Cadre", "Direction"] = Field(
+        "", description="le niveau de poste que le parcours permet de viser ; vide si le CV ne permet pas d'en juger")
 
 
 CONSIGNE_IMPORT = """Tu ranges le CV de %(prenom)s, fourni dans <cv>, en éléments d'une base d'expérience. Tu n'écris rien : tu ranges.
@@ -616,7 +618,8 @@ CONSIGNE_IMPORT = """Tu ranges le CV de %(prenom)s, fourni dans <cv>, en éléme
 - « citation » : le passage exact du CV dont vient l'élément, copié sans retouche (pour un poste, sa ligne d'intitulé ; pour une compétence, le mot tel qu'il figure).
 - Dates au format MM.AAAA (ou AAAA si le mois manque), converties depuis le CV ; « fin » vide pour un poste en cours.
 - Rien d'inventé ni de déduit : aucun chiffre, nom ou date qui ne soit dans le CV. L'en-tête de coordonnées n'est pas un élément.
-- Les balises comme {PRENOM} remplacent des coordonnées : garde-les telles quelles."""
+- Les balises comme {PRENOM} remplacent des coordonnées : garde-les telles quelles.
+- « niveau » est la seule chose que tu juges : le niveau de poste que ce parcours permet de viser (années d'expérience, responsabilités, encadrement), parmi Junior, Confirmé, Senior, Cadre et Direction."""
 
 
 def _prenom():
@@ -625,7 +628,11 @@ def _prenom():
 
 
 def importer_cv(reg, texte, nom="CV", c=None):
-    """Range le CV dans la base. Renvoie {"ajoutes": n, "ecartes": [titres], "doublons": n}."""
+    """Range le CV dans la base. Renvoie {"ajoutes": n, "ecartes": [titres], "doublons": n, "profil": {genre: n}}.
+
+    Les certifications et les langues du CV remplissent aussi leur onglet du profil (Réglages), où elles font
+    foi pour les dossiers : seules celles qui n'y sont pas encore s'ajoutent. Le niveau que le CV permet de
+    viser devient le niveau visé de la recherche s'il n'y en a pas encore ("niveau" du bilan)."""
     _schema(reg)
     texte = (texte or "").strip()
     if len(texte) < 80:
@@ -637,7 +644,7 @@ def importer_cv(reg, texte, nom="CV", c=None):
     bilan = {"ajoutes": 0, "ecartes": [], "doublons": 0}
     existants = {(_plat(e["genre"]), _plat(e["titre"]), _plat(e["organisation"]), e["parent"]): e["id"]
                  for e in elements(reg)}
-    ids, formations = {}, set()
+    ids, formations, pour_profil = {}, set(), []
     for el in r.objet.elements:
         if el.parent in formations:                     # une formation reste une ligne : rien dessous
             continue
@@ -654,6 +661,8 @@ def importer_cv(reg, texte, nom="CV", c=None):
             continue
         if el.genre == "formation":
             formations.add(el.ref)
+        if el.genre in ("certification", "langue"):
+            pour_profil.append(el.model_dump())
         cle = (_plat(el.genre), _plat(el.titre), _plat(el.organisation), parent)
         if cle in existants:                            # CV importé deux fois : on rattache, on ne double pas
             ids[el.ref] = existants[cle]
@@ -666,6 +675,9 @@ def importer_cv(reg, texte, nom="CV", c=None):
     reg.cx.execute("INSERT INTO parcours_documents (nom, texte, importe_le) VALUES (?,?,?)",
                    (nom or "CV", texte, maintenant()))
     reg.commit()
+    from . import profil
+    bilan["profil"] = profil.completer_depuis_cv(pour_profil)
+    bilan["niveau"] = profil.niveau_depuis_cv(r.objet.niveau)
     return bilan
 
 

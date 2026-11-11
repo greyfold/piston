@@ -35,7 +35,7 @@
 </div></header>
 {% endblock %}
 <main>
-{% if profil_manquants and not accueil and not premiers_pas_affiches and not nav.startswith(('/profil', '/connexion')) %}<div class="bandeau attention"><span class="point"></span><span>Profil incomplet ({{ profil_manquants | map('last') | join(', ') }}) : <a href="/profil">le compléter</a>.</span></div>{% endif %}
+{% if profil_manquants and not accueil and not concentre and not premiers_pas_affiches and not nav.startswith(('/profil', '/connexion')) %}<div class="bandeau attention"><span class="point"></span><span>Profil incomplet ({{ profil_manquants | map('last') | join(', ') }}) : <a href="/profil">le compléter</a>.</span></div>{% endif %}
 {% if a_configurer and not accueil and nav in ('/', '/sante') %}{% for c in a_configurer %}<div class="bandeau attention"><span class="point"></span><span>{{ c.nom }} n'est pas branché : {{ c.message }}. Les autres sources tournent normalement, et {{ c.nom }} reprendra de lui-même une fois le réglage fait. <a href="/connecteurs#{{ c.id }}">Que faire</a></span></div>{% endfor %}{% endif %}
 {# Réglages : menu à gauche, la page ouverte à droite, sur une seule colonne. #}
 {% set cadre_reglages = dans_reglages and not accueil %}

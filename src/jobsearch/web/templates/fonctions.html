@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block titre %}Fonctions · Réglages · Recherche d'emploi{% endblock %}
+{% block contenu %}
+<h1>Fonctions</h1>
+<p class="muet">Ce que la plateforme fait pour toi. Les premières s'ouvrent au fil de ta configuration ; les preuves Job-Room, c'est toi qui choisis.</p>
+
+{# Lignes de réglage : la fonction et son état à gauche, ce qui l'ouvre ou l'interrupteur à droite. #}
+<ul class="reglages-liste" id="fonctions">
+  {% for d in deblocages %}{% set ouvert = fonctions[d.id] %}
+  <li class="reglage-ligne" id="{{ d.id }}">
+    <span class="texte"><span class="titre">{{ d.titre }}
+        <span class="puce {{ 'B' if ouvert }}">{{ "ouverte" if ouvert else "fermée" }}</span></span>
+      <span class="description">{% if ouvert %}{{ d.description }}{% else %}S'ouvre avec : {% for i, libelle, lien in fonctions.manque[d.id] %}<a href="{{ lien }}"{% if i == 'ia' %} data-connexion-ia="claude" data-nom="Claude"{% endif %}>{{ libelle[:1] | lower }}{{ libelle[1:] }}</a>{{ ", " if not loop.last }}{% endfor %}.{% endif %}</span></span>
+  </li>
+  {% endfor %}
+  {% for o in options %}{% set actif = fonctions[o.id] %}
+  <li class="reglage-ligne" id="{{ o.id }}">
+    <span class="texte"><span class="titre" id="opt-{{ o.id }}">{{ o.titre }}</span>
+      <span class="description">{{ o.description }}</span></span>
+    {# Switch (Nexus) : réglage immédiat, sans bouton Enregistrer. #}
+    <form method="post" action="/fonctions/{{ o.id }}">
+      <input type="hidden" name="actif" value="{{ '0' if actif else '1' }}">
+      <button class="interrupteur{{ ' actif' if actif }}" role="switch" aria-checked="{{ 'true' if actif else 'false' }}" aria-labelledby="opt-{{ o.id }}">
+        <span class="curseur" aria-hidden="true"></span></button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+{% endblock %}

@@ -54,7 +54,7 @@ COULEUR = r"#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\("
 
 # Attributs style="…" dans les gabarits : la mise en forme passe par une classe de style.css.
 BASE_STYLE_EN_LIGNE = {
-    "_macros.html": 6, "accueil.html": 9, "ajout.html": 2, "annonce.html": 11,
+    "_macros.html": 6, "accueil.html": 7, "ajout.html": 2, "annonce.html": 11,
     "connexion.html": 2, "dossier.html": 8, "ia.html": 2,
     "registre.html": 2, "sante.html": 5, "sources.html": 16,
 }
@@ -139,12 +139,11 @@ def test_un_seul_fichier_css_et_pas_de_ressource_externe():
 
 def test_icones_par_la_macro():
     # SVG écrits à la main hors de la macro icone() : chevrons et coches dessinés avant le jeu Lucide.
-    base_svg = {"_champs_profil.html": 2, "_connexion_ia.html": 1, "accueil.html": 1, "bienvenue.html": 1,
-                "interface.html": 1}
+    base_svg = {"_champs_profil.html": 2, "_connexion_ia.html": 1, "accueil.html": 1, "bienvenue.html": 1}
     gabarits = [f for f in _gabarits() if f.name != "_macros.html"]
     _comparer(_compter(gabarits, r"<svg\b"), base_svg, "<svg> écrit à la main",
               "Utiliser icone(nom) ; une icône manquante s'ajoute à ICONES dans _macros.html.")
-    _comparer(_compter(_gabarits(), r"[⚠✕✓✗✔✘❌✅]"), {"_macros.html": 2, "profil.html": 4},
+    _comparer(_compter(_gabarits(), r"[⚠✕✓✗✔✘❌✅]"), {"_macros.html": 2},
               "glyphe utilisé comme icône", "Utiliser icone(nom).")
 
 

@@ -26,6 +26,16 @@
     {% else %}
     <div class="petit muet ligne-carte">Pour l'activer : {{ c.activer }}</div>
     {% endif %}
+    {% if c.id == "apple-mail" %}
+    <form method="post" action="/connecteurs/apple-mail/comptes" class="ligne-carte">
+      <div class="champ">
+        <label for="comptes-mail">Comptes où chercher les réponses</label>
+        <textarea id="comptes-mail" name="comptes" rows="3" spellcheck="false" aria-describedby="comptes-mail-aide">{{ comptes_mail }}</textarea>
+        <div class="aide" id="comptes-mail-aide">Le nom de chaque compte tel qu'il figure dans Mail, un par ligne.</div>
+      </div>
+      <div class="boutons"><button class="discret">Enregistrer les comptes</button></div>
+    </form>
+    {% endif %}
     <div class="boutons">
       <form method="post" action="/connecteurs/{{ c.id }}/{{ 'desactiver' if c.actif else 'activer' }}">
         <button class="{{ 'discret' if c.actif else 'go' }}">{{ "Désactiver" if c.actif else "Activer" }}</button></form>

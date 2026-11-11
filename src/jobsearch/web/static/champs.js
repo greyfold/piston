@@ -1,4 +1,4 @@
-// Champs du design system Nexus, sans React : PhoneField et DateField (mode date de naissance).
+// Champs du design system Nexus, sans React : PhoneField, DateField (mode date de naissance) et lignes répétables.
 // Même comportement que src/components/PhoneField.jsx et DateField.jsx du dépôt design-system.
 (function () {
   "use strict";
@@ -308,9 +308,95 @@
     }
   }
 
+  /* ------------------------------------------------------- Lignes répétables */
+
+  function viderLigne(ligne) { ligne.querySelectorAll("input, select").forEach(function (i) { i.value = ""; }); }
+
+  // La ligne vide du bas, ou une nouvelle, copiée de la dernière puis vidée.
+  function ligneLibre(liste) {
+    var toutes = liste.querySelectorAll("[data-ligne]"), derniere = toutes[toutes.length - 1];
+    var vide = Array.prototype.every.call(derniere.querySelectorAll("input, select"), function (i) { return !i.value.trim(); });
+    if (vide) return derniere;
+    var cible = derniere.cloneNode(true);
+    viderLigne(cible);
+    liste.appendChild(cible);
+    return cible;
+  }
+
+  function lignes(bloc) {
+    var liste = bloc.querySelector("[data-lignes]"), ajouter = bloc.querySelector("[data-ajouter-ligne]");
+    if (!liste || !ajouter) return;
+    var toutes = function () { return liste.querySelectorAll("[data-ligne]"); };
+    var vider = viderLigne;
+    ajouter.hidden = false;
+    ajouter.addEventListener("click", function () { ligneLibre(liste).querySelector("input, select").focus(); });
+    liste.addEventListener("click", function (e) {
+      var bouton = e.target.closest("[data-retirer-ligne]");
+      if (!bouton) return;
+      var ligne = bouton.closest("[data-ligne]");
+      if (toutes().length === 1) { vider(ligne); ligne.querySelector("input, select").focus(); return; }
+      var voisine = ligne.nextElementSibling || ligne.previousElementSibling;
+      ligne.remove();
+      (voisine && voisine.matches("[data-ligne]") ? voisine.querySelector("input") : ajouter).focus();
+    });
+  }
+
+  /* ------------------------------------------------ Postes proposés par l'IA */
+
+  // « Ajouter » : le poste proposé passe dans les lignes du champ « Postes recherchés », juste au-dessus.
+  function reprendrePoste(bouton) {
+    var bloc = bouton.closest("[data-postes-proposes]"), champ = bloc.previousElementSibling;
+    var liste = champ && champ.matches("[data-champ-lignes]") ? champ.querySelector("[data-lignes]") : null;
+    if (!liste) return;
+    var ligne = ligneLibre(liste), champs = ligne.querySelectorAll("input");
+    champs[0].value = bouton.getAttribute("data-intitule");
+    if (champs[1]) champs[1].value = bouton.getAttribute("data-variantes");
+    var item = bouton.closest("li"), ul = item.parentNode;
+    item.remove();
+    if (!ul.querySelector("li")) {                    // plus rien à reprendre : la liste et son titre s'en vont
+      var intro = ul.previousElementSibling;
+      if (intro && intro.matches(".champ-intro")) intro.remove();
+      ul.remove();
+    }
+    champs[0].focus();
+  }
+
+  // « Proposer des postes » : l'appel à l'IA, puis le bloc rendu par le serveur remplace l'ancien.
+  function proposerPostes(bouton) {
+    var bloc = bouton.closest("[data-postes-proposes]");
+    var attente = bloc.querySelector("[data-attente]"), erreur = bloc.querySelector("[data-erreur]");
+    bouton.disabled = true; bouton.setAttribute("aria-busy", "true");
+    attente.hidden = false; erreur.hidden = true;
+    fetch("/profil/postes/proposer", {method: "POST", credentials: "same-origin"})
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.ok) throw new Error(d.erreur || "échec");
+        var tmp = document.createElement("div");
+        tmp.innerHTML = d.html;
+        var neuf = tmp.querySelector("[data-postes-proposes]");
+        bloc.replaceWith(neuf);
+        var premier = neuf.querySelector("[data-ajouter-poste], [data-proposer-postes]");
+        if (premier) premier.focus();
+      })
+      .catch(function (e) {
+        attente.hidden = true;
+        bouton.disabled = false; bouton.removeAttribute("aria-busy");
+        erreur.hidden = false;
+        erreur.textContent = "L'IA n'a pas pu proposer de postes (" + e.message + ").";
+      });
+  }
+
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-ajouter-poste]");
+    if (b) { reprendrePoste(b); return; }
+    b = e.target.closest("[data-proposer-postes]");
+    if (b && !b.disabled) proposerPostes(b);
+  });
+
   function el(tag, classe) { var e = document.createElement(tag); if (classe) e.className = classe; return e; }
   function option(v, t, choisi) { var o = document.createElement("option"); o.value = v; o.textContent = t; o.selected = choisi; return o; }
 
   document.querySelectorAll("[data-telephone]").forEach(telephone);
   document.querySelectorAll("[data-date]").forEach(date);
+  document.querySelectorAll("[data-champ-lignes]").forEach(lignes);
 })();

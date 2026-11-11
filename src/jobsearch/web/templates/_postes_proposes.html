@@ -1,0 +1,34 @@
+{# Les postes que l'IA propose d'après le parcours, sous le champ « Postes recherchés » (_champs_profil.html).
+   Rendu aussi seul par POST /profil/postes/proposer ; champs.js lance la proposition et reprend un poste d'un clic. #}
+{% from "_macros.html" import icone %}
+<div class="champ large" data-postes-proposes>
+  {% if pp.postes %}
+  <p class="champ-intro"><span class="badge-ia">{{ icone("modele") }}Proposés par l'IA</span>
+    d'après ton parcours{% if pp.perime %}, avant ses dernières modifications{% endif %}. « Ajouter » le met dans ta liste ; enregistre ensuite.</p>
+  <ul class="reglages-liste">
+    {% for x in pp.postes %}
+    <li class="reglage-ligne">
+      <span class="texte"><span class="titre">{{ x.intitule }}</span>
+        {% if x.variantes %}<span class="description">Aussi publié comme {{ x.variantes | join(", ") }}.</span>{% endif %}
+        {% if x.appui %}<span class="description">D'après ton parcours : {{ x.appui }}</span>{% endif %}</span>
+      <button type="button" class="petit" data-ajouter-poste data-intitule="{{ x.intitule }}"
+        data-variantes="{{ x.variantes | join(', ') }}" aria-label="Ajouter {{ x.intitule }} à tes postes">{{ icone("plus") }}<span>Ajouter</span></button>
+    </li>
+    {% endfor %}
+  </ul>
+  {% elif pp.propose and pp.parcours %}
+  <p class="aide">Les postes proposés par l'IA sont tous dans ta liste.</p>
+  {% endif %}
+  {% if not pp.parcours %}
+  <p class="aide">Importe ton CV dans <a href="/parcours">Ton parcours</a> : l'IA te proposera des postes d'après ton expérience.</p>
+  {% elif ia %}
+  <div class="boutons">
+    <button type="button" class="discret petit proposer-postes" data-proposer-postes>{{ icone("plus") }}<span>{{ "Proposer d'autres postes d'après mon CV" if pp.propose else "Proposer des postes d'après mon CV" }}</span></button>
+  </div>
+  <div class="statut-ia" data-attente role="status" hidden><span class="spinner" aria-hidden="true"></span>
+    <span>L'IA lit ton parcours et cherche les postes qu'il permet de viser…</span></div>
+  <p class="flash ko" data-erreur hidden role="alert"></p>
+  {% else %}
+  <p class="aide">Connecte l'IA dans <a href="/ia">Réglages</a> : elle te proposera des postes d'après ton CV.</p>
+  {% endif %}
+</div>

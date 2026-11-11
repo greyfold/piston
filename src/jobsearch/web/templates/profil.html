@@ -1,12 +1,15 @@
 {% extends "base.html" %}
 {% from "_macros.html" import icone %}
-{% block titre %}Profil · Recherche d'emploi{% endblock %}
+{% block titre %}{{ etape.titre }} · Ma recherche{% endblock %}
 {% block contenu %}
-<h1>Profil</h1>
-<p class="muet">Ce que la plateforme sait de toi pour chercher, trier et écrire tes dossiers. Gardé sur ton ordinateur seulement. <a href="/interface">Personnaliser l'interface</a></p>
+<h1>Ma recherche</h1>
+<p class="muet">Ce que la plateforme sait de toi pour chercher, trier et écrire tes dossiers. Gardé sur ton ordinateur seulement.</p>
 
-{% if etape %}
-{% if ident == "criteres" %}{% include "_reponses_criteres.html" %}{% endif %}
+{% if a_reprendre %}
+<form method="post" action="/profil/{{ ident }}/reprendre" class="bandeau info"><span class="point"></span>
+  <span>Ton parcours contient {{ a_reprendre }} absente{{ "s" if not a_reprendre.startswith("1 ") }} de cette liste.
+    <button class="lien-neutre">Les ajouter</button></span></form>
+{% endif %}
 <form method="post" action="/profil/{{ ident }}" class="carte profil" autocomplete="on">
   <div class="titre-etape">
     <span class="pastille">{{ icone(ident) }}</span>
@@ -18,45 +21,7 @@
 
   <div class="boutons pied">
     {% if precedente %}<a class="bouton" href="/profil/{{ precedente }}">Précédent</a>{% endif %}
-    <button class="go">Enregistrer et continuer</button>
+    <button class="go">{{ "Enregistrer" if ident == etapes[-1].id else "Enregistrer et continuer" }}</button>
   </div>
 </form>
-
-{% else %}
-{% if manquants %}
-<div class="bandeau {{ 'info' if premiers_pas_affiches else 'attention' }}"><span class="point"></span><span>Encore à remplir : {% for e, libelle in manquants %}<a href="/profil/{{ e }}">{{ libelle }}</a>{{ ", " if not loop.last }}{% endfor %}.</span></div>
-{% else %}
-<div class="bandeau ok"><span class="point"></span>Profil complet. Tu peux revenir ici à tout moment.</div>
-{% endif %}
-
-<div class="cartes deux">
-{% for x in resume %}
-  <section class="carte">
-    <div class="tete"><h3>{{ x.titre }}</h3><a class="petit" href="/profil/{{ x.id }}">Modifier</a></div>
-    <dl class="champs recap">
-    {% for libelle, v in x.valeurs %}
-      <dt>{{ libelle }}</dt>
-      <dd>{% if v is string and v %}{{ v }}{% elif v is number %}{{ v }}{% elif v %}{{ v | join(", ") }}{% else %}<span class="muet">–</span>{% endif %}</dd>
-    {% endfor %}
-    </dl>
-  </section>
-{% endfor %}
-  <section class="carte">
-    <div class="tete"><h3>Fournisseur d'IA</h3><a class="petit" href="/ia">Voir</a></div>
-    <ul class="verifs">
-      <li class="{{ 'ok' if moteur.connecte else 'ko' }}"><span class="marque-verif">{{ '✓' if moteur.connecte else '✗' }}</span><span><b>Claude</b> <span class="muet">{{ moteur.message }}</span></span></li>
-    </ul>
-  </section>
-  <section class="carte">
-    <div class="tete"><h3>Clés d'accès</h3><a class="petit" href="/sante#cles">Voir</a></div>
-    <ul class="verifs">
-    {% for c in cles %}
-      <li class="{{ 'ok' if c.presente else 'ko' }}"><span class="marque-verif">{{ '✓' if c.presente else '✗' }}</span><span><b>{{ c.nom }}</b>{% if not c.presente %} <span class="muet">à saisir sur la page Santé, depuis le Mac</span>{% endif %}</span></li>
-    {% endfor %}
-    </ul>
-  </section>
-</div>
-<div class="boutons pied">{% if precedente %}<a class="bouton" href="/profil/{{ precedente }}">Précédent</a>{% endif %}
-  <a class="bouton go" href="/">Aller au tableau de bord</a></div>
-{% endif %}
 {% endblock %}

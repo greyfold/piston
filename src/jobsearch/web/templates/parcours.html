@@ -98,7 +98,7 @@
         <div><p class="fort">L'IA range ton CV…</p><p>Une à deux minutes. Garde cette page ouverte.</p></div></div>
       <p class="flash ko" data-erreur hidden role="alert"></p>
       <div class="actions-accueil">
-        <a class="lien-neutre" href="/premiers-pas/dossier?formulaire=1">Réglages du dossier, à la main</a>
+        <span></span>
         <button class="go grand" {% if not ia %}disabled{% endif %}>Importer mon CV</button>
       </div>
     </form>
@@ -226,7 +226,6 @@
           <div class="actions-el"><button class="lien-danger">Vider le parcours</button></div>
         </form>
       </details>
-      <p class="petit muet"><a href="/premiers-pas/dossier?formulaire=1">Réglages du dossier</a> : différenciateur, règles particulières, certifications, pages du CV.</p>
     </div>
   </dialog>
 {% endif %}
@@ -314,6 +313,11 @@
     });
     envoyer(imp, "/parcours/importer", function (d) {
       var m = d.ajoutes + " éléments rangés" + (d.ecartes.length ? " ; " + d.ecartes.length + " écartés, introuvables mot pour mot dans le CV" : "") + ".";
+      var p = d.profil || {}, ajouts = [];
+      if (p.certification) ajouts.push(p.certification + (p.certification > 1 ? " certifications" : " certification"));
+      if (p.langue) ajouts.push(p.langue + (p.langue > 1 ? " langues" : " langue"));
+      if (d.niveau) ajouts.push("le niveau visé (" + d.niveau + ")");
+      if (ajouts.length) m += " Ajouté à tes réglages : " + ajouts.join(" et ") + ".";
       return "/parcours?ok=1&msg=" + encodeURIComponent(m);
     }, "");
   }

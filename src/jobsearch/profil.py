@@ -5,11 +5,11 @@ tableau de bord. C'est ce qui rend la plateforme utilisable par quelqu'un d'autr
 le nom, la ville, les critères et les angles des consignes Claude viennent d'ici,
 plus du code.
 
-Ce qui existe déjà dans `config/settings.yaml` ou `config/criteres.yaml` (objectifs, listes du sourcing, lieux LinkedIn et Indeed, mots des intitulés) n'est
-écrit dans le profil que
-s'il en diffère : les fichiers de config donnent les valeurs par défaut, le profil
+Ce qui existe déjà dans `config/settings.yaml` ou `config/criteres.yaml` (objectifs, listes du sourcing,
+postes recherchés) n'est écrit dans le profil que s'il en diffère : les fichiers de config donnent les valeurs par défaut, le profil
 ce qui est propre à la personne, et `config.reglages()` / `config.criteres()`
-rendent la superposition des deux. Les règles du pré-tri restent dans
+rendent la superposition des deux. Des postes recherchés se déduisent les requêtes de chaque
+plateforme, les recherches LinkedIn et les mots des intitulés du pré-tri ; des cantons, les lieux jobup et Indeed et la région ; de l'adresse, le lieu LinkedIn. Les règles du pré-tri restent dans
 `criteres.yaml` : le profil n'en garde que celles qu'il désactive, et ses propres mots
 d'intitulés à écarter, sans expression régulière à écrire.
 
@@ -27,17 +27,51 @@ import yaml
 from . import config, pays, telephone
 
 
+# Les niveaux de poste que la recherche peut viser : la liste du champ et ce que l'import du CV peut en déduire.
+NIVEAUX = ["Junior", "Confirmé", "Senior", "Cadre", "Direction"]
+
+
+def niveau_connu(v):
+    """Le niveau de NIVEAUX qu'une valeur désigne, majuscules et espaces ignorés ; "" sinon."""
+    v = re.sub(r"\s+", " ", str(v or "")).strip().lower()
+    return next((n for n in NIVEAUX if n.lower() == v), "")
+
+
 def champ(cle, libelle, type="texte", requis=False, aide="", exemple="", choix=None, prefixe="",
-          en_tete=None, vide="—", virgules=False):
+          en_tete=None, vide="—", virgules=False, large=False, colonnes=None, section=""):
     """Un champ de l'assistant. `choix` : la liste d'une liste déroulante, `en_tete` : les choix
     proposés d'abord, `vide` : le libellé de l'option sans valeur, `prefixe` : le début fixe d'une adresse.
     Types de liste : « liste » (une par ligne), « liste_choix » (pilules à cocher et un champ pour en ajouter,
-    séparées par des virgules si `virgules`), « criteres » (les critères structurés, CRITERES)."""
+    séparées par des virgules si `virgules`), « criteres » (les critères structurés, CRITERES), « postes »
+    (une ligne par poste : son intitulé et ses autres intitulés, POSTES), « lignes » (une ligne par élément, une
+    case par colonne de `colonnes` : [(sous-clé, libellé, exemple)] ; enregistrée « a | b | c », comme « liste »).
+    `large` : toute la largeur du formulaire. `section` : un titre de section montré avant le champ."""
     return {"cle": cle, "libelle": libelle, "type": type, "requis": requis, "aide": aide, "exemple": exemple,
-            "choix": choix or [], "prefixe": prefixe, "en_tete": en_tete or [], "vide": vide, "virgules": virgules}
+            "choix": choix or [], "prefixe": prefixe, "en_tete": en_tete or [], "vide": vide, "virgules": virgules,
+            "large": large, "colonnes": colonnes or [], "section": section}
 
 
 LINKEDIN = "https://www.linkedin.com/in/"
+
+# Niveaux de langue proposés : l'échelle européenne (CECR), qui sert aussi à s'évaluer soi-même ; un niveau
+# choisi n'est pas un certificat (colonne « Attesté par » pour celui qui en a un).
+NIVEAUX_LANGUE = ["Langue maternelle", "Bilingue", "Maîtrise (C2)", "Courant (C1)", "Avancé (B2)",
+                  "Intermédiaire (B1)", "Élémentaire (A2)", "Débutant (A1)"]
+
+
+def niveau_langue(v):
+    """Le niveau proposé qu'une saisie désigne sans rien y ajouter : « courant (C1) », « C1 », « c1 courant »,
+    « maternelle » ; sinon la saisie telle quelle (« notions » ne devient pas un niveau du CECR)."""
+    from .prefilter import plier
+    v = re.sub(r"\s+", " ", str(v or "")).strip()
+    cle = " ".join(re.findall(r"[a-z0-9]+", plier(v)))
+    for n in NIVEAUX_LANGUE:
+        m = re.fullmatch(r"(.+) \((\w\d)\)", n)
+        mot, code = (plier(m.group(1)), m.group(2).lower()) if m else (plier(n), None)
+        formes = {mot, plier(n).split()[-1]} if not code else {code, mot + " " + code, code + " " + mot}
+        if cle in formes:
+            return n
+    return v
 
 
 ETAPES = [
@@ -68,27 +102,16 @@ ETAPES = [
     {"id": "recherche", "titre": "Recherche",
      "intro": "Ce que le passage du matin cherche, et ce que le pré-tri écarte d'office.",
      "champs": [
-         champ("recherche.niveau", "Niveau visé", exemple="senior", aide="Repris dans la consigne de notation."),
-         champ("recherche.region", "Région visée", exemple="Suisse romande",
-               aide="Sert aussi à estimer le salaire du marché pour chaque annonce."),
-         champ("recherche.cantons", "Cantons", type="liste", requis=True,
-               aide="Abréviations, une par ligne (VD, GE…). Une annonce hors de ces cantons est écartée."),
-         champ("recherche.jobup_lieux", "Lieux jobup", type="liste",
-               aide="Cantons ou villes, écrits comme jobup les connaît (Vaud, Genève…)."),
-         champ("recherche.requetes", "Requêtes", type="liste", requis=True,
-               aide="Une recherche par ligne, lancée sur chaque plateforme."),
+         champ("recherche.niveau", "Niveau visé", type="choix", choix=NIVEAUX, vide="Non précisé", large=True,
+               aide="Déduit de ton CV à son import ; corrige-le si besoin. Repris dans la consigne de notation."),
+         champ("recherche.cantons", "Cantons", type="cantons", requis=True,
+               aide="Chaque plateforme cherche dans ces cantons ; une annonce hors de ces cantons est écartée."),
+         champ("recherche.postes", "Postes recherchés", type="postes", requis=True,
+               aide="Un poste par ligne, avec les autres intitulés sous lesquels il est publié. Chaque intitulé est "
+                    "cherché sur chaque plateforme ; sur LinkedIn, un poste fait une seule recherche, ses intitulés "
+                    "reliés par « OR ». Une annonce dont le titre ne contient aucun de leurs mots est écartée."),
          champ("recherche.entreprises", "Entreprises visées", type="liste",
                aide="Une recherche de plus par entreprise nommée."),
-         champ("recherche.familles", "Mots des intitulés visés", type="liste", requis=True,
-               aide="Un intitulé qui ne contient aucun de ces mots est écarté d'office. Un mot ou une expression "
-                    "par ligne, sans accents ni majuscules."),
-         champ("recherche.linkedin_requetes", "Requêtes LinkedIn", type="liste",
-               aide="Une par ligne, dans la syntaxe de LinkedIn (« OR » entre les variantes). "
-                    "Chaque requête est un run Apify payant."),
-         champ("recherche.linkedin_lieu", "Lieu LinkedIn", exemple="Lausanne, Vaud, Switzerland",
-               aide="Écrit comme LinkedIn le propose dans sa recherche."),
-         champ("recherche.indeed_lieux", "Lieux Indeed", type="liste",
-               aide="Villes, une par ligne : chaque requête est lancée dans chaque lieu."),
      ]},
     {"id": "pretri", "titre": "Pré-tri",
      "intro": "Ce que le pré-tri écarte d'office, avant toute note. Une case décochée désactive la règle : "
@@ -102,43 +125,54 @@ ETAPES = [
                     "le retirer."),
      ]},
     {"id": "criteres", "titre": "Critères",
-     "intro": "Ce que Claude vérifie en notant chaque annonce. Aucun montant ici : le salaire minimum "
-              "visé n'est écrit nulle part.",
+     "intro": "Ce que l'IA vérifie en notant chaque annonce ; laisse vide ce qui t'est égal. Une annonce qui viole "
+              "clairement un critère est notée 40 au plus. Aucun montant de salaire ici.",
      "champs": [
-         champ("evaluation.criteres", "Critères non négociables", type="criteres", requis=True,
-               aide="Un champ par critère ; laisse vide ce qui t'est égal. Une annonce qui en viole un clairement "
-                    "est notée 40 au plus."),
+         champ("evaluation.criteres", "Critères non négociables", type="criteres", requis=True),
          champ("evaluation.activites", "Activités qui doivent occuper l'essentiel du temps", type="liste_choix",
-               virgules=True, exemple="ajouter des activités, séparées par des virgules"),
-         champ("evaluation.interet", "Ce qui rend un poste intéressant", exemple="un produit utile, de l'autonomie…"),
+               virgules=True, exemple="ajouter des activités, séparées par des virgules",
+               section="Ce qui rend un poste intéressant"),
+         champ("evaluation.interet", "En quelques mots", exemple="un produit utile, de l'autonomie…", large=True),
          champ("evaluation.angles", "Angles de candidature", type="liste_choix", exemple="ajouter un angle",
-               aide="Les façons de te présenter : Claude en propose une par annonce."),
+               aide="Les façons de te présenter : l'IA en propose une par annonce.", section="Pour te présenter"),
      ]},
-    {"id": "dossier", "titre": "Dossier",
-     "intro": "Ce que Claude suit en écrivant le CV et la lettre, en plus de la méthode de base.",
+    # Certifications et langues : remplies à l'import du CV (`completer_depuis_cv`), corrigées ici.
+    {"id": "certifications", "titre": "Certifications",
+     "intro": "Remplies à l'import de ton CV, dans Ton parcours. Corrige-les ici : elles font foi dans chaque CV.",
      "champs": [
-         champ("dossier.differenciateur", "Différenciateur", exemple="IA",
-               aide="Le troisième paragraphe de chaque lettre le met en avant."),
-         champ("dossier.regles", "Règles particulières", type="liste",
-               aide="Une consigne par ligne (Brevet en cours : dans la formation, pas dans les certifications)."),
-         champ("dossier.certifications", "Certifications", type="liste",
-               exemple="Certified Data Professional | The Analytics Institute | 02.2025",
-               aide="Une par ligne : nom | organisme | MM.AAAA. Elles font foi dans chaque CV, à la place de celles "
-                    "du CV maître ; un même nom n'est gardé qu'une fois."),
-         champ("dossier.pages_cv", "Pages du CV au plus", type="nombre", exemple="2",
-               aide="Un CV plus long est raccourci par Claude jusqu'à tenir sur ce nombre de pages A4 (2 si vide)."),
+         champ("dossier.certifications", "Certifications obtenues", type="lignes",
+               colonnes=[("titre", "Titre de la certification", "Certified Data Professional"),
+                         ("organisme", "Organisme", "The Analytics Institute"),
+                         ("date", "Obtenue en", "MM.AAAA")],
+               aide="Une ligne par certification : son titre, l'organisme qui l'a délivrée et le mois où tu l'as "
+                    "obtenue (MM.AAAA, ou l'année seule). Elles remplacent celles du CV maître ; un même titre "
+                    "n'est gardé qu'une fois."),
      ]},
-    {"id": "objectifs", "titre": "Objectifs et courrier",
-     "intro": "Le rythme de postulation à tenir, et les comptes où chercher les réponses des employeurs.",
+    {"id": "langues", "titre": "Langues",
+     "intro": "Les langues que tu parles, remplies à l'import de ton CV, dans Ton parcours. Corrige-les ici : "
+              "elles font foi dans chaque CV.",
+     "champs": [
+         champ("dossier.langues", "Langues parlées", type="lignes",
+               colonnes=[("langue", "Langue", "Anglais"), ("niveau", "Niveau", "Choisir un niveau", NIVEAUX_LANGUE),
+                         ("attestation", "Attesté par (facultatif)", "Cambridge C1 Advanced, 2022")],
+               aide="Le niveau est ton estimation, sur l'échelle européenne : pas besoin d'un certificat pour le "
+                    "choisir. Si un diplôme ou un test l'atteste, indique-le : sans lui, le CV ne parle d'aucun "
+                    "certificat. Une même langue n'est gardée qu'une fois ; ces lignes remplacent celles du CV maître."),
+     ]},
+    # Le différenciateur vient de l'entretien « Ce qui compte pour toi » ; les règles particulières et le
+    # nombre de pages du CV (`dossier.*`) restent lus s'ils sont dans le profil, sans onglet pour les saisir.
+    {"id": "objectifs", "titre": "Objectifs de postulation",
+     "intro": "Le rythme de postulation à tenir, par semaine, par mois, ou les deux : suivi sur le tableau de "
+              "bord, avec un rappel le vendredi si l'objectif de la semaine n'est pas atteint. Vide : pas de suivi.",
      "champs": [
          champ("objectifs.semaine_min", "Objectif par semaine", type="nombre",
                aide="Nombre de postulations, du lundi au dimanche. Facultatif : vide, pas d'objectif."),
          champ("objectifs.mois_min", "Objectif par mois", type="nombre",
                aide="Nombre de postulations dans le mois civil. Facultatif : vide, pas d'objectif."),
-         champ("courrier.comptes", "Comptes Apple Mail", type="liste",
-               aide="Les comptes où chercher les réponses des employeurs, un par ligne."),
      ]},
 ]
+# Les comptes Apple Mail se choisissent sur la page Connecteurs (`poser_comptes_courrier`).
+COMPTES_COURRIER = "courrier.comptes"
 
 # Clé du profil → (fichier de config qu'elle remplace, clé dans ce fichier).
 SUPERPOSES = {
@@ -146,14 +180,12 @@ SUPERPOSES = {
     "objectifs.mois_min": ("reglages", "objectifs.mois_min"),
     "courrier.comptes": ("reglages", "courrier.comptes"),
     "recherche.cantons": ("criteres", "sourcing.cantons"),
-    "recherche.jobup_lieux": ("criteres", "sourcing.jobup_lieux"),
-    "recherche.requetes": ("criteres", "sourcing.requetes"),
     "recherche.entreprises": ("criteres", "sourcing.entreprises"),
-    "recherche.familles": ("criteres", "familles_cibles"),
-    "recherche.linkedin_requetes": ("criteres", "sourcing.linkedin_requetes"),
-    "recherche.linkedin_lieu": ("criteres", "sourcing.linkedin_lieu"),
-    "recherche.indeed_lieux": ("reglages", "indeed.lieux"),
 }
+POSTES = "recherche.postes"            # requêtes, recherches LinkedIn et mots du pré-tri en sont déduits
+# Clés d'avant les postes : lues tant que le profil n'a pas de postes, retirées à son premier enregistrement.
+ANCIENNES = ["recherche.requetes", "recherche.familles", "recherche.linkedin_requetes", "recherche.indeed_lieux",
+             "recherche.jobup_lieux", "recherche.region", "recherche.linkedin_lieu"]
 REGLES_HORS_CHOIX = {"canton"}          # suit les cantons de l'étape Recherche
 REGLE_MOTS = "titre-profil"
 FICHIERS_CONFIG = {"reglages": "settings.yaml", "criteres": "criteres.yaml"}
@@ -226,14 +258,13 @@ def enregistrer_recherche(valeur_objectif, poste, cantons):
     p = copy.deepcopy(charger())
     if not existe():
         p[ACCUEIL] = "en_cours"
-    requetes = lire(p, "recherche.requetes") or []
-    _poser(p, "recherche.requetes", [poste] + [q for q in requetes if q.lower() != poste.lower()])
+    # Le poste passe en tête des postes recherchés ; ses mots deviennent ceux du pré-tri (postes()).
+    ps = postes_saisis(p)
+    meme = next((x for x in ps if x["intitule"].lower() == poste.lower()), {"intitule": poste, "variantes": []})
+    _poser(p, POSTES, [meme] + [x for x in ps if x is not meme])
+    for cle in ANCIENNES:
+        _retirer(p, cle)
     _poser(p, "recherche.cantons", cantons)
-    _poser(p, "recherche.jobup_lieux", [pays.CANTONS[c] for c in cantons])
-    # Les mots de l'intitulé deviennent les mots des intitulés visés : le tri garde les annonces
-    # dont le titre en contient un (« Product designer » → product, designer).
-    familles = lire(p, "recherche.familles") or []
-    _poser(p, "recherche.familles", familles + [m for m in mots_intitule(poste) if m not in familles])
     off = [i for i in (lire(p, "exclusions.desactivees") or []) if i not in REGLES_OBJECTIF] + o["desactive"]
     if off:
         _poser(p, "exclusions.desactivees", off)
@@ -243,14 +274,134 @@ def enregistrer_recherche(valeur_objectif, poste, cantons):
     return p
 
 
-MOTS_VIDES = {"de", "du", "des", "la", "le", "les", "et", "en", "au", "aux", "pour", "un", "une", "of", "and", "the",
-              "for", "in", "h", "f", "m", "w", "d", "hf", "fh", "mw", "wm", "e"}
+MOTS_VIDES = {"de", "du", "des", "la", "le", "les", "et", "ou", "en", "au", "aux", "pour", "par", "sur", "avec",
+              "un", "une", "of", "and", "or", "the", "for", "in", "on", "at", "to", "with",
+              "h", "f", "m", "w", "d", "hf", "fh", "mw", "wm", "mwd", "wmd", "e"}
 
 
 def mots_intitule(poste):
+    """Les mots d'un intitulé qui comptent pour le pré-tri : « UX designer (H/F) » → ux, designer."""
     from .prefilter import plier
-    mots = re.findall(r"[a-z0-9]+", plier(poste or ""))
-    return list(dict.fromkeys(m for m in mots if len(m) >= 3 and m not in MOTS_VIDES))
+    mots = re.findall(r"[a-z0-9]+", plier(poste or "").lower())
+    return list(dict.fromkeys(m for m in mots if len(m) >= 2 and m not in MOTS_VIDES))
+
+
+# --- Postes recherchés : ce que le sourcing et le pré-tri en tirent ----------------------
+
+
+def _intitule(t):
+    return re.sub(r"\s+", " ", str(t or "")).strip().strip(",;")[:120]
+
+
+def normaliser_postes(v):
+    """[{intitule, variantes}] : chaque intitulé une seule fois, d'un poste à l'autre ; une chaîne vaut un poste."""
+    vus, out = set(), []
+    for x in v or []:
+        x = {"intitule": x} if isinstance(x, str) else dict(x or {})
+        titres = []
+        for t in [x.get("intitule")] + list(x.get("variantes") or []):
+            t = _intitule(t)
+            if t and t.lower() not in vus:
+                vus.add(t.lower())
+                titres.append(t)
+        if titres:
+            out.append({"intitule": titres[0], "variantes": titres[1:]})
+    return out
+
+
+def postes_saisis(p=None):
+    """Les postes du profil seul (ou ses anciennes requêtes, un poste chacune) ; [] s'il n'en a pas."""
+    p = charger() if p is None else p
+    v = lire(p, POSTES)
+    return normaliser_postes(lire(p, "recherche.requetes") if v is None else v)
+
+
+def postes_de_base():
+    return normaliser_postes(lire(config.lire_yaml("criteres.yaml"), "sourcing.requetes") or [])
+
+
+def postes(p=None):
+    """Les postes recherchés qui s'appliquent : ceux du profil, sinon les requêtes de config/."""
+    p = charger() if p is None else p
+    return postes_saisis(p) or postes_de_base()
+
+
+def intitules(ps):
+    """Tous les intitulés, variantes comprises : une recherche chacun sur chaque plateforme."""
+    return [t for x in ps for t in [x["intitule"]] + list(x.get("variantes") or [])]
+
+
+def requete_linkedin(x):
+    """Un poste, une recherche LinkedIn (un run payant) : ses intitulés entre guillemets, reliés par « OR »."""
+    titres = [x["intitule"]] + list(x.get("variantes") or [])
+    return titres[0] if len(titres) == 1 else " OR ".join('"%s"' % t.replace('"', "") for t in titres)
+
+
+def mots_postes(ps):
+    """Les mots des intitulés visés : une annonce dont le titre n'en contient aucun est écartée."""
+    return list(dict.fromkeys(m for t in intitules(ps) for m in mots_intitule(t)))
+
+
+def lieux_cantons(p=None):
+    """Les noms des cantons choisis (« Vaud »), tels que jobup et Indeed les attendent comme lieu."""
+    p = charger() if p is None else p
+    cantons = lire(p, "recherche.cantons") or lire(config.lire_yaml("criteres.yaml"), "sourcing.cantons") or []
+    return [pays.CANTONS[c] for c in cantons if c in pays.CANTONS]
+
+
+def region(p=None):
+    """La région visée, déduite des cantons choisis : consigne et salaire du marché. Sans canton, la région
+    d'avant (champ retiré, effacée au prochain enregistrement de la recherche), sinon le pays du profil."""
+    p = charger() if p is None else p
+    return (pays.region_des_cantons(lire(p, "recherche.cantons")) or lire(p, "recherche.region")
+            or identite(p).get("pays") or "")
+
+
+def niveau_depuis_cv(niveau):
+    """Le niveau que l'import du CV en déduit, posé s'il n'y en a pas encore : un niveau déjà écrit, corrigé
+    à la main, reste. Renvoie le niveau posé, "" sinon."""
+    niveau = niveau_connu(niveau)
+    p = copy.deepcopy(charger())
+    if not niveau or lire(p, "recherche.niveau"):
+        return ""
+    if not existe():
+        p[ACCUEIL] = "en_cours"
+    _poser(p, "recherche.niveau", niveau)
+    ecrire(p)
+    return niveau
+
+
+def lieu_linkedin(p=None):
+    """Où LinkedIn cherche : la localité de l'adresse du profil et son pays, en anglais comme LinkedIn
+    l'écrit (« Lausanne, Switzerland ») ; "" sans localité."""
+    p = charger() if p is None else p
+    i = identite(p)
+    ville = i.get("ville") or ""
+    pays_ = i.get("pays") or pays.pays_detecte()
+    return ", ".join(x for x in (ville, pays.EN_ANGLAIS.get(pays_, pays_)) if x) if ville else ""
+
+
+def lieux_indeed(p=None):
+    """Où lancer chaque recherche Indeed : les cantons choisis, sinon la localité du profil."""
+    p = charger() if p is None else p
+    ville = identite(p).get("ville")
+    return lieux_cantons(p) or ([ville] if ville else [])
+
+
+def postes_du_formulaire(f, cle=POSTES):
+    """Les lignes du champ : `cle.intitule` et `cle.variantes` (formulaire web, une ligne par poste),
+    sinon `cle` lui-même, liste de postes ou texte « intitulé | variante, variante » par ligne."""
+    brut = f.get(cle)
+    if isinstance(brut, list):
+        return normaliser_postes(brut)
+    if isinstance(brut, str):
+        lignes = [l.split("|", 1) + [""] for l in brut.splitlines()]
+        return normaliser_postes({"intitule": a, "variantes": re.split(r"[,;]", b)} for a, b, *_ in lignes)
+    liste = lambda n: (f.getlist(n) if hasattr(f, "getlist") else [f.get(n)] if isinstance(f.get(n), str)
+                       else list(f.get(n) or []))
+    intit, var = liste(cle + ".intitule"), liste(cle + ".variantes")
+    var += [""] * (len(intit) - len(var))
+    return normaliser_postes({"intitule": i, "variantes": re.split(r"[,;]", v or "")} for i, v in zip(intit, var))
 
 
 # Les tâches de la checklist : chacune est un seul écran, avec les seuls champs qu'elle demande.
@@ -262,7 +413,7 @@ TACHES = {
     "criteres": {"titre": "Ce qui compte pour toi", "etapes": ["criteres"], "icone": "criteres", "entretien": True,
                  "intro": "L'IA note chaque annonce d'après ces critères, comme tu le ferais. "
                           "Tu pourras les ajuster quand tu veux."},
-    "dossier": {"titre": "Ton parcours", "etapes": ["dossier"], "icone": "dossier", "entretien": True,
+    "dossier": {"titre": "Ton parcours", "etapes": [], "icone": "dossier", "entretien": True,
                 "intro": "La matière de tes CV et de tes lettres : l'IA n'écrit que ce que tu as vraiment fait."},
 }
 
@@ -298,13 +449,13 @@ def _taches_checklist(p, ia_connectee):
     ids_manquants = {e for e, _ in manquants(p)}
     saisie = lambda *etapes: all(e not in ids_manquants for e in etapes) and any(
         lire(p, c["cle"]) not in (None, "", []) for e in etapes for c in etape(e)["champs"])
-    recherche = bool(lire(p, "recherche.requetes")) and bool(lire(p, "recherche.cantons"))
+    recherche = bool(postes_saisis(p)) and bool(lire(p, "recherche.cantons"))
     return [
         ("ia", "Connecter ton IA", "Pour noter les annonces et écrire tes dossiers", "1 min", "/ia", ia_connectee),
         ("recherche", "Définir ta recherche", "Ce que la plateforme cherche chaque matin", "1 min", "/profil/recherche", recherche),
         ("identite", "Tes coordonnées", "En tête de tes CV et lettres, et pour les formulaires", "2 min", "/premiers-pas/identite", saisie("identite")),
         ("dossier", "Ton parcours", "Ton CV, puis un entretien avec l'IA sur chaque poste : des CV et des lettres "
-         "fidèles à ton expérience", "15 min", "/premiers-pas/dossier", saisie("dossier") or _parcours_termine()),
+         "fidèles à ton expérience", "15 min", "/premiers-pas/dossier", _parcours_termine()),
         ("criteres", "Ce qui compte pour toi", "Quelques questions à cliquer, pour que l'IA note les annonces "
          "comme tu le ferais", "5 min", "/premiers-pas/criteres", saisie("criteres")),
     ]
@@ -320,20 +471,22 @@ def _parcours_termine():
 
 # --- Ce que l'interface montre : avancement de la configuration et options -------------
 
-# Options d'interface, au choix de la personne (page « Ton interface »).
+# Fonctions au choix de la personne (page « Fonctions »).
 OPTIONS = [
     {"id": "jobroom", "titre": "Preuves de recherche Job-Room",
      "description": "Pour l'ORP : la plateforme prépare la saisie de chaque postulation dans Job-Room et te rappelle les délais."},
-    {"id": "objectifs", "titre": "Objectifs de postulations",
-     "description": "Un nombre de postulations par semaine, par mois, ou les deux, au choix : suivi sur le tableau "
-                    "de bord, avec un rappel le vendredi si l'objectif de la semaine n'est pas atteint."},
 ]
+# Le suivi des objectifs n'a pas d'interrupteur : il suit les objectifs saisis dans « Ma recherche ».
+OPTION_OBJECTIFS = "objectifs"
 
 # Ce que chaque fonction demande d'avoir configuré (identifiants de la checklist).
 DEBLOCAGES = [
-    {"id": "offres", "titre": "Voir les offres trouvées", "demande": ["recherche"]},
-    {"id": "noter", "titre": "La note de chaque annonce", "demande": ["ia", "criteres"]},
-    {"id": "postuler", "titre": "Postuler : CV, lettre et suivi", "demande": ["ia", "identite", "dossier"]},
+    {"id": "offres", "titre": "Voir les offres trouvées", "demande": ["recherche"],
+     "description": "Les annonces trouvées chaque matin sur tes sources, triées par le pré-tri."},
+    {"id": "noter", "titre": "La note de chaque annonce", "demande": ["ia", "criteres"],
+     "description": "L'IA note chaque annonce d'après ce qui compte pour toi."},
+    {"id": "postuler", "titre": "Postuler : CV, lettre et suivi", "demande": ["ia", "identite", "dossier"],
+     "description": "Un CV et une lettre préparés pour chaque annonce retenue, puis le suivi des réponses."},
 ]
 
 
@@ -345,6 +498,8 @@ def progressif(p=None):
 
 
 def option(nom, p=None):
+    if nom == OPTION_OBJECTIFS:                            # actif dès qu'un objectif est saisi
+        return any(objectifs_rythme().values())
     p = charger() if p is None else p
     v = lire(p, "interface." + nom)
     return (not progressif(p)) if v is None else bool(v)
@@ -362,6 +517,7 @@ def fonctions(p=None, ia_connectee=False):
     """{fonction: ouverte} et, pour chacune, ce qui manque : [(id, libellé, lien)]."""
     p = charger() if p is None else p
     out = {o["id"]: option(o["id"], p) for o in OPTIONS}
+    out[OPTION_OBJECTIFS] = option(OPTION_OBJECTIFS, p)
     if not progressif(p):
         out.update({d["id"]: True for d in DEBLOCAGES})
         out["manque"] = {d["id"]: [] for d in DEBLOCAGES}
@@ -385,7 +541,7 @@ def objectifs_rythme():
 
 
 def enregistrer_objectifs(semaine, mois):
-    """Les objectifs seuls (page « Ton interface ») : chacun facultatif, vide = aucun."""
+    """Les objectifs seuls (entretien « Ce qui compte pour toi ») : chacun facultatif, vide = aucun."""
     p = copy.deepcopy(charger())
     champs = {c["cle"]: c for e in ETAPES for c in e["champs"] if c["cle"] in OBJECTIFS_RYTHME}
     valeurs = {}
@@ -415,6 +571,28 @@ def poser_valeur(cle, valeur):
     ecrire(p)
 
 
+def poser_comptes_courrier(texte):
+    """Les comptes Apple Mail où chercher les réponses des employeurs (page Connecteurs), un par ligne.
+    Les mêmes que config/ : retirés du profil, le fichier de config reste maître."""
+    vus, comptes = set(), []
+    for ligne in str(texte or "").splitlines():
+        ligne = re.sub(r"\s+", " ", ligne).strip()
+        if ligne and ligne.casefold() not in vus:
+            vus.add(ligne.casefold())
+            comptes.append(ligne)
+    p = copy.deepcopy(charger())
+    if _egal_base(COMPTES_COURRIER, comptes):
+        _retirer(p, COMPTES_COURRIER)
+    else:
+        _poser(p, COMPTES_COURRIER, comptes)
+    ecrire(p)
+    return comptes
+
+
+def comptes_courrier(p=None):
+    return list(effectif(COMPTES_COURRIER, p) or [])
+
+
 def masquer_premiers_pas():
     p = copy.deepcopy(charger())
     if p.get(PREMIERS_PAS):
@@ -426,12 +604,20 @@ def existe():
     return config.chemin_profil().exists()
 
 
+# Clés qui ne s'appliquent plus : ignorées à la lecture, donc retirées du fichier au prochain enregistrement.
+# Règles particulières et pages du CV : l'onglet Dossier n'existe plus ; objectifs : plus d'interrupteur.
+OBSOLETES = ["dossier.regles", "dossier.pages_cv", "interface.objectifs"]
+
+
 @lru_cache
 def charger():
     p = config.chemin_profil()
     if not p.exists():
         return {}
-    return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    d = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    for cle in OBSOLETES:
+        _retirer(d, cle)
+    return d
 
 
 def lire(d, cle, defaut=None):
@@ -462,22 +648,16 @@ def _retirer(d, cle):
             parent.pop(k)
 
 
-def familles_en_liste(motif):
-    """« \\b(ux|design|…)\\b » (familles_cibles de criteres.yaml) → ["ux", "design", …]."""
-    motif = re.sub(r"\s*\|\s*", "|", (motif or "").strip())
-    m = re.fullmatch(r"\\b\((.*)\)\\b", motif, re.S)
-    return [w.strip() for w in (m.group(1) if m else motif).split("|") if w.strip()]
-
-
 def familles_en_motif(mots):
     return r"\b(%s)\b" % "|".join(mots)
 
 
 def base(cle):
     """La valeur par défaut d'une clé superposée, lue dans config/ (sans le profil)."""
+    if cle == POSTES:
+        return postes_de_base()
     fichier, cible = SUPERPOSES[cle]
-    v = lire(config.lire_yaml(FICHIERS_CONFIG[fichier]), cible)
-    return familles_en_liste(v) if cle == "recherche.familles" else v
+    return lire(config.lire_yaml(FICHIERS_CONFIG[fichier]), cible)
 
 
 def _regle_cantons(c, cantons):
@@ -528,9 +708,20 @@ def appliquer(defauts, fichier, p=None):
         v = lire(p, cle)
         if f != fichier or v is None:
             continue
-        _poser(out, cible, familles_en_motif(v) if cle == "recherche.familles" else v)
+        _poser(out, cible, v)
+    ps = postes_saisis(p)
+    if fichier == "criteres" and ps:
+        _poser(out, "sourcing.requetes", intitules(ps))
+        _poser(out, "sourcing.linkedin_requetes", [requete_linkedin(x) for x in ps])
+        mots = mots_postes(ps)
+        out["familles_cibles"] = familles_en_motif(mots) if mots else ""
+    if fichier == "reglages" and not lire(out, "indeed.lieux"):
+        _poser(out, "indeed.lieux", lieux_indeed(p))
     if fichier == "criteres" and lire(p, "recherche.cantons"):
         _regle_cantons(out, lire(p, "recherche.cantons"))
+        _poser(out, "sourcing.jobup_lieux", lieux_cantons(p))      # jobup cherche canton par canton
+    if fichier == "criteres" and lieu_linkedin(p):
+        _poser(out, "sourcing.linkedin_lieu", lieu_linkedin(p))    # l'adresse du profil
     if fichier == "criteres":
         _exclusions(out, p)
     return out
@@ -559,6 +750,8 @@ def effectif(cle, p=None):
     if cle == "exclusions.regles":                 # les règles actives ; le profil garde les désactivées
         off = set(lire(p, "exclusions.desactivees") or [])
         return [i for i in _ids_au_choix() if i not in off]
+    if cle == POSTES:
+        return postes(p)
     v = lire(p, cle)
     if v is None and cle in SUPERPOSES:
         v = base(cle)
@@ -573,6 +766,8 @@ def affiche(c, p=None):
         return "toutes" if not off else "toutes sauf : " + ", ".join(off)
     if c["type"] == "criteres":
         return lignes_criteres(criteres_structures(p))
+    if c["type"] == "postes":
+        return [x["intitule"] + (" (%s)" % ", ".join(x["variantes"]) if x["variantes"] else "") for x in v]
     return v
 
 
@@ -636,29 +831,36 @@ ORGANISATIONS = [("start-up", "Start-up"), ("PME", "PME"), ("grande entreprise",
                  ("secteur public", "Secteur public"), ("ONG ou associatif", "ONG ou associatif")]
 TRAJETS = [("30", "30 minutes"), ("45", "45 minutes"), ("60", "1 heure"), ("90", "1 h 30")]
 
+# Les critères, par section (« section » : le titre montré avant le premier critère de chaque groupe). Les mêmes
+# libellés que les questions de « Ce qui compte pour toi » (ce_qui_compte.QUESTIONS), qui les reprennent.
+TELETRAVAIL = [("1", "1 jour par semaine"), ("2", "2 jours par semaine"), ("3", "3 jours par semaine"),
+               ("5", "Entièrement à distance")]
+ENCADREMENT = [("non", "Pas d'équipe à encadrer"), ("oui", "Une équipe à encadrer")]
+DEPLACEMENTS = [("non", "Pas de déplacements"), ("occasionnels", "Déplacements occasionnels")]
 CRITERES = [
     {"cle": "trajet", "libelle": "Trajet au plus, porte à porte", "type": "un", "vide": "Peu importe",
-     "choix": TRAJETS},
+     "choix": TRAJETS, "section": "Conditions de travail"},
     {"cle": "trajet_depuis", "libelle": "Trajet depuis", "type": "texte", "exemple": "ta localité"},
     {"cle": "teletravail", "libelle": "Télétravail, au moins", "type": "un", "vide": "Pas d'exigence",
-     "choix": [("1", "1 jour par semaine"), ("2", "2 jours par semaine"), ("3", "3 jours par semaine"),
-               ("5", "Entièrement à distance")]},
-    {"cle": "taux_min", "libelle": "Taux d'activité, au moins (%)", "type": "nombre", "exemple": "80"},
+     "choix": TELETRAVAIL},
+    {"cle": "taux_min", "libelle": "Taux d'activité, au moins (%)", "type": "nombre", "exemple": "80",
+     "aide": "Sous 100 %, le tri du matin garde aussi les annonces à temps partiel."},
     {"cle": "taux_max", "libelle": "Taux d'activité, au plus (%)", "type": "nombre", "exemple": "100"},
+    {"cle": "heures_max", "libelle": "Heures par semaine, au plus", "type": "nombre", "exemple": "42"},
+    {"cle": "vacances_min", "libelle": "Semaines de vacances, au moins", "type": "nombre", "exemple": "5"},
+    {"cle": "deplacements", "libelle": "Déplacements", "type": "un", "vide": "Peu importe", "choix": DEPLACEMENTS},
     {"cle": "contrats", "libelle": "Formes de contrat acceptées", "type": "plusieurs",
-     "choix": [(k, v[1]) for k, v in CONTRATS.items()], "aide": "Aucune ou toutes cochées : pas de critère."},
-    {"cle": "langues", "libelle": "Langues de travail", "type": "plusieurs", "choix": LANGUES},
-    {"cle": "encadrement", "libelle": "Encadrement", "type": "un", "vide": "Peu importe",
-     "choix": [("non", "Pas d'équipe à encadrer"), ("oui", "Une équipe à encadrer")]},
+     "choix": [(k, v[0]) for k, v in CONTRATS.items()], "section": "Le poste",
+     "aide": "Aucune ou toutes cochées : pas de critère. Sans CDD ni mission, le tri du matin les écarte d'office."},
+    {"cle": "langues", "libelle": "Langues de travail", "type": "plusieurs", "choix": LANGUES,
+     "aide": "Sans l'allemand, le tri du matin écarte les annonces en allemand."},
+    {"cle": "encadrement", "libelle": "Encadrement", "type": "un", "vide": "Peu importe", "choix": ENCADREMENT},
     {"cle": "organisations", "libelle": "Types d'organisation", "type": "plusieurs", "choix": ORGANISATIONS,
      "aide": "Aucun ou tous cochés : peu importe."},
     {"cle": "secteurs_exclus", "libelle": "Secteurs exclus", "type": "liste", "virgules": True,
      "exemple": "ajouter des secteurs, séparés par des virgules"},
-    {"cle": "heures_max", "libelle": "Heures par semaine, au plus", "type": "nombre", "exemple": "42"},
-    {"cle": "vacances_min", "libelle": "Semaines de vacances, au moins", "type": "nombre", "exemple": "5"},
-    {"cle": "deplacements", "libelle": "Déplacements", "type": "un", "vide": "Peu importe",
-     "choix": [("non", "Aucun"), ("occasionnels", "Occasionnels seulement")]},
-    {"cle": "a_eviter", "libelle": "À éviter", "type": "texte", "exemple": "trop de réunions, un management distant…"},
+    {"cle": "a_eviter", "libelle": "À éviter", "type": "texte", "exemple": "trop de réunions, un management distant…",
+     "section": "À éviter, et le reste"},
     {"cle": "autres", "libelle": "Autres critères", "type": "liste",
      "exemple": "ajouter un critère ; une précision facultative après « : »"},
 ]
@@ -855,21 +1057,22 @@ def _convertir(c, brut):
     if t == "regles":                              # cases cochées : liste (formulaire) ou une par ligne
         cochees = set(brut if isinstance(brut, list) else str(brut or "").split())
         return [i for i in _ids_au_choix() if i in cochees]
-    if t in ("liste", "liste_choix"):
+    if t in ("liste", "liste_choix", "cantons", "lignes"):
         vus, out = set(), []
         for ligne in str(brut or "").splitlines():
             ligne = re.sub(r"\s+", " ", ligne).strip()
+            if t == "lignes":
+                ligne = _ligne_en_colonnes(c, ligne)
             if c["cle"] == "recherche.cantons":
                 ligne = ligne.upper()
-                if ligne and not re.fullmatch(r"[A-Z]{2}", ligne):
+                if ligne and ligne not in pays.CANTONS:
                     raise ProfilInvalide("%s : « %s » n'est pas une abréviation de canton" % (c["libelle"], ligne))
-            elif c["cle"] in ("recherche.familles", "exclusions.mots_titre"):
+            elif c["cle"] == "exclusions.mots_titre":
                 from .prefilter import plier
                 ligne = plier(ligne).replace("|", " ").strip()
             cle = ligne
-            if c["cle"] == "dossier.certifications":       # même certification, autre date : la première reste
-                from .prefilter import plier
-                cle = re.sub(r"[^a-z0-9]+", " ", plier(ligne.split("|")[0])).strip()
+            if c["cle"] in LISTES_CV.values():       # même certification ou langue, autre date ou niveau : la première reste
+                cle = _nom_dans_liste(ligne)
             if ligne and cle not in vus:
                 vus.add(cle)
                 out.append(ligne)
@@ -893,6 +1096,8 @@ def _convertir(c, brut):
             v = dt.date(int(a), int(mo), int(j)).strftime("%d.%m.%Y")
         except (AttributeError, ValueError):
             raise ProfilInvalide("%s : une date jj.mm.aaaa" % c["libelle"]) from None
+    if c["cle"] == "recherche.niveau":
+        v = niveau_connu(v) or v
     if t == "choix" and v and v not in c["choix"]:
         raise ProfilInvalide("%s : choisir dans la liste" % c["libelle"])
     if t == "url" and v and c["prefixe"] == LINKEDIN:
@@ -906,9 +1111,136 @@ def _convertir(c, brut):
     return v
 
 
+# --- Champs en lignes (certifications, langues) : une case par colonne -----------------
+
+
+def mois_annee(v):
+    """« 3/2024 », « 03.2024 », « 2024-03 » → « 03.2024 » ; une année seule reste l'année ; None si ce n'est
+    pas une date de ce genre."""
+    v = re.sub(r"\s+", "", str(v or ""))
+    if not v:
+        return ""
+    if re.fullmatch(r"(19|20)\d\d", v):
+        return v
+    m = re.fullmatch(r"(\d{1,2})[./-](\d{4})", v) or re.fullmatch(r"(\d{4})[./-](\d{1,2})", v)
+    if not m:
+        return None
+    mo, a = (m.group(1), m.group(2)) if len(m.group(2)) == 4 else (m.group(2), m.group(1))
+    return "%02d.%s" % (int(mo), a) if 1 <= int(mo) <= 12 and 1900 <= int(a) <= 2100 else None
+
+
+def colonnes_de_ligne(c, ligne):
+    """Une ligne enregistrée « a | b | c » → ses cases, autant que de colonnes (la dernière garde le reste)."""
+    n = len(c["colonnes"]) or 1
+    morceaux = [x.strip() for x in str(ligne or "").split("|", n - 1)]
+    return morceaux + [""] * (n - len(morceaux))
+
+
+def _ligne_en_colonnes(c, ligne):
+    """Une ligne remise en forme : cases nettoyées, date en MM.AAAA quand elle se lit, cases vides de fin retirées."""
+    cases = colonnes_de_ligne(c, ligne)
+    for i, (sous, *_) in enumerate(c["colonnes"]):
+        if sous == "date":
+            cases[i] = mois_annee(cases[i]) or cases[i]     # import du CV : une date illisible reste telle quelle
+        elif sous == "niveau":
+            cases[i] = niveau_langue(cases[i])
+    while cases and not cases[-1]:
+        cases.pop()
+    return " | ".join(cases) if cases and cases[0] else ""
+
+
+def lignes_du_formulaire(f, c):
+    """Les lignes d'un champ en lignes : `cle.<colonne>` (formulaire web, une valeur par ligne ; ou un texte, une
+    ligne par retour) → [[case, …]], lignes vides retirées. Lève ProfilInvalide pour une ligne sans son premier
+    champ ou une date illisible. Sans ces champs, `cle` lui-même : un texte « a | b | c » par ligne."""
+    cle = c["cle"]
+    if not any((cle + "." + sous) in f for sous, *_ in c["colonnes"]):
+        return [colonnes_de_ligne(c, l) for l in str(f.get(cle) or "").splitlines() if l.strip()]
+    def valeurs(n):
+        if hasattr(f, "getlist"):
+            return [str(x) for x in f.getlist(n)]
+        v = f.get(n)
+        return str(v).split("\n") if isinstance(v, str) else [str(x) for x in v or []]
+    cols = [valeurs(cle + "." + sous) for sous, *_ in c["colonnes"]]
+    n = max(len(x) for x in cols)
+    lignes = []
+    for i in range(n):
+        cases = [re.sub(r"\s+", " ", (col[i] if i < len(col) else "")).replace("|", "/").strip() for col in cols]
+        if not any(cases):
+            continue
+        if not cases[0]:
+            raise ProfilInvalide("%s : une ligne n'a pas de %s" % (c["libelle"], c["colonnes"][0][1].lower()))
+        for j, (sous, lib, *_) in enumerate(c["colonnes"]):
+            if sous == "date" and cases[j]:
+                d = mois_annee(cases[j])
+                if d is None:
+                    raise ProfilInvalide("%s : « %s » n'est pas une date MM.AAAA" % (c["libelle"], cases[j]))
+                cases[j] = d
+        lignes.append(cases)
+    return lignes
+
+
+# --- Certifications et langues : tirées du CV importé (parcours) ----------------------
+
+LISTES_CV = {"certification": "dossier.certifications", "langue": "dossier.langues"}
+NOMS_LISTES_CV = {"certification": ("certification", "certifications"), "langue": ("langue", "langues")}
+
+
+def _nom_dans_liste(ligne):
+    """Ce qui identifie une ligne « nom | … » : le nom, sans accents, majuscules ni ponctuation."""
+    from .prefilter import plier
+    return re.sub(r"[^a-z0-9]+", " ", plier(str(ligne).split("|")[0])).strip()
+
+
+def ligne_du_cv(e):
+    """Un élément du parcours (certification ou langue) → sa ligne dans l'onglet du profil."""
+    if e["genre"] == "langue":
+        morceaux = [e.get("titre"), e.get("detail")]
+    else:
+        morceaux = [e.get("titre"), e.get("organisation"), e.get("fin") or e.get("debut")]
+    while morceaux and not (morceaux[-1] or "").strip():
+        morceaux.pop()
+    return " | ".join((m or "").strip() for m in morceaux)
+
+
+def _champ_cle(cle):
+    return next(c for e in ETAPES for c in e["champs"] if c["cle"] == cle)
+
+
+def absents_du_cv(elements, p=None):
+    """{genre: [lignes]} des certifications et langues du parcours qui manquent à leur onglet."""
+    p = charger() if p is None else p
+    out = {}
+    for genre, cle in LISTES_CV.items():
+        vus = {_nom_dans_liste(x) for x in lire(p, cle) or []}
+        for e in elements:
+            if e["genre"] == genre and (n := _nom_dans_liste(e["titre"])) and n not in vus:
+                vus.add(n)
+                out.setdefault(genre, []).append(ligne_du_cv(e))
+    return out
+
+
+def completer_depuis_cv(elements):
+    """Ajoute à leur onglet les certifications et langues du CV qui n'y sont pas encore. Ce qui y est déjà
+    reste tel quel : corrigé à la main, il fait foi. Renvoie {genre: nombre ajouté}."""
+    p = copy.deepcopy(charger())
+    ajouts = absents_du_cv(elements, p)
+    if not ajouts:
+        return {}
+    if not existe():
+        p[ACCUEIL] = "en_cours"
+    for genre, lignes in ajouts.items():
+        cle = LISTES_CV[genre]
+        _poser(p, cle, _convertir(_champ_cle(cle), "\n".join(list(lire(p, cle) or []) + lignes)))
+    ecrire(p)
+    return {g: len(l) for g, l in ajouts.items()}
+
+
 def en_saisie(c, v):
     """La valeur telle qu'elle s'écrit dans le champ : sans le préfixe affiché devant."""
     v = "" if v is None else str(v)
+    if c["cle"] == "recherche.niveau":              # « senior » écrit avant la liste : l'option « Senior »
+        return niveau_connu(v) or v
     if c["cle"] == "identite.pays" and not v:
         return pays.pays_detecte()
     if c.get("type") in ("date", "date_naissance"):   # jj.mm.aaaa enregistré → aaaa-mm-jj du calendrier
@@ -957,6 +1289,12 @@ def enregistrer(ident, formulaire):
             elif c["type"] == "liste_choix":
                 v = _convertir(c, "\n".join(valeurs_formulaire(formulaire, c["cle"])
                                             + ajouts_formulaire(formulaire, c["cle"], c["virgules"])))
+            elif c["type"] == "postes":
+                v = postes_du_formulaire(formulaire, c["cle"])
+            elif c["type"] == "lignes":
+                v = _convertir(c, "\n".join(" | ".join(x) for x in lignes_du_formulaire(formulaire, c)))
+            elif c["type"] == "cantons":              # pilules cochées (formulaire web), sinon une par ligne
+                v = _convertir(c, "\n".join(valeurs_formulaire(formulaire, c["cle"])))
             else:
                 v = _convertir(c, formulaire.getlist(c["cle"]) if multiple else formulaire.get(c["cle"], ""))
         except ProfilInvalide as err:
@@ -970,7 +1308,7 @@ def enregistrer(ident, formulaire):
                 _retirer(p, "exclusions.desactivees")
         elif c["requis"] and (v in ("", [], None) or c["type"] == "criteres" and not lignes_criteres(v)):
             erreurs.append("%s : obligatoire" % c["libelle"])
-        elif c["cle"] in SUPERPOSES and _egal_base(c["cle"], v):
+        elif (c["cle"] in SUPERPOSES or c["cle"] == POSTES) and _egal_base(c["cle"], v):
             _retirer(p, c["cle"])               # même valeur que config/ : le fichier de config reste maître
         elif v in ("", None, {}) or (v == [] and c["cle"] not in SUPERPOSES):
             _retirer(p, c["cle"])
@@ -978,6 +1316,9 @@ def enregistrer(ident, formulaire):
             _poser(p, c["cle"], v)
     if erreurs:
         raise ProfilInvalide(" ; ".join(erreurs))
+    if ident == "recherche":
+        for cle in ANCIENNES:                   # repris dans les postes, ou déduits d'eux
+            _retirer(p, cle)
     ecrire(p)
     return p
 

@@ -11,10 +11,12 @@
 
 sourcing:
   cantons: []
+  # Les postes recherchés du profil remplacent les trois listes qui en découlent : ces requêtes
+  # (chaque intitulé), les requêtes LinkedIn (une par poste) et familles_cibles (leurs mots).
   requetes: []
   # Une requête par entreprise visée.
   entreprises: []
-  # jobup filtre par ville ou par canton (par son nom), pas par rayon.
+  # jobup filtre par ville ou par canton (par son nom), pas par rayon ; vide : les cantons, par leur nom.
   jobup_lieux: []
   # LinkedIn par Apify : syntaxe de recherche LinkedIn (« OR »), un run payant par requête.
   linkedin_requetes: []

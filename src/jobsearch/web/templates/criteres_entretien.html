@@ -171,7 +171,7 @@
       <h3 class="section-base">Ce qui compte</h3>
       <p class="champ-intro">Critères non négociables : un champ par critère, laisse vide ce qui t'est égal. Une annonce qui en
         viole un clairement est notée 40 au plus.</p>
-      {{ champs_criteres(criteres_def, valeurs.criteres, id="p") }}
+      {{ champs_criteres(criteres_def, valeurs.criteres, id="p", niveau=4) }}
       <h3 class="section-base">Ce qui rend un poste intéressant</h3>
       {% set act = [] %}{% for x in options.activites %}{% set _ = act.append((x, x)) %}{% endfor %}
       {{ champ_puces("evaluation.activites", "Activités qui doivent occuper l'essentiel du temps", act, valeurs.activites,

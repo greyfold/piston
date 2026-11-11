@@ -183,7 +183,7 @@ def test_barre_et_reglages(web, reg):
     r = web.get("/reglages", follow_redirects=False)                     # pas de vue d'ensemble :
     assert r.status_code == 303 and r.headers["location"] == "/profil"    # Réglages ouvre Ma recherche
     reglages = web.get("/reglages").text
-    for href in ("/profil", "/reglages/parcours", "/interface", "/sources", "/ia", "/connecteurs",
+    for href in ("/profil", "/reglages/parcours", "/fonctions", "/sources", "/ia", "/connecteurs",
                  "/confidentialite", "/sante"):
         assert 'href="%s"' % href in reglages
     assert "Vue d&#39;ensemble" not in reglages and "Vue d'ensemble" not in reglages
@@ -211,6 +211,39 @@ def test_clic_go_ecrit_tout_de_suite(web, reg):
     reg.cx.rollback()
     f = reg.get(e)
     assert f["statut"] == "retenue" and f["raison_decision"] == ["angle fort", "employeur visé"]
+
+
+def test_a_l_ouverture_le_tri_passe_d_abord(web, reg):
+    """Des annonces à trancher : l'accueil ouvre la pile de tri, sans barre de menu ; « Tableau de bord »
+    pose le cookie de la session et le tableau de bord reste ensuite accessible, avec une simple entrée."""
+    import datetime as dt
+    proche = (dt.date.today() + dt.timedelta(days=3)).isoformat()
+    loin = annonce(reg, statut="B", titre="Poste sans délai", texte=FR)
+    presse = annonce(reg, statut="A", titre="Poste pressé", texte=FR, delai_postulation=proche)
+    r = web.get("/", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/trier"
+    tri = web.get("/trier").text
+    assert 'class="barre"' not in tri and 'href="/?ensuite=1"' in tri and "1</span> sur 2" in tri
+    assert tri.index("Poste pressé") < tri.index("Poste sans délai")          # le plus pressé d'abord
+    assert 'name="empreinte" value="%s"' % presse in tri and 'data-empreinte="%s" aria-labelledby="carte-tri-2" inert' % loin in tri
+    assert 'value="pasgo"' in tri and 'value="go"' in tri and 'value="attendre"' in tri
+    page = web.get("/?ensuite=1")
+    assert "tri_passe" in page.headers.get("set-cookie", "") and "Trancher maintenant" in page.text
+    assert web.get("/", follow_redirects=False).status_code == 200              # tri passé : plus de détour
+
+
+def test_trancher_en_json_puis_tout_est_tranche(web, reg):
+    e = annonce(reg, statut="A", texte=FR)
+    r = web.post("/action", data={"empreinte": e, "type": "pasgo", "raisons": ["salaire"], "retour": "/trier"},
+                 headers={"accept": "application/json"})
+    assert r.json()["ok"] is True and "Pas go" in r.json()["msg"]
+    reg.cx.rollback()
+    assert reg.get(e)["statut"] == "C" and reg.get(e)["raison_decision"] == ["salaire"]
+    r = web.post("/action", data={"empreinte": "inconnue", "type": "go"}, headers={"accept": "application/json"})
+    assert r.json()["ok"] is False and "aucune annonce" in r.json()["msg"]
+    tri = web.get("/trier").text                         # plus rien : la fin, et le chemin vers la suite
+    assert "Tout est tranché" in tri and "Passer à la suite" in tri and "data-form-tri" not in tri
+    assert web.get("/", follow_redirects=False).status_code == 200
 
 
 def test_post_autre_origine_refuse(web, reg):
@@ -404,22 +437,24 @@ def test_objectifs_choisis_par_periode(web, reg, sans_notification):
     assert "Aucun poste identifié pour le moment" in web.get("/").text      # rien à faire : l'état vide, pas d'objectifs
     annonce(reg, statut="A")
     reg.commit()
-    r = web.post("/objectifs", data={"semaine": "", "mois": "10"}, follow_redirects=False)
+    r = web.post("/profil/objectifs", data={"objectifs.semaine_min": "", "objectifs.mois_min": "10"},
+                 follow_redirects=False)
     assert r.status_code == 303 and "ok=1" in r.headers["location"]
-    html = web.get("/").text
+    html = web.get("/?ensuite=1").text
     assert "postulations ce mois" in html and "postulations cette semaine" not in html
     vendredi = dt.datetime(2026, 10, 30, 10, 0)
     assert not followups.rythme(reg, vendredi.date())["alerte"]      # pas d'objectif de semaine : pas de rappel
     assert not pipeline.rappel_rythme(reg, vendredi)["alerte"] and not sans_notification
-    assert 'value="10"' in web.get("/interface").text
-    web.post("/objectifs", data={"semaine": "", "mois": ""})
+    assert 'value="10"' in web.get("/profil/objectifs").text            # dans Ma recherche › Objectifs
+    web.post("/profil/objectifs", data={"objectifs.semaine_min": "", "objectifs.mois_min": ""})
     assert "postulations ce mois" not in web.get("/").text
-    assert "nombre entier" in __import__("urllib.parse").parse.unquote(
-        web.post("/objectifs", data={"semaine": "x", "mois": ""}, follow_redirects=False).headers["location"])
+    assert "nombre entier" in web.post("/profil/objectifs", data={"objectifs.semaine_min": "x",
+                                                                   "objectifs.mois_min": ""}).text
 
 
-def test_option_coupee_sans_rappel(web, reg, sans_notification):
-    profil.poser_option("objectifs", False)
+def test_sans_objectif_sans_rappel(web, reg, sans_notification):
+    profil.enregistrer_objectifs("", "")              # pas d'interrupteur : le suivi suit les objectifs saisis
+    assert not profil.option("objectifs") and not profil.fonctions()["objectifs"]
     vendredi = dt.datetime(2026, 10, 30, 10, 0)
     assert not followups.rythme(reg, vendredi.date())["actif"]
     assert not pipeline.rappel_rythme(reg, vendredi)["alerte"]
@@ -531,3 +566,15 @@ def test_page_confidentialite_montre_ce_que_l_ia_recoit(web, monkeypatch):
     assert "| Téléphone | {TELEPHONE} |" in html and "{PRENOM} a formé 300 personnes." in html
     assert "paul@exemple-sa.ch" not in html.split("extrait-masque")[1].split("</pre>")[0]
     assert "(1 dans ton profil)" in html
+
+
+def test_reglages_sans_dossier_et_comptes_mail_dans_connecteurs(web):
+    profil_page = web.get("/profil/identite").text
+    assert 'href="/profil/dossier"' not in profil_page and 'href="/profil/objectifs"' in profil_page
+    assert "Objectifs de postulation" in profil_page and 'href="/fonctions"' in profil_page
+    assert 'name="courrier.comptes"' not in web.get("/profil/objectifs").text
+    r = web.post("/connecteurs/apple-mail/comptes", data={"comptes": "iCloud\nTravail"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].endswith("#apple-mail")
+    assert profil.comptes_courrier() == ["iCloud", "Travail"]
+    assert "iCloud\nTravail</textarea>" in web.get("/connecteurs").text
+    assert web.get("/premiers-pas/dossier?formulaire=1").status_code == 200       # toujours l'entretien

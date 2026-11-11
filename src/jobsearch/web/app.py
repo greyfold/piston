@@ -19,6 +19,7 @@ from markupsafe import Markup
 
 from .. import moteur as moteur_mod
 from .. import actions, ajout, ce_qui_compte, cles, courrier, dossier, doublons, entretiens, evaluation, followups, parcours
+from .. import postes_proposes
 from .. import profil as profil_mod
 from .. import repertoire as repertoire_mod
 from ..formatage import annonce_html
@@ -86,7 +87,7 @@ tpl.env.filters.update(date_fr=date_fr, jour_fr=jour_fr, il_y_a=il_y_a, texte_ht
 tpl.env.globals.update(TYPES=actions.TYPES, STATUTS=STATUTS, libelle_dossier=dossier.libelle)
 # La feuille de style porte sa date dans son adresse : un navigateur (ou la vue web de
 # l'application Mac) ne garde jamais une ancienne version en cache.
-tpl.env.globals["version_css"] = lambda: int(max((ICI / "static" / f).stat().st_mtime for f in ("style.css", "champs.js", "compositeur.js", "entretien.js")))
+tpl.env.globals["version_css"] = lambda: int(max((ICI / "static" / f).stat().st_mtime for f in ("style.css", "champs.js", "compositeur.js", "entretien.js", "tri.js")))
 
 
 def _decomposer_tel(numero, defaut):
@@ -178,22 +179,30 @@ def etat_passage(reg):
 # --- Pages --------------------------------------------------------------------
 
 
+# Le tri passé pour cette ouverture de l'application : un cookie de session, perdu quand elle se ferme.
+# Tant qu'il manque et qu'une annonce attend une décision, l'accueil ouvre d'abord le tri (/trier).
+COOKIE_TRI = "tri_passe"
+
+
+def a_trancher_par_urgence(reg, evals):
+    """Les annonces qui attendent une décision, la plus pressée d'abord (délai, puis note, puis fraîcheur)."""
+    note = lambda f: evals[f["empreinte"]]["note_globale"] if f["empreinte"] in evals else None
+    return sorted(reg.liste(["A", "B", "nouvelle"]), key=lambda f: priorite(f, note(f)))
+
+
 @app.get("/", response_class=HTMLResponse)
-def accueil(request: Request, tri: str = "urgence"):
+def accueil(request: Request, ensuite: str = ""):
     if profil_mod.en_accueil():                    # premier lancement : les avantages, puis l'assistant
         return RedirectResponse("/bienvenue", status_code=303)
     reg = _reg()
     try:
-        ordre = {"A": 0, "B": 1, "nouvelle": 2}
         evals = evaluation.toutes(reg)
         note = lambda f: evals[f["empreinte"]]["note_globale"] if f["empreinte"] in evals else None
-        fraicheur = lambda f: -(int((f.get("publiee_le") or f.get("vue_le") or "0")[:10].replace("-", "") or 0))
-        cles = {"urgence": lambda f: priorite(f, note(f)),
-                "note": lambda f: (-(note(f) if note(f) is not None else -1), fraicheur(f)),
-                "recence": fraicheur,
-                "statut": lambda f: (ordre[f["statut"]], -(note(f) or -1), fraicheur(f))}
-        tri = tri if tri in cles else "urgence"
-        a_trancher = sorted(reg.liste(["A", "B", "nouvelle"]), key=cles[tri])
+        a_trancher = a_trancher_par_urgence(reg, evals)
+        # À l'ouverture, ce qui est à trancher passe avant tout le reste. « Tableau de bord » (ensuite=1)
+        # ou un message de retour d'action laissent le tableau de bord s'afficher.
+        if a_trancher and not ensuite and not request.cookies.get(COOKIE_TRI) and "msg" not in request.query_params:
+            return RedirectResponse("/trier", status_code=303)
         limite = (dt.date.today() - dt.timedelta(days=14)).isoformat()
         limites = [f for f in reg.liste(["C"]) if f.get("limite") and (f.get("vue_le") or "") >= limite]
         dossiers = {f["empreinte"]: infos_dossier(reg, f) for f in reg.liste(["retenue"])}
@@ -207,7 +216,7 @@ def accueil(request: Request, tri: str = "urgence"):
                     if p.get(profil_mod.PREMIERS_PAS) == "affichee" else [])
         if all(t[5] for t in premiers):            # tout est fait : « Bien démarrer » disparaît
             premiers = []
-        return page(request, "accueil.html", etat=etat_passage(reg), a_trancher=a_trancher, evals=evals, tri=tri,
+        reponse = page(request, "accueil.html", etat=etat_passage(reg), a_trancher=a_trancher, evals=evals,
                     premiers_pas=premiers,
                     taches=taches, tache_jobroom=tache_jobroom, etats_taches=agent_claude.ETATS,
                     dossiers=dossiers, courrier_a_trancher=courrier.pour_le_tableau(reg, reg.liste(["candidature", "entretien", "offre"])),
@@ -217,6 +226,20 @@ def accueil(request: Request, tri: str = "urgence"):
                     sans_reponse=followups.sans_reponse(reg), stats=reg.stats(),
                     entretiens=entretiens.a_venir(reg),
                     rythme=followups.rythme(reg))
+        if ensuite:
+            reponse.set_cookie(COOKIE_TRI, "1", httponly=True, samesite="strict")
+        return reponse
+    finally:
+        reg.fermer()
+
+
+@app.get("/trier", response_class=HTMLResponse)
+def trier(request: Request):
+    """Le tri en mode concentré : une annonce à la fois, Go ou Pas go, jusqu'à la dernière."""
+    reg = _reg()
+    try:
+        evals = evaluation.toutes(reg)
+        return page(request, "trier.html", a_trancher=a_trancher_par_urgence(reg, evals), evals=evals, concentre=True)
     finally:
         reg.fermer()
 
@@ -429,6 +452,8 @@ def annonce_preremplir(emp: str, cible: str = Form("employeur"), retour: str = F
         msg, ok = "Pré-remplissage impossible : %s" % e, False
     finally:
         reg.fermer()
+    if en_json:
+        return JSONResponse({"ok": ok, "msg": msg})
     base, _, ancre = retour.partition("#")
     return RedirectResponse("%s%smsg=%s&ok=%d%s" % (base, "&" if "?" in base else "?", quote(msg), int(ok),
                                                      "#" + ancre if ancre else ""), status_code=303)
@@ -448,6 +473,8 @@ def annonce_claude(emp: str, type_: str = Form("formulaire", alias="type"), reto
         msg, ok = "Claude n'a pas pu démarrer : %s" % e, False
     finally:
         reg.fermer()
+    if en_json:
+        return JSONResponse({"ok": ok, "msg": msg})
     base, _, ancre = retour.partition("#")
     return RedirectResponse("%s%smsg=%s&ok=%d%s" % (base, "&" if "?" in base else "?", quote(msg), int(ok),
                                                      "#" + ancre if ancre else ""), status_code=303)
@@ -777,7 +804,16 @@ def connecteurs_page(request: Request):
     a_faire = _a_configurer()
     return page(request, "connecteurs.html", connecteurs=connecteurs.liste(), roles=connecteurs.ROLES,
                 moteur=etat_claude(), distant=travailleur.distant(), a_configurer=a_faire,
-                etats={c["id"]: c for c in a_faire})
+                etats={c["id"]: c for c in a_faire}, comptes_mail="\n".join(profil_mod.comptes_courrier()))
+
+
+@app.post("/connecteurs/apple-mail/comptes")
+async def connecteurs_comptes_mail(request: Request):
+    """Les comptes de Mail où chercher les réponses des employeurs."""
+    form = await request.form()
+    comptes = profil_mod.poser_comptes_courrier(form.get("comptes", ""))
+    msg = "Apple Mail : %s." % ("comptes enregistrés" if comptes else "aucun compte choisi")
+    return RedirectResponse("/connecteurs?msg=%s&ok=1#apple-mail" % quote(msg), status_code=303)
 
 
 _ETAT_CLAUDE = {"t": 0.0, "v": None}
@@ -884,7 +920,7 @@ def confidentialite_page(request: Request):
 
 
 # Pages de réglage : rangées sous « Réglages » dans la barre (elles gardent leur adresse).
-REGLAGES = ("/reglages", "/profil", "/interface", "/sources", "/ia", "/connecteurs", "/confidentialite", "/sante")
+REGLAGES = ("/reglages", "/profil", "/fonctions", "/sources", "/ia", "/connecteurs", "/confidentialite", "/sante")
 
 
 @app.get("/reglages")
@@ -983,6 +1019,19 @@ def _champs(etapes, p, saisi=None):
             if c["type"] == "criteres":                 # un dictionnaire : un champ par critère
                 valeur = (profil_mod.criteres_du_formulaire(saisi) if saisi is not None
                           else profil_mod.criteres_structures(p))
+            elif c["type"] == "postes":                  # une ligne par poste : intitulé, autres intitulés
+                valeur = (profil_mod.postes_du_formulaire(saisi, c["cle"]) if saisi is not None
+                          else profil_mod.postes(p))
+            elif c["type"] == "lignes":                  # une ligne par élément, une case par colonne
+                if saisi is not None:                    # saisie refusée : rendue telle quelle, une case par colonne
+                    cols = [str(saisi.get(c["cle"] + "." + sous, "")).split("\n") for sous, *_ in c["colonnes"]]
+                    valeur = [[col[i] if i < len(col) else "" for col in cols] for i in range(max(map(len, cols)))]
+                    valeur = [x for x in valeur if any(v.strip() for v in x)]
+                else:
+                    valeur = [profil_mod.colonnes_de_ligne(c, l) for l in profil_mod.effectif(c["cle"], p) or []]
+            elif c["type"] == "cantons":                 # les codes cochés
+                valeur = ([x.upper() for x in profil_mod.valeurs_formulaire(saisi, c["cle"])] if saisi is not None
+                          else list(profil_mod.effectif(c["cle"], p) or []))
             elif c["type"] == "liste_choix" and saisi is not None:    # cochées et ajoutées, gardées telles quelles
                 valeur = "\n".join(profil_mod.valeurs_formulaire(saisi, c["cle"])
                                    + profil_mod.ajouts_formulaire(saisi, c["cle"], c["virgules"]))
@@ -991,39 +1040,79 @@ def _champs(etapes, p, saisi=None):
                     else profil_mod.en_saisie(c, _en_texte(profil_mod.effectif(c["cle"], p)))
             champs.append(dict(c, valeur=valeur,
                                par_defaut=c["cle"] in profil_mod.SUPERPOSES and profil_mod.lire(p, c["cle"]) is None))
+            if c["type"] == "postes":                  # ce que le pré-tri en tire, et ce que l'IA propose
+                champs[-1]["mots"] = profil_mod.mots_postes(valeur)
+                champs[-1].update(proposes=_postes_proposes(p), ia=ia_connectee())
     return champs
+
+
+def _postes_proposes(p=None):
+    """Sous le champ « Postes recherchés » : les postes que l'IA a proposés d'après le parcours."""
+    reg = parcours.ouvrir()
+    try:
+        return postes_proposes.etat(reg, p)
+    finally:
+        reg.cx.close()
+
+
+@app.post("/profil/postes/proposer")
+def profil_postes_proposer():
+    """L'IA propose des postes d'après le parcours ; rend le bloc à mettre sous le champ (rien n'est enregistré
+    dans le profil : la personne reprend ceux qu'elle veut)."""
+    reg = parcours.ouvrir()
+    try:
+        postes_proposes.proposer(reg)
+        pp = postes_proposes.etat(reg)
+    except postes_proposes.ParcoursVide as e:
+        return _refus_ia(e)
+    except moteur_mod.MoteurImpossible as e:
+        return _refus_ia(e)
+    finally:
+        reg.cx.close()
+    return JSONResponse({"ok": True, "html": tpl.get_template("_postes_proposes.html").render(pp=pp, ia=True)})
 
 
 def _ctx_champs():
     from .. import pays as pays_mod, telephone
-    return {"indicatifs": telephone.INDICATIFS, "code_tel_defaut": pays_mod.code_telephone_defaut()}
+    return {"indicatifs": telephone.INDICATIFS, "code_tel_defaut": pays_mod.code_telephone_defaut(),
+            "liste_cantons": sorted(pays_mod.CANTONS.items(), key=lambda x: x[1])}
+
+
+_GENRE_ONGLET = {"certifications": "certification", "langues": "langue"}
+
+
+def _elements_cv(genre):
+    reg = parcours.ouvrir()
+    try:
+        return [e for e in parcours.elements(reg) if e["genre"] == genre]
+    finally:
+        reg.cx.close()
 
 
 def _page_profil(request, ident, saisi=None, **ctx):
     p = profil_mod.charger()
     e = profil_mod.etape(ident)
     champs = _champs([e] if e else [], p, saisi)
-    ids = [x["id"] for x in profil_mod.etapes()] + ["fin"]
+    ids = [x["id"] for x in profil_mod.etapes()]
     i = ids.index(ident)
-    resume = [dict(x, valeurs=[(c["libelle"], profil_mod.affiche(c, p)) for c in x["champs"]])
-              for x in profil_mod.etapes()] if ident == "fin" else []
     for k, v in _ctx_champs().items():
         ctx.setdefault(k, v)
-    if ident == "criteres":                      # les questions de « Ce qui compte pour toi », toutes ici
+    if ident == "criteres":                      # les exemples du questionnaire, à cocher en plus
         reg = parcours.ouvrir()
         try:
-            ctx.update(questions_criteres=ce_qui_compte.questions(reg), defauts_criteres=_defauts_criteres(p))
             contexte = ce_qui_compte.reponses(reg).get(ce_qui_compte.CONTEXTE) or {}
             contenu = ce_qui_compte.resolue(ce_qui_compte.PAR_CLE["contenu"], contexte)
             ctx["options_listes"] = {"evaluation.activites": [v for v, _ in contenu.get("choix", [])],
                                      "evaluation.angles": contexte.get("angles") or []}
         finally:
             reg.cx.close()
+    genre = _GENRE_ONGLET.get(ident)
+    if genre:                                    # ce que le parcours (CV importé) a de plus que l'onglet
+        n = len(profil_mod.absents_du_cv(_elements_cv(genre), p).get(genre, []))
+        ctx["a_reprendre"] = "%d %s" % (n, profil_mod.NOMS_LISTES_CV[genre][n > 1]) if n else ""
     ctx.setdefault("criteres_def", profil_mod.CRITERES)
     return page(request, "profil.html", etapes=profil_mod.etapes(), etape=e, ident=ident, champs=champs,
-                precedente=ids[i - 1] if i else None, resume=resume, regles=profil_mod.regles_au_choix() if e else [],
-                cles=[cles.etat(n) for n in cles.SERVICES] if ident == "fin" else [],
-                moteur=etat_claude() if ident == "fin" else None,
+                precedente=ids[i - 1] if i else None, regles=profil_mod.regles_au_choix(),
                 manquants=profil_mod.manquants(p), **ctx)
 
 
@@ -1035,7 +1124,7 @@ ORDRE_ACCUEIL = ["recherche", "sources", "ia", "offres"]
 
 def _recherche_faite(p=None):
     p = profil_mod.charger() if p is None else p
-    return bool(profil_mod.lire(p, "recherche.requetes")) and bool(profil_mod.lire(p, "recherche.cantons"))
+    return bool(profil_mod.postes_saisis(p)) and bool(profil_mod.lire(p, "recherche.cantons"))
 
 
 def _sources_faites(p=None):
@@ -1084,7 +1173,7 @@ def bienvenue_recherche(request: Request):
     from .. import pays
     p = profil_mod.charger()
     return _page_accueil(request, "recherche", objectifs=profil_mod.OBJECTIFS, objectif=profil_mod.objectif(p),
-                         poste=(profil_mod.lire(p, "recherche.requetes") or [""])[0],
+                         poste=next((x["intitule"] for x in profil_mod.postes_saisis(p)), ""),
                          cantons_choisis=profil_mod.lire(p, "recherche.cantons") or [],
                          cantons=pays.CANTONS, romands=pays.CANTONS_ROMANDS)
 
@@ -1141,8 +1230,8 @@ def bienvenue_offres(request: Request):
     noms = [s["nom"] for s in SOCLE if s["id"] in socle_choisi()]
     return _page_accueil(request, "offres", premiere=e, offres_vues=e["etat"] == "finie",
                          sites=" et ".join([", ".join(noms[:-1]), noms[-1]]) if len(noms) > 1 else "".join(noms),
-                         poste=profil_mod.lire(p, "recherche.requetes")[0],
-                         lieux=", ".join(profil_mod.lire(p, "recherche.jobup_lieux") or profil_mod.lire(p, "recherche.cantons")))
+                         poste=profil_mod.postes_saisis(p)[0]["intitule"],
+                         lieux=", ".join(profil_mod.lieux_cantons(p)))
 
 
 @app.get("/bienvenue/offres/etat")
@@ -1200,34 +1289,26 @@ def ia_connexion_annuler():
     return {"etat": "annulee"}
 
 
-@app.get("/interface", response_class=HTMLResponse)
-def interface(request: Request):
-    p = profil_mod.charger()
-    ia = ia_connectee() if profil_mod.progressif(p) else True
-    return page(request, "interface.html", options=profil_mod.OPTIONS, deblocages=profil_mod.DEBLOCAGES,
-                taches={x[0]: x for x in profil_mod._taches_checklist(p, ia)},
-                objectifs_rythme=profil_mod.objectifs_rythme())
+@app.get("/fonctions", response_class=HTMLResponse)
+def fonctions_page(request: Request):
+    """Ce que la plateforme fait : les fonctions qui s'ouvrent avec la configuration, et les options."""
+    return page(request, "fonctions.html", options=profil_mod.OPTIONS, deblocages=profil_mod.DEBLOCAGES)
 
 
-@app.post("/objectifs")
-async def objectifs_enregistrer(request: Request):
-    """Objectifs de postulations par semaine et par mois : chacun facultatif, vide = aucun."""
-    form = await request.form()
-    try:
-        profil_mod.enregistrer_objectifs(form.get("semaine", ""), form.get("mois", ""))
-    except profil_mod.ProfilInvalide as e:
-        return RedirectResponse("/interface?msg=%s" % quote(str(e)), status_code=303)
-    return RedirectResponse("/interface?msg=%s&ok=1" % quote("Objectifs enregistrés."), status_code=303)
+@app.get("/interface")
+def interface():
+    """Ancienne page « Interface et objectifs » : ses fonctions vivent dans « Fonctions »."""
+    return RedirectResponse("/fonctions", status_code=303)
 
 
-@app.post("/interface/{option}")
-async def interface_option(request: Request, option: str):
+@app.post("/fonctions/{option}")
+async def fonctions_option(request: Request, option: str):
     form = await request.form()
     try:
         profil_mod.poser_option(option, form.get("actif") == "1")
     except profil_mod.ProfilInvalide:
-        return RedirectResponse("/interface", status_code=303)
-    return RedirectResponse("/interface?msg=%s&ok=1" % quote("Enregistré."), status_code=303)
+        return RedirectResponse("/fonctions", status_code=303)
+    return RedirectResponse("/fonctions?msg=%s&ok=1#%s" % (quote("Enregistré."), option), status_code=303)
 
 
 @app.post("/premiers-pas/masquer")
@@ -1250,8 +1331,10 @@ def _page_tache(request, tache, saisi=None, **ctx):
 def premiers_pas_tache(request: Request, tache: str):
     if tache not in profil_mod.TACHES:
         return RedirectResponse("/", status_code=303)
+    if tache == "dossier":                       # Ton parcours : toujours l'entretien, sans formulaire
+        return page_parcours(request)
     if profil_mod.TACHES[tache].get("entretien") and request.query_params.get("formulaire") != "1":
-        return page_parcours(request) if tache == "dossier" else page_criteres(request)
+        return page_criteres(request)
     return _page_tache(request, tache)
 
 
@@ -1388,18 +1471,19 @@ def page_criteres(request: Request, msg=None, ok=None):
     et la proposition entière dans le volet, à relire avant d'enregistrer."""
     reg = parcours.ouvrir()
     try:
-        etat = ce_qui_compte.etat(reg, modifier=request.query_params.get("modifier"))
         p = profil_mod.charger()
+        etat = ce_qui_compte.etat(reg, modifier=request.query_params.get("modifier"), p=p)
         actuel = {"criteres": profil_mod.criteres_structures(p),
                   "activites": profil_mod.lire(p, "evaluation.activites") or [],
                   "interet": profil_mod.lire(p, "evaluation.interet") or "",
                   "regles": profil_mod.effectif("exclusions.regles", p),
                   "mots_titre": profil_mod.lire(p, "exclusions.mots_titre") or [], **profil_mod.objectifs_rythme()}
-        prop = ce_qui_compte.proposition(etat["reponses"], p) if etat["commence"] else None
+        # Déjà enregistrées : les réponses sont celles du profil (etat) et le pré-tri reste le sien.
+        prop = ce_qui_compte.proposition(etat["reponses"], p, regles=not etat["enregistre"]) if etat["commence"] else None
         ctx = etat["contexte"] or {}
         criteres = prop["criteres"] if prop and prop["lignes"] else actuel["criteres"]
         activites = prop["activites"] if prop and prop["activites"] is not None else actuel["activites"]
-        angles = ctx.get("angles") or profil_mod.lire(p, "evaluation.angles") or []
+        angles = profil_mod.lire(p, "evaluation.angles") or ctx.get("angles") or []
         mots = prop["mots_titre"] if prop else actuel["mots_titre"]
         contenu = ce_qui_compte.resolue(ce_qui_compte.PAR_CLE["contenu"], ctx)
         valeurs = {
@@ -1449,13 +1533,14 @@ async def criteres_repondre(request: Request):
     champs = {k[len("champ."):]: v for k, v in form.items() if k.startswith("champ.")}
     reg = parcours.ouvrir()
     try:
+        deja_enregistre = bool(ce_qui_compte.reponses(reg).get(ce_qui_compte.ENREGISTRE))
         ce_qui_compte.repondre(reg, cle, form.getlist("choix"), champs, passer=form.get("passer") == "1")
         if not ce_qui_compte.etat(reg)["termine"]:
             return RedirectResponse("/premiers-pas/criteres#entretien", status_code=303)
-        # Dernière réponse, ou une réponse modifiée une fois tout répondu : enregistré tout de suite,
-        # avant l'écran de succès.
+        # Dernière réponse : tout est enregistré. Une réponse modifiée une fois les réponses enregistrées :
+        # seulement ce qu'elle commande (le reste a pu changer depuis, dans les réglages). Avant l'écran de succès.
         try:
-            ce_qui_compte.enregistrer(reg)
+            ce_qui_compte.enregistrer(reg, cle if deja_enregistre else None)
         except profil_mod.ProfilInvalide as e:
             return RedirectResponse("/premiers-pas/criteres?msg=%s" % quote("Pas encore enregistré : %s." % e), status_code=303)
         return RedirectResponse("/premiers-pas/criteres?ok=1&enregistre=1", status_code=303)
@@ -1464,29 +1549,6 @@ async def criteres_repondre(request: Request):
                                 status_code=303)
     finally:
         reg.cx.close()
-
-
-@app.post("/profil/criteres/reponses")
-async def profil_criteres_reponses(request: Request):
-    """Réglages : toutes les réponses de « Ce qui compte pour toi » à la fois, puis le profil réécrit."""
-    form = await request.form()
-    valeurs = {q["cle"]: (form.getlist("choix." + q["cle"]),
-                          {c["nom"]: form.get("champ.%s.%s" % (q["cle"], c["nom"]), "") for c in q.get("champs", [])})
-               for q in ce_qui_compte.QUESTIONS}
-    reg = parcours.ouvrir()
-    try:
-        erreurs = ce_qui_compte.repondre_tout(reg, valeurs)
-        if erreurs:
-            return RedirectResponse("/profil/criteres?msg=%s#reponses" % quote("À compléter : %s." % " ; ".join(erreurs)),
-                                    status_code=303)
-        try:
-            ce_qui_compte.enregistrer(reg)
-        except profil_mod.ProfilInvalide as e:
-            return RedirectResponse("/profil/criteres?msg=%s#reponses" % quote("Pas enregistré : %s." % e), status_code=303)
-    finally:
-        reg.cx.close()
-    return RedirectResponse("/profil/criteres?ok=1&msg=%s#reponses" % quote(
-        "Réponses enregistrées : critères, tri du matin et objectifs mis à jour."), status_code=303)
 
 
 @app.post("/criteres/preparer")
@@ -1540,14 +1602,15 @@ async def premiers_pas_enregistrer(request: Request, tache: str):
 
 
 @app.get("/profil")
-def profil_debut():
+def profil_debut(request: Request):
     manque = profil_mod.manquants()
-    return RedirectResponse("/profil/%s" % (manque[0][0] if manque else "identite"), status_code=303)
+    suite = "?" + request.url.query if request.url.query else ""        # le message suit
+    return RedirectResponse("/profil/%s%s" % (manque[0][0] if manque else "identite", suite), status_code=303)
 
 
 @app.get("/profil/{ident}", response_class=HTMLResponse)
 def profil_page(request: Request, ident: str):
-    if ident != "fin" and profil_mod.etape(ident) is None:
+    if profil_mod.etape(ident) is None:
         return RedirectResponse("/profil", status_code=303)
     return _page_profil(request, ident)
 
@@ -1557,13 +1620,26 @@ def profil_terminer(request: Request):
     try:
         profil_mod.terminer_accueil()
     except profil_mod.ProfilInvalide as e:
-        return RedirectResponse("/profil/fin?msg=%s" % quote("À compléter avant de commencer : %s." % e), status_code=303)
+        return RedirectResponse("/profil?msg=%s" % quote("À compléter avant de commencer : %s." % e), status_code=303)
     return RedirectResponse("/?msg=%s&ok=1" % quote("Profil enregistré. Bienvenue !"), status_code=303)
+
+
+@app.post("/profil/{ident}/reprendre")
+def profil_reprendre(ident: str):
+    """Certifications ou langues : ajoute celles du parcours qui manquent (CV importé avant l'onglet)."""
+    genre = _GENRE_ONGLET.get(ident)
+    if genre is None:
+        return RedirectResponse("/profil", status_code=303)
+    n = profil_mod.completer_depuis_cv(_elements_cv(genre)).get(genre, 0)
+    msg = "%d %s ajoutée%s depuis ton parcours." % (n, profil_mod.NOMS_LISTES_CV[genre][n > 1], "s" if n > 1 else "") \
+        if n else "Rien à ajouter."
+    return RedirectResponse("/profil/%s?msg=%s&ok=1" % (ident, quote(msg)), status_code=303)
 
 
 @app.post("/profil/{ident}", response_class=HTMLResponse)
 async def profil_enregistrer(request: Request, ident: str):
     form = await request.form()
+    avant = profil_mod.criteres_structures() if ident == "criteres" else None
     try:
         profil_mod.enregistrer(ident, form)
     except profil_mod.ProfilInvalide as e:
@@ -1571,9 +1647,25 @@ async def profil_enregistrer(request: Request, ident: str):
             return RedirectResponse("/profil", status_code=303)
         saisi = {k: "\n".join(form.getlist(k)) for k in form.keys()}      # cases cochées : une par ligne
         return _page_profil(request, ident, saisi=saisi, msg="À corriger : %s." % e, ok=False)
-    ids = [x["id"] for x in profil_mod.etapes()] + ["fin"]
-    suivante = ids[ids.index(ident) + 1]
-    return RedirectResponse("/profil/%s?msg=%s&ok=1" % (suivante, quote("Enregistré.")), status_code=303)
+    msg = "Enregistré."
+    if ident == "criteres" and _pretri_selon_criteres(avant):
+        msg = "Enregistré ; le tri du matin suit tes critères."
+    ids = [x["id"] for x in profil_mod.etapes()]
+    suivante = ids[min(ids.index(ident) + 1, len(ids) - 1)]      # la dernière étape reste ouverte
+    return RedirectResponse("/profil/%s?msg=%s&ok=1" % (suivante, quote(msg)), status_code=303)
+
+
+def _pretri_selon_criteres(avant):
+    """Après Réglages › Critères : le taux, les contrats et les langues qui ont changé commandent les règles du
+    pré-tri, comme dans le questionnaire. Rend vrai si une règle a changé."""
+    p = profil_mod.charger()
+    actives = profil_mod.effectif("exclusions.regles", p)
+    regles = ce_qui_compte.critere_vers_pretri(avant, profil_mod.criteres_structures(p), actives)
+    if regles == list(actives):
+        return False
+    profil_mod.enregistrer("pretri", {"exclusions.regles": " ".join(regles),
+                                      "exclusions.mots_titre": "\n".join(profil_mod.lire(p, "exclusions.mots_titre") or [])})
+    return True
 
 
 # --- Actions --------------------------------------------------------------------
@@ -1588,12 +1680,15 @@ async def action(request: Request):
         retour = "/"
     donnees = {k: form.get(k) for k in ("note", "date", "canal", "motif", "prochaine") if form.get(k)}
     donnees["raisons"] = form.getlist("raisons")
+    en_json = "application/json" in request.headers.get("accept", "")
     p = profil_mod.charger()
     if type_ in ("go", "candidature") and profil_mod.progressif(p) and \
             not profil_mod.fonctions(p, ia_connectee())["postuler"]:
         manque = profil_mod.fonctions(p, ia_connectee())["manque"]["postuler"]
-        return RedirectResponse("%s?msg=%s" % (retour.split("#")[0], quote(
-            "Pour postuler, il reste : %s." % ", ".join(l[:1].lower() + l[1:] for _, l, _ in manque))), status_code=303)
+        msg = "Pour postuler, il reste : %s." % ", ".join(l[:1].lower() + l[1:] for _, l, _ in manque)
+        if en_json:
+            return JSONResponse({"ok": False, "msg": msg})
+        return RedirectResponse("%s?msg=%s" % (retour.split("#")[0], quote(msg)), status_code=303)
     reg = _reg()
     try:
         msg, ok = actions.appliquer(reg, emp, type_, donnees), True
@@ -1612,6 +1707,8 @@ async def action(request: Request):
         msg, ok = "Refusé : %s" % e, False
     finally:
         reg.fermer()
+    if en_json:
+        return JSONResponse({"ok": ok, "msg": msg})
     base, _, ancre = retour.partition("#")
     sep = "&" if "?" in base else "?"
     return RedirectResponse("%s%smsg=%s&ok=%d%s" % (base, sep, quote(msg), int(ok),

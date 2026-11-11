@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone, etat_vide, bouton_action, meta, decision, notes, alertes, delais, adequation, annuler_go, preremplir, claude, etat_tache %}
+{% from "_macros.html" import icone, etat_vide, bouton_action, meta, notes, alertes, delais, adequation, annuler_go, preremplir, claude, etat_tache %}
 {% block contenu %}
 {# Par défaut, une section vide ne s'affiche pas. Le courrier des employeurs ne compte qu'une fois une candidature
    envoyée. Rien du tout à faire : un état vide remplace la page (la checklist « Bien démarrer » reste au-dessus). #}
@@ -18,7 +18,7 @@
   <div class="tete">
     <div><h2 id="premiers-pas-titre">Bien démarrer</h2>
       <p class="muet petit">{{ faits }} sur {{ premiers_pas | length }} fait{{ 's' if faits > 1 }}. Le reste rend la note des annonces et tes dossiers plus justes.</p></div>
-    <div class="boutons-tete"><a class="petit" href="/interface">Ce qui s'ouvre</a>
+    <div class="boutons-tete"><a class="petit" href="/fonctions">Ce qui s'ouvre</a>
       <form method="post" action="/premiers-pas/masquer"><button class="lien-neutre petit">Masquer</button></form></div>
   </div>
   <div class="progression" role="progressbar" aria-valuemin="0" aria-valuemax="{{ premiers_pas | length }}" aria-valuenow="{{ faits }}" aria-label="Bien démarrer">
@@ -83,33 +83,17 @@
 {% endif %}
 
 {% if a_trancher %}
+{# Le tri lui-même se fait dans la pile de /trier, une annonce à la fois ; ici, seulement l'entrée. #}
 <h2 id="trancher">À trancher <span class="compte">{{ a_trancher | length }}</span></h2>
-<nav class="tri" aria-label="Trier">
-  Trier par
-  {% for k, v in [("urgence", "urgence"), ("note", "note"), ("recence", "date de publication"), ("statut", "statut")] %}
-  <a href="/?tri={{ k }}#trancher" class="{{ 'actif' if tri == k }}">{{ v }}</a>{% endfor %}
-</nav>
-<div class="cartes deux">
-{% for f in a_trancher %}
-  <article class="carte" id="a-{{ f.empreinte }}">
-    <div class="tete">
-      <div>
-        <h3><a href="/annonce/{{ f.empreinte }}">{{ f.titre }}</a></h3>
-        <div><b>{{ f.entreprise }}</b></div>
-        <div class="meta">{{ meta(f) }}</div>
-      </div>
-      <span class="puce {{ f.statut }}">{{ f.statut }}</span>
+<article class="carte">
+  <div class="tete">
+    <div>
+      <h3>{{ a_trancher | length }} annonce{{ 's attendent' if a_trancher | length > 1 else ' attend' }} ta décision</h3>
+      <div class="meta">Une à la fois : Go, Pas go ou plus tard.</div>
     </div>
-    {{ delais(f) }}
-    {{ adequation(evals.get(f.empreinte)) }}
-    {% if f.angle %}<p class="petit" style="margin:.5rem 0 0"><b>Angle :</b> {{ f.angle }}</p>{% endif %}
-    {% if f.exigences %}<ul class="exig">{% for e in f.exigences[:3] %}<li>{{ e }}</li>{% endfor %}</ul>
-    {% elif f.texte %}<p class="extrait">{{ f.texte[:400] }}</p>{% endif %}
-    {% if f.motif and f.statut == 'B' %}<p class="petit muet" style="margin:.4rem 0 0">{{ f.motif }}</p>{% endif %}
-    {{ decision(f, raisons, "/#trancher", fonctions) }}
-  </article>
-{% endfor %}
-</div>
+    <a class="bouton go" href="/trier">Trancher maintenant</a>
+  </div>
+</article>
 <p class="petit"><a href="/offres/ajouter">Ajouter une annonce trouvée ailleurs</a></p>
 {% endif %}
 

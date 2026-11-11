@@ -147,3 +147,41 @@ def test_employeur_non_divulgue_et_adresse_saisis(reg):
     v = valeurs_jobroom(f, "")
     assert (v["npa"], v["ville"]) == ("1201", "Genève") and "rue" not in v
     assert any("employeur · Employeur non divulgué sur Jobup · 1201 Genève" in j["texte"] for j in reg.journal(e))
+
+
+def _ompi(reg):
+    """La candidature OMPI du 29.10, et la même offre ajoutée le 05.11 sous le nom français."""
+    a = annonce(reg, entreprise="World Intellectual Property Organization", titre="UX Lead", statut="candidature",
+                postulee_le="2026-10-29", jobroom_saisie_le="2026-11-03")
+    b = annonce(reg, entreprise="Organisation Mondiale de la Propriété Intellectuelle (OMPI / WIPO)",
+                titre="UX Lead", statut="B")
+    return a, b
+
+
+def test_go_refuse_sur_un_poste_deja_postule(reg):
+    a, b = _ompi(reg)
+    with pytest.raises(ActionRefusee, match="même poste déjà engagé"):
+        appliquer(reg, b, "go")
+    assert reg.get(b)["statut"] == "B"
+
+
+def test_envoi_du_meme_poste_note_avec_alerte_et_preuve_refusee(reg):
+    from jobsearch import followups
+    a, b = _ompi(reg)
+    reg.maj(b, statut="retenue")
+    reg.commit()
+    msg = appliquer(reg, b, "candidature", {"date": "2026-11-11"})
+    assert "même poste déjà engagé" in msg and reg.get(b)["statut"] == "candidature"
+    with pytest.raises(ActionRefusee, match="déjà saisie pour le même poste"):
+        appliquer(reg, b, "jobroom_saisie")
+    jr = followups.jobroom(reg)
+    assert b not in [f["empreinte"] for f in jr["a_saisir"] + jr["a_verifier"]]
+    assert [f["empreinte"] for f in jr["meme_poste"]] == [b]
+
+
+def test_paire_dite_differente_libere_le_go(reg):
+    from jobsearch import doublons
+    a, b = _ompi(reg)
+    doublons.differentes(reg, a, b)
+    appliquer(reg, b, "go")
+    assert reg.get(b)["statut"] == "retenue"

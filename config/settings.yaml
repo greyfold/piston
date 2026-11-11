@@ -84,7 +84,7 @@ indeed:
   actif: true
   outils: "mcp__claude_ai_Indeed"   # préfixe des outils Indeed dans Claude Code
   modele: "haiku"                   # le modèle ne fait qu'appeler les outils
-  lieux: []                         # chaque requête du sourcing est lancée dans chaque lieu
+  lieux: []                         # chaque requête dans chaque lieu ; vide : les cantons du profil
   recherches_max: 20                # appels search_jobs par passage, en roulement d'un jour à l'autre
   details_max: 25                   # textes complets lus par passage (nouvelles, pas écartées)
   recherches_par_tour: 10           # paquets espacés : 50 appels d'affilée déclenchent la limite d'Indeed
@@ -97,7 +97,7 @@ linkedin:
   # Offres LinkedIn publiques par l'acteur Apify crawlworks/linkedin-jobs-scraper (décision du 26.10) ;
   # aucun compte LinkedIn personnel n'est utilisé. Jeton Apify dans le trousseau macOS,
   # saisi sur la page Santé du tableau de bord (depuis le Mac).
-  # Requêtes et lieu : `linkedin_requetes` et `linkedin_lieu` dans config/criteres.yaml.
+  # Requêtes déduites des postes recherchés du profil (une par poste) ; lieu : l'adresse du profil, sinon `linkedin_lieu`.
   actif: false
   acteur: "crawlworks~linkedin-jobs-scraper"
   annonces_par_requete: 25

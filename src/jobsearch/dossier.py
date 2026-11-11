@@ -49,7 +49,7 @@ CONSIGNE = """Tu prépares le dossier de candidature de %(nom)s pour une annonce
 - Le CV et la lettre sont dans la langue de l'annonce, rédigés directement dans cette langue (jamais une traduction mot à mot). Les mots-clés viennent du texte original de l'annonce.
 - Aucun tiret cadratin (—). Une puce par ligne. Aucun lien [[...]], aucune référence P-xx ou E-n, aucun tag d'angle dans le CV ou la lettre.
 - Lettre : une page, au style de « Style d'écriture », jamais « ravi de », au plus une anecdote tirée des preuves ou du parcours et portée par une force de « Forces VIA » qui répond à un signal de l'annonce, sans jamais nommer le test. Prête à envoyer : aucun champ à compléter, salutation neutre si le destinataire est inconnu.
-%(regles)sRéponds uniquement par le contenu Markdown demandé, sans préambule."""
+Réponds uniquement par le contenu Markdown demandé, sans préambule."""
 
 # Guides de Harvard (Mignone Center for Career Success), retenus le 27.10 et résumés ici :
 # careerservices.fas.harvard.edu/resources/create-a-strong-resume/ (CV et lettre) et
@@ -97,6 +97,7 @@ HARVARD_LETTRE = """Règles des guides de Harvard pour la lettre : adressée à 
 PIECES = {
     "analyse": """Écris Analyse.md. Commence exactement par « ## Angle proposé » (%(angles)s, et pourquoi en trois phrases). Puis : « ## Exigences » (explicites, implicites, signaux culturels), « ## Correspondance » (chaque exigence majeure → preuve P-xx, élément E-n du parcours ou poste), « ## Écarts assumés » (et comment la lettre les traite), « ## Mots-clés de l'annonce » (15 à 25 termes, dans la langue de l'annonce, marqués présent / à aligner / écart), « ## Questions en attente » (hypothèses prises faute d'information ; vide si aucune). Tu peux citer P-xx et E-n ici : c'est une note de travail.""",
     "cv": """Écris CV.md, le CV adapté. Première ligne : « # %(nom)s », deuxième : « ## <titre exact de l'annonce> ». Puis les sections usuelles dans la langue de l'annonce, dans cet ordre : profil, expérience, compétences, formation, certifications, langues ; une seule colonne, dates au format MM.AAAA. Puces choisies et réordonnées depuis le CV maître (ou les réalisations de la base Parcours) pour l'angle retenu ; mots-clés de l'annonce repris seulement s'ils sont vrais. Aucune référence P-xx ni E-n, aucun lien, aucun tiret cadratin. Le CV tient sur %(pages_cv)s pages A4 au plus, soit %(mots_cv)s mots environ : les postes anciens ou éloignés de l'annonce gardent leur ligne d'en-tête et perdent leurs puces, les compétences sont resserrées sur l'annonce. Section certifications : %(certifications)s
+Section langues : %(langues)s
 
 """ + HARVARD.replace("%", "%%"),
     "lettre": """Écris Lettre.md. Avant la lettre, une note de travail de deux lignes au plus (anecdote choisie et pourquoi), puis une ligne « --- », puis la lettre elle-même dans la langue de l'annonce : la ligne de lieu et date avec la date du jour fournie (« %(ville)s, le 26 octobre 2026 », ou son équivalent dans la langue de l'annonce), objet, salutation, quatre paragraphes (accroche sur le problème de l'entreprise, preuve principale, %(differenciateur)s, clôture avec demande d'entretien), formule finale, « %(nom)s ». Aucun tiret cadratin, aucun champ à compléter.
@@ -116,9 +117,9 @@ def _valeurs():
         "ville": profil.identite().get("ville") or "Localité",
         "angles": "un des %s angles" % profil.nombre_fr(len(angles)) if angles else "un des angles de la méthode",
         "differenciateur": "différenciateur " + diff if diff else "différenciateur",
-        "regles": "".join("- %s\n" % r for r in profil.lire(p, "dossier.regles") or []),
-        "pages_cv": pages_cv(), "mots_cv": MOTS_PAR_PAGE * pages_cv(),
+        "pages_cv": PAGES_CV, "mots_cv": MOTS_PAR_PAGE * PAGES_CV,
         "certifications": _certifications(profil.lire(p, "dossier.certifications") or []),
+        "langues": _langues(profil.lire(p, "dossier.langues") or []),
     }
 
 
@@ -132,8 +133,18 @@ def _certifications(liste):
             + "".join("- %s\n" % c for c in liste))
 
 
-def pages_cv():
-    return int(profil.lire(profil.charger(), "dossier.pages_cv") or 2)
+def _langues(liste):
+    if not liste:
+        return "celles du CV maître, chacune une seule fois."
+    return ("celles de la liste ci-dessous, qui fait foi (langue | niveau | attestation éventuelle) et remplace celle "
+            "du CV maître : chacune une seule fois ; nom de la langue et niveau traduits dans la langue de l'annonce. "
+            "Le niveau est une auto-évaluation sur l'échelle européenne : jamais « certifié », « attesté », « diplôme » "
+            "ni nom de test ou de certificat qui ne figure pas sur sa ligne ; une attestation donnée se cite telle quelle, "
+            "entre parenthèses après le niveau.\n"
+            + "".join("- %s\n" % x for x in liste))
+
+
+PAGES_CV = 2                 # pages A4 au plus : un CV plus long est raccourci par Claude
 
 
 def lignes_par_page(pdf):
@@ -326,7 +337,7 @@ def finir(reg, emp, c=None):
     return _finaliser(reg, f, dossier, pieces, contexte_fixe(), c)
 
 
-RACCOURCIR = """Le CV ci-dessous, rendu en Word puis en PDF A4, fait %(pages)s pages ; il en faut %(pages_cv)s au plus. %(debord)sIl compte %(mots)s mots : ramène-le à %(cible)s mots au plus. Garde le titre exact, l'en-tête, le profil et les expériences récentes et pertinentes pour l'annonce avec leurs meilleures puces. Condense d'abord ce qui sert le moins l'annonce : postes anciens ou éloignés réduits à leur ligne d'en-tête, sans puces, compétences resserrées, puces plus courtes, détails redondants. Ne rien inventer, ne rien ajouter ; les mots-clés de l'annonce déjà présents restent, la section certifications reste complète. Même format : sections, dates MM.AAAA, une puce par ligne, aucun tiret cadratin, aucune référence P-xx.
+RACCOURCIR = """Le CV ci-dessous, rendu en Word puis en PDF A4, fait %(pages)s pages ; il en faut %(pages_cv)s au plus. %(debord)sIl compte %(mots)s mots : ramène-le à %(cible)s mots au plus. Garde le titre exact, l'en-tête, le profil et les expériences récentes et pertinentes pour l'annonce avec leurs meilleures puces. Condense d'abord ce qui sert le moins l'annonce : postes anciens ou éloignés réduits à leur ligne d'en-tête, sans puces, compétences resserrées, puces plus courtes, détails redondants. Ne rien inventer, ne rien ajouter ; les mots-clés de l'annonce déjà présents restent, les sections certifications et langues restent complètes. Même format : sections, dates MM.AAAA, une puce par ligne, aucun tiret cadratin, aucune référence P-xx.
 
 """ + HARVARD.replace("%", "%%") + """
 
@@ -338,8 +349,8 @@ def _raccourcir(c, f, cv, pages, fixe, tour, par_page=None):
     une ligne qui déborde se règle en supprimant des lignes entières, pas en raccourcissant des
     phrases (constat JTI, 27.10 : deux raccourcis de mots, la ligne débordait toujours)."""
     mots = len(cv.split())
-    if par_page and len(par_page) > pages_cv():
-        debord = sum(par_page[pages_cv():])
+    if par_page and len(par_page) > PAGES_CV:
+        debord = sum(par_page[PAGES_CV:])
         lignes = (debord + 3) * tour                                  # le second tour coupe plus franchement
         texte = ("Les pages en trop portent %d ligne(s) : supprime au moins %d lignes entières du rendu "
                  "(une puce entière, une ligne de compétences, un poste très ancien et sans lien avec l'annonce, "
@@ -347,7 +358,7 @@ def _raccourcir(c, f, cv, pages, fixe, tour, par_page=None):
                  "ligne ne libère aucune place. " % (debord, lignes))
         coupe = 12 * lignes
     else:
-        coupe = mots - int(MOTS_PAR_PAGE * pages_cv() * (0.95 if tour == 1 else 0.85))
+        coupe = mots - int(MOTS_PAR_PAGE * PAGES_CV * (0.95 if tour == 1 else 0.85))
         texte = ""
     cible = mots - max(coupe, 40)
     return _appel(c, fixe, RACCOURCIR % dict(_valeurs(), pages=pages, mots=mots, cible=cible, debord=texte),
@@ -371,7 +382,7 @@ def _finaliser(reg, f, dossier, pieces, fixe, c=None):
     pdf = rendre("cv")
     pages = nombre_pages(pdf)
     tour = 0
-    while c and pages and pages > pages_cv() and tour < RACCOURCIS_MAX:
+    while c and pages and pages > PAGES_CV and tour < RACCOURCIS_MAX:
         tour += 1
         (dossier / ("CV.%d-pages.md" % pages)).write_text(pieces["cv"], encoding="utf-8")   # version trop longue gardée
         avant = pages
@@ -381,7 +392,8 @@ def _finaliser(reg, f, dossier, pieces, fixe, c=None):
         pages = nombre_pages(pdf)
         reg.noter(emp, "CV raccourci · %s → %s pages" % (avant, pages or "?"))
     couverture = mesurer(dossier, f.get("entreprise"))
-    certifications = "\n".join(profil.lire(profil.charger(), "dossier.certifications") or [])
+    certifications = "\n".join((profil.lire(profil.charger(), "dossier.certifications") or [])
+                               + (profil.lire(profil.charger(), "dossier.langues") or []))
     resultats = controler(f, dossier, pieces, couverture, fixe + "\n" + certifications, pages)
     etat = "pret" if all(r["ok"] for r in resultats) else "a_revoir"
     reg.cx.execute("UPDATE dossiers SET etat=?, fin=?, couverture=?, controles=? WHERE empreinte=?",
@@ -596,7 +608,7 @@ def controler(f, dossier, pieces, couverture, fixe, pages=None):
             len(re.findall(r"^## [0-5]\.", pieces["envoi"], re.M)) >= 6)
     ajouter("CQ-12 l'analyse commence par « Angle proposé »", pieces["analyse"].lstrip().startswith("## Angle proposé"))
     if pages is not None:                                             # sans PDF, rien à compter
-        ajouter("CQ-13 CV sur %d pages au plus" % pages_cv(), pages <= pages_cv(), "%d pages" % pages)
+        ajouter("CQ-13 CV sur %d pages au plus" % PAGES_CV, pages <= PAGES_CV, "%d pages" % pages)
     return r
 
 

@@ -103,7 +103,7 @@ def web(reg, monkeypatch):
 
 def test_bandeau_et_carte_disent_quoi_faire(reg, notes, web, monkeypatch):
     _passage(reg, IndeedAbsent())
-    accueil = web.get("/").text
+    accueil = web.get("/?ensuite=1").text                # le tableau de bord, une fois le tri passé
     assert "Indeed n'est pas branché" in accueil and 'href="/connecteurs#indeed"' in accueil
     page = web.get("/connecteurs").text
     assert "à configurer" in page and "Pas encore branché" in page and "activer Indeed" in page

@@ -1,5 +1,5 @@
 {# Les champs d'une étape du profil : assistant (profil.html) et tâches de la checklist (premiers_pas.html). #}
-{% from "_macros.html" import champ_puces %}
+{% from "_macros.html" import champ_puces, champ_lignes %}
 {% from "_questions_criteres.html" import champs_criteres %}
 {% set autocomplete = {"identite.prenom": "given-name", "identite.nom": "family-name", "identite.adresse": "street-address",
    "identite.npa": "postal-code", "identite.ville": "address-level2", "identite.pays": "country-name",
@@ -7,6 +7,7 @@
    "identite.civilite": "honorific-prefix", "identite.date_naissance": "bday"} %}
 {% set clavier = {"email": "email", "tel": "tel", "url": "url", "nombre": "numeric", "date": "numeric"} %}
   {% for c in champs %}
+    {% if c.section %}<h3 class="section-base">{{ c.section }}</h3>{% endif %}
     {% if c.type == 'regles' %}
     {# Une règle par pilule, un champ par groupe (Langue, Niveau, Contrat…). #}
     {% set cochees = c.valeur.split('\n') %}
@@ -20,11 +21,28 @@
     {% set items = c.valeur.split('\n') | map('trim') | select | list %}
     {% set opts = [] %}{% for x in items + ((options_listes | default({})).get(c.cle) or []) %}{% if x not in opts | map(attribute='0') | list %}{% set _ = opts.append((x, x)) %}{% endif %}{% endfor %}
     {{ champ_puces(c.cle, c.libelle, opts, items, c.cle, aide=c.aide, ajout=true, exemple=c.exemple, requis=c.requis) }}
+    {% elif c.type == 'cantons' %}
+    {# Une pilule par canton, sous son nom ; le profil garde les abréviations. #}
+    {{ champ_puces(c.cle, c.libelle, liste_cantons, c.valeur, c.cle, aide=c.aide, requis=c.requis) }}
+    {% elif c.type == 'postes' %}
+    {# Une ligne par poste : son intitulé, puis ses autres intitulés séparés par des virgules. #}
+    {% set lignes = [] %}{% for x in c.valeur %}{% set _ = lignes.append([x.intitule, x.variantes | join(", ")]) %}{% endfor %}
+    {{ champ_lignes(c.cle, c.libelle, [("intitule", "Intitulé", "Chef de projet"),
+        ("variantes", "Autres intitulés, séparés par des virgules", "Responsable de projet, Project manager")],
+        lignes, c.cle, aide=c.aide, requis=c.requis, ajout="Ajouter un poste",
+        apres=("Mots gardés pour le pré-tri : " ~ c.mots | join(", ") ~ ".") if c.mots else "") }}
+    {% if c.proposes %}{% with pp=c.proposes, ia=c.ia %}{% include "_postes_proposes.html" %}{% endwith %}{% endif %}
+    {% elif c.type == 'lignes' %}
+    {# Certifications, langues : une ligne par élément, une case par colonne. #}
+    {{ champ_lignes(c.cle, c.libelle, c.colonnes, c.valeur, c.cle, aide=c.aide, requis=c.requis,
+        ajout={"dossier.certifications": "Ajouter une certification", "dossier.langues": "Ajouter une langue"}.get(c.cle, "Ajouter une ligne")) }}
     {% elif c.type == 'criteres' %}
-    <p class="champ-intro">{{ c.libelle }}{% if c.requis %} <span class="requis">*</span>{% endif %} : {{ c.aide }}</p>
+    {% if c.aide %}<p class="champ-intro">{{ c.aide }}</p>{% endif %}
+    {% if ident == "criteres" %}<p class="champ-intro">Tu préfères répondre à des questions ?
+      <a class="lien-neutre" href="/premiers-pas/criteres">Questionnaire « Ce qui compte pour toi »</a></p>{% endif %}
     {{ champs_criteres(criteres_def, c.valeur, id="profil") }}
     {% else %}
-    <div class="champ{{ ' large' if c.type == 'liste' }}">
+    <div class="champ{{ ' large' if c.type == 'liste' or c.large }}">
       <label for="{{ c.cle }}">{{ c.libelle }}{% if c.requis %} <span class="requis" title="obligatoire">*</span>{% endif %}
         {% if c.par_defaut and c.valeur %}<span class="puce" title="Valeur des fichiers de config/ : enregistrée dans le profil seulement si tu la changes">par défaut</span>{% endif %}</label>
       {% if c.type == 'choix' %}

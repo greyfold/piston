@@ -1,7 +1,6 @@
 {% from "_macros.html" import champ_puces %}
 {# Les réponses possibles à une question de « Ce qui compte pour toi » (ce_qui_compte.py) : choix à cliquer et
-   champs. Le même rendu dans le questionnaire (une question à la fois) et dans les réglages (toutes à la fois) :
-   `nom_choix` et `prefixe` nomment les entrées, `id` les distingue d'une question à l'autre. #}
+   champs, une question à la fois. `nom_choix` et `prefixe` nomment les entrées, `id` les distingue. #}
 {% macro reponse_question(q, deja, defauts, nom_choix="choix", prefixe="champ.", id="r") -%}
 {% set coches = (deja.choix if deja.choix is not string else [deja.choix]) if deja and deja.choix is defined and deja.choix is not none else [] %}
 {% if q.choix %}
@@ -29,12 +28,13 @@
 {%- endmacro %}
 
 {# Les critères non négociables (profil.CRITERES), un champ par élément : choix simple ou multiple en pilules,
-   nombres, textes, listes libres à compléter. Mêmes noms (`critere.<clé>`) dans le volet du questionnaire et
-   dans les réglages ; `v` : {clé: valeur}. #}
-{% macro champs_criteres(criteres, v, id="c") -%}
+   nombres, textes, listes libres à compléter, groupés sous leurs titres de section (`niveau` : celui du titre).
+   Mêmes noms (`critere.<clé>`) dans le volet du questionnaire et dans les réglages ; `v` : {clé: valeur}. #}
+{% macro champs_criteres(criteres, v, id="c", niveau=3) -%}
 <div class="grille-champs">
   {% for c in criteres %}
   {% set val = v[c.cle] if v and c.cle in v else none %}
+  {% if c.section %}<h{{ niveau }} class="section-base">{{ c.section }}</h{{ niveau }}>{% endif %}
   {% if c.type == "un" %}
   {{ champ_puces("critere." ~ c.cle, c.libelle, [("", c.vide)] + c.choix, [val | string if val is not none else ""],
                  id ~ "-" ~ c.cle, multiple=false, aide=c.aide or "") }}
@@ -49,7 +49,9 @@
   <div class="champ{{ ' large' if c.type == 'texte' and not c.cle.endswith('_depuis') }}">
     <label for="{{ id }}-{{ c.cle }}">{{ c.libelle }}</label>
     <input type="text" id="{{ id }}-{{ c.cle }}" name="critere.{{ c.cle }}" value="{{ val if val is not none else '' }}"
-      placeholder="{{ c.exemple }}"{% if c.type == "nombre" %} inputmode="numeric" spellcheck="false"{% endif %}>
+      placeholder="{{ c.exemple }}"{% if c.type == "nombre" %} inputmode="numeric" spellcheck="false"{% endif %}
+      {%- if c.aide %} aria-describedby="{{ id }}-{{ c.cle }}-aide"{% endif %}>
+    {% if c.aide %}<span class="aide" id="{{ id }}-{{ c.cle }}-aide">{{ c.aide }}</span>{% endif %}
   </div>
   {% endif %}
   {% endfor %}

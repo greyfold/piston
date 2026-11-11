@@ -236,41 +236,54 @@ def test_ecran_de_succes_avec_modifier(base, monkeypatch):
     assert profil.lignes_criteres(profil.criteres_structures())[0] == "trajet : 30 minutes au plus depuis Morges"
 
 
-def test_reglages_montrent_et_enregistrent_toutes_les_questions(base, monkeypatch):
-    """Réglages › Critères : toutes les questions et leurs options, à remplir et enregistrer d'un coup."""
+def test_reglages_un_seul_formulaire_qui_commande_aussi_le_pretri(base, monkeypatch):
+    """Réglages › Critères : un seul formulaire, en sections ; le taux, les contrats et les langues qui changent
+    commandent le pré-tri comme dans le questionnaire, une règle réglée à la main reste sinon."""
     from jobsearch.web import app as appmod
     monkeypatch.setattr(appmod, "ia_connectee", lambda: False)
     web = TestClient(appmod.app)
-    cqc.repondre(base, "trajet", ["45"], {"depuis": "Morges"})
     page = web.get("/profil/criteres").text
-    assert "Tes réponses" in page and page.count('class="question-reglage"') == len(cqc.QUESTIONS)
-    for q in cqc.QUESTIONS:
-        assert q["question"].replace("'", "&#39;") in page or q["question"] in page
-    assert "CDD de 2 ans ou plus" in page and "Au moins (%)" in page and 'name="choix.trajet" value="45" checked' in page
-    form = {"choix.trajet": "60", "champ.trajet.depuis": "Morges", "champ.taux.min": "90", "champ.taux.max": "100",
-            "choix.contrat": ["cdi", "cdd-2ans"], "choix.langues": ["français", "anglais"],
-            "champ.rythme.semaine": "2", "champ.rythme.mois": "8"}
-    r = web.post("/profil/criteres/reponses", data=form, follow_redirects=False)
-    assert "ok=1" in r.headers["location"]
-    pr = profil.charger()
-    assert profil.lignes_criteres(profil.criteres_structures(pr))[:3] == [
-        "trajet : 1 heure au plus depuis Morges", "taux d'activité : 90 à 100 %", "contrat : CDI, CDD de 2 ans ou plus"]
-    assert profil.objectifs_rythme() == {"semaine": 2, "mois": 8}
-    assert "teletravail" not in cqc.reponses(base)                     # jamais répondue, laissée vide : sans réponse
-    r = web.post("/profil/criteres/reponses", data={**form, "champ.taux.min": "120"}, follow_redirects=False)
-    assert "msg=" in r.headers["location"] and "ok=1" not in r.headers["location"]
+    assert "Tes réponses" not in page and 'name="choix.' not in page and "/profil/criteres/reponses" not in page
+    for titre in ("Conditions de travail", "Le poste", "À éviter, et le reste", "Ce qui rend un poste intéressant",
+                  "Pour te présenter"):
+        assert '<h3 class="section-base">%s</h3>' % titre in page
+    assert page.count('name="critere.trajet"') == len(profil.TRAJETS) + 1 and 'href="/premiers-pas/criteres"' in page
+    assert "Sans l&#39;allemand, le tri du matin" in page or "Sans l'allemand, le tri du matin" in page
+    form = {"critere.taux_min": "80", "critere.contrats": ["cdi", "cdd-long"], "critere.langues": ["français"],
+            "critere.autres": ["dimension IA"]}
+    r = web.post("/profil/criteres", data=form, follow_redirects=False)
+    assert "tri%20du%20matin" in r.headers["location"]
+    actives = profil.effectif("exclusions.regles")
+    assert "taux" not in actives and "contrat-cdd" not in actives and "langue-allemand" in actives
+    # Une règle remise à la main dans le pré-tri reste tant que son critère ne bouge pas.
+    profil.enregistrer("pretri", {"exclusions.regles": " ".join(actives + ["taux"]), "exclusions.mots_titre": ""})
+    r = web.post("/profil/criteres", data={**form, "critere.teletravail": "2"}, follow_redirects=False)
+    assert "tri%20du%20matin" not in r.headers["location"] and "taux" in profil.effectif("exclusions.regles")
 
 
-def test_les_reglages_gardent_une_question_passee(base):
-    cqc.repondre(base, "teletravail", passer=True)
-    cqc.repondre(base, "langues", passer=True)
-    cqc.repondre(base, "trajet", ["45"], {"depuis": "Morges"})
-    valeurs = {q["cle"]: ([], {}) for q in cqc.QUESTIONS}
-    valeurs["trajet"] = (["30"], {"depuis": "Morges"})
-    assert cqc.repondre_tout(base, valeurs) == []
-    rep = cqc.reponses(base)
-    assert rep["teletravail"] == {"passe": True} and rep["langues"] == {"passe": True}
-    assert rep["trajet"]["choix"] == "30"
+def test_le_questionnaire_suit_le_profil(base, monkeypatch):
+    """Une fois les réponses enregistrées, le profil fait foi : le fil montre ce qu'on a changé dans les
+    réglages, et une réponse modifiée ne réécrit que ce qu'elle commande."""
+    from jobsearch.web import app as appmod
+    monkeypatch.setattr(appmod, "ia_connectee", lambda: False)
+    web = TestClient(appmod.app)
+    _repondre_tout(base)
+    web.post("/criteres/repondre", data={"cle": "rythme", "champ.semaine": "3", "champ.mois": "12"})
+    assert cqc.reponses(base)[cqc.ENREGISTRE]
+    web.post("/profil/criteres", data={"critere.trajet": "45", "critere.trajet_depuis": "Morges", "critere.teletravail": "3",
+                                       "critere.taux_min": "80", "critere.langues": ["français", "anglais"],
+                                       "evaluation.angles": ["Mon angle"]})
+    e = cqc.etat(base)
+    fil = {x["question"]["cle"]: x["reponse"] for x in e["fil"]}
+    assert fil["teletravail"] == "3 jours par semaine" and fil["contrat"] == "Peu importe" and fil["eviter"] == "Passé"
+    assert cqc.etat(base, modifier="teletravail")["deja"]["choix"] == "3"
+    # Une réponse modifiée : le trajet change, le télétravail réglé ailleurs et les angles restent.
+    web.post("/criteres/repondre", data={"cle": "trajet", "choix": "30", "champ.depuis": "Morges"})
+    c = profil.criteres_structures()
+    assert c["trajet"] == "30" and c["teletravail"] == "3" and "contrats" not in c
+    assert profil.lire(profil.charger(), "evaluation.angles") == ["Mon angle"]
+    page = web.get("/premiers-pas/criteres").text
+    assert "Enregistré dans ton profil" in page
 
 
 def test_les_choix_donnes_avant_les_exemples_de_l_ia_restent(base):

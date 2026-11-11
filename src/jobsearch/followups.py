@@ -70,17 +70,25 @@ def sans_reponse(reg, aujourdhui=None):
 def jobroom(reg, aujourdhui=None):
     """Preuves à saisir (délai en cours), à vérifier (délai passé, aucune trace
     au registre), et refus à reporter sur la ligne existante."""
+    from .doublons import meme_poste_engage
     auj = aujourdhui or dt.date.today()
-    a_saisir, a_verifier = [], []
+    a_saisir, a_verifier, meme_poste = [], [], []
     for f in reg.liste(ENVOYEES, ordre="postulee_le DESC"):
         if not f.get("postulee_le") or f.get("jobroom_saisie_le"):
+            continue
+        # Le même poste a déjà sa ligne dans Job-Room (doublon OMPI du 05.11) : pas de seconde
+        # saisie, ni par la personne ni par la session Claude qui suit l'envoi.
+        deja = [g for g, _ in meme_poste_engage(reg, f) if g.get("jobroom_saisie_le")]
+        if deja:
+            f["_meme_poste"] = deja
+            meme_poste.append(f)
             continue
         lim = echeance_jobroom(f["postulee_le"])
         f["_limite"], f["_jours_restants"] = lim, (lim - auj).days
         (a_saisir if lim >= auj else a_verifier).append(f)
     a_saisir.sort(key=lambda f: f["_limite"])
     refus = [f for f in reg.liste(["refus"]) if f.get("jobroom_maj") == "a_faire"]
-    return {"a_saisir": a_saisir, "a_verifier": a_verifier, "refus_a_reporter": refus}
+    return {"a_saisir": a_saisir, "a_verifier": a_verifier, "refus_a_reporter": refus, "meme_poste": meme_poste}
 
 
 def rythme(reg, aujourdhui=None):

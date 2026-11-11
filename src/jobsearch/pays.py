@@ -13,6 +13,8 @@ from functools import lru_cache
 
 # Pays où la plateforme cherche (étape Identité, champ Pays) : code ISO → nom.
 PAYS_DE_RECHERCHE = {"CH": "Suisse", "FR": "France"}
+# Les pays de recherche tels que LinkedIn les écrit dans un lieu (« Lausanne, Switzerland »).
+EN_ANGLAIS = {"Suisse": "Switzerland", "France": "France"}
 
 # Proposés en tête de la liste des nationalités.
 FREQUENTES = ["Suisse", "France", "Italie", "Portugal", "Espagne", "Allemagne", "Belgique"]
@@ -265,3 +267,18 @@ CANTONS = {
 }
 # Proposés en tête du choix de la région (Suisse romande d'abord).
 CANTONS_ROMANDS = ["GE", "VD", "VS", "FR", "NE", "JU"]
+CANTONS_ITALIENS = ["TI"]
+
+
+def region_des_cantons(codes):
+    """La région que forment des cantons, pour la consigne et le salaire du marché : « Suisse romande »
+    quand tous sont romands, « Suisse alémanique », « Suisse italienne », sinon « Suisse » ; "" sans canton."""
+    codes = [c for c in codes or [] if c in CANTONS]
+    if not codes:
+        return ""
+    for groupe, nom in ((CANTONS_ROMANDS, "Suisse romande"), (CANTONS_ITALIENS, "Suisse italienne")):
+        if all(c in groupe for c in codes):
+            return nom
+    if not any(c in CANTONS_ROMANDS + CANTONS_ITALIENS for c in codes):
+        return "Suisse alémanique"
+    return "Suisse"

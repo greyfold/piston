@@ -169,3 +169,15 @@ def test_lien_garde_sans_suivi(reg):
     f = reg.get(r["empreinte"])
     assert f["url"] == f["url_postuler"] == "https://www.exemple.ch/pm?id=7"
     assert f["ids_source"] == ["ajout-manuel:https://www.exemple.ch/pm?id=7"]
+
+
+def test_meme_poste_deja_postule_rejoint_la_candidature(reg):
+    # 05.11 : l'OMPI ajoutée à la main sous son nom français, déjà postulée le 29.10 (Indeed, en anglais).
+    a = annonce(reg, entreprise="World Intellectual Property Organization", titre="UX Lead",
+                statut="candidature", postulee_le="2026-10-29")
+    texte = TEXTE.replace("Exemple SA", "L'OMPI").replace("Product Manager", "UX Lead")
+    r = ajout.ajouter(reg, texte=texte, entreprise="Organisation Mondiale de la Propriété Intellectuelle (OMPI / WIPO)",
+                      titre="UX Lead")
+    assert r["empreinte"] == a and not r["nouvelle"] and "Même poste déjà au registre" in r["message"]
+    doublon = [f for f in reg.liste(["doublon"])]
+    assert len(doublon) == 1 and doublon[0]["extra"]["doublon_de"] == a

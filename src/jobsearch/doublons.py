@@ -62,6 +62,42 @@ def cle_entreprise(nom):
     return frozenset(_FORMES.sub(" ", normaliser(t)).split())
 
 
+_JURIDIQUES = set("sa sarl ag gmbh ltd limited inc llc plc bv nv spa sas co cie".split())
+
+
+def sigle(nom):
+    """« World Intellectual Property Organization » → « wipo » ; None sous trois mots.
+
+    Les mots entre parenthèses (un sigle déjà écrit, « via … ») et les formes juridiques
+    ne comptent pas ; « de », « la », « of »… non plus : « Organisation Mondiale de la
+    Propriété Intellectuelle » → « ompi ».
+    """
+    t = re.sub(r"\([^)]*\)", " ", html.unescape(nom or ""))
+    mots = [m for m in normaliser(t).split() if m not in _VIDES and m not in _JURIDIQUES and not m.isdigit()]
+    return "".join(m[0] for m in mots) if len(mots) >= 3 else None
+
+
+def meme_employeur(na, nb):
+    """Vrai si les deux noms désignent le même employeur.
+
+    L'un contenu dans l'autre (« Nexthink » et « Nexthink SA »), ou, quand ils n'ont aucun
+    mot en commun, le sigle de l'un écrit dans l'autre : « World Intellectual Property
+    Organization » et « Organisation Mondiale de la Propriété Intellectuelle (OMPI / WIPO) »
+    (doublon du 05.11, candidature envoyée deux fois). Deux noms qui partagent des mots
+    sans s'inclure restent deux employeurs : « Banque Cantonale Vaudoise (BCV) » et
+    « Banque Cantonale du Valais ».
+    """
+    ea, eb = cle_entreprise(na), cle_entreprise(nb)
+    if not ea or not eb:
+        return False
+    if ea <= eb or eb <= ea:
+        return True
+    if ea & eb:
+        return False
+    sa, sb = sigle(na), sigle(nb)
+    return bool((sa and sa in eb) or (sb and sb in ea))
+
+
 def mots_titre(titre):
     """(mots, numéros) d'un intitulé ; les taux et marques de genre sont déjà retirés."""
     mots = normaliser(html.unescape(titre or "")).split()
@@ -85,8 +121,7 @@ def ressemblance_textes(a, b):
 
 def comparer(a, b):
     """(niveau, raison) pour deux fiches : niveau « sur », « a_verifier » ou None."""
-    ea, eb = cle_entreprise(a.get("entreprise")), cle_entreprise(b.get("entreprise"))
-    if not ea or not eb or not (ea <= eb or eb <= ea):
+    if not meme_employeur(a.get("entreprise"), b.get("entreprise")):
         return None, ""
     (ta, na), (tb, nb) = mots_titre(a.get("titre")), mots_titre(b.get("titre"))
     if not ta or not tb or (na and nb and na != nb):
@@ -149,18 +184,24 @@ def detecter(reg, fiches=None):
     """{"surs": [(principale, secondaire, raison)], "a_verifier": [(a, b, raison)]}."""
     fiches = [f for f in (fiches if fiches is not None else reg.toutes()) if f.get("statut") != "doublon"]
     deja = verdicts(reg)
-    index = {}
+    index, par_sigle = {}, {}
     for i, f in enumerate(fiches):
         f["_cle"] = cle_entreprise(f.get("entreprise"))
+        f["_sigle"] = sigle(f.get("entreprise"))
         for mot in f["_cle"]:
             index.setdefault(mot, []).append(i)
+        if f["_sigle"]:
+            par_sigle.setdefault(f["_sigle"], []).append(i)
     surs, a_verifier, vues = [], [], set()
     for i, a in enumerate(fiches):
         if not a["_cle"]:
             continue
         # Une paire « l'un contenu dans l'autre » partage forcément le mot le plus rare du plus court.
         rare = min(a["_cle"], key=lambda m: len(index[m]))
-        for j in index[rare]:
+        # Et une paire reconnue au sigle : le sigle de l'un est un mot de l'autre.
+        candidates = index[rare] + index.get(a["_sigle"], []) + \
+            [j for m in a["_cle"] for j in par_sigle.get(m, [])]
+        for j in candidates:
             if j == i or (min(i, j), max(i, j)) in vues:
                 continue
             vues.add((min(i, j), max(i, j)))
@@ -174,7 +215,44 @@ def detecter(reg, fiches=None):
                 a_verifier.append((*ordonner(a, b), raison))
     for f in fiches:
         f.pop("_cle", None)
+        f.pop("_sigle", None)
     return {"surs": surs, "a_verifier": a_verifier}
+
+
+def meme_poste_engage(reg, f):
+    """Les autres fiches du même poste déjà retenues ou envoyées : [(fiche, raison)].
+
+    Même poste : même identifiant de plateforme, ou même employeur et même intitulé (le
+    niveau « sûr » de `comparer`, quel que soit le statut). Une paire que la personne a dite
+    « différentes » n'y figure pas. Sert de garde-fou avant le Go, à l'envoi, à la preuve
+    Job-Room et à l'ajout manuel (doublon OMPI du 05.11).
+    """
+    deja = verdicts(reg)
+    ids = set(f.get("ids_source") or [])
+    neutre = dict(f, statut="nouvelle")
+    out = []
+    for g in reg.liste(sorted(ENGAGEES), ordre="postulee_le, vue_le"):
+        if g["empreinte"] == f["empreinte"] or deja.get(_paire(f["empreinte"], g["empreinte"])) == "differentes":
+            continue
+        commun = ids & set(g.get("ids_source") or [])
+        if commun:
+            out.append((g, "même identifiant (%s)" % ", ".join(sorted(commun))))
+            continue
+        niveau, raison = comparer(neutre, dict(g, statut="nouvelle"))
+        if niveau == "sur":
+            out.append((g, raison))
+    return out
+
+
+def decrire(g):
+    """« World Intellectual Property Organization — UX Lead (6c8c2078, postulée le 29.10.2026) »."""
+    if g.get("postulee_le") and g.get("statut") in ENVOYEES:
+        etat = "postulée le %s" % ".".join(reversed(g["postulee_le"][:10].split("-")))
+    else:
+        etat = "statut « %s »" % g.get("statut")
+    if g.get("jobroom_saisie_le"):
+        etat += ", preuve Job-Room du %s" % ".".join(reversed(g["jobroom_saisie_le"][:10].split("-")))
+    return "%s — %s (%s, %s)" % (g.get("entreprise"), g.get("titre"), g["empreinte"][:8], etat)
 
 
 def _union(*listes):

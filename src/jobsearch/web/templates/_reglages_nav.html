@@ -3,11 +3,10 @@
    Sur une page du profil, ses étapes s'ouvrent en sous-liens sous « Ma recherche ». #}
 {% from "_macros.html" import icone %}
 {% set groupes = [
-  [("/profil", "Ma recherche", "identite"), ("/reglages/parcours", "Ton parcours", "base"),
-   ("/interface", "Interface et objectifs", "objectifs")],
+  [("/profil", "Ma recherche", "identite"), ("/reglages/parcours", "Ton parcours", "base")],
   [("/sources", "Sources", "globe"), ("/ia", "Fournisseur d'IA", "ia"),
    ("/connecteurs", "Connecteurs", "prise"), ("/confidentialite", "Confidentialité", "cadenas")],
-  [("/sante", "Système", "systeme")],
+  [("/fonctions", "Fonctions", "objectifs"), ("/sante", "Système", "systeme")],
 ] %}
 {% set ids_manquants = profil_manquants | map('first') | list %}
 <nav class="reglages-nav" aria-label="Réglages">
@@ -22,8 +21,6 @@
         {% set actif = nav == "/profil/" ~ x.id %}
         <li><a href="/profil/{{ x.id }}" class="{{ 'actif' if actif }}"{% if actif %} aria-current="step"{% endif %}><span>{{ x.titre }}</span>{% if x.id in ids_manquants %}<span class="a-remplir" title="À remplir"><span class="cache">, à remplir</span></span>{% endif %}</a></li>
         {% endfor %}
-        {% set actif = nav == "/profil/fin" %}
-        <li><a href="/profil/fin" class="{{ 'actif' if actif }}"{% if actif %} aria-current="step"{% endif %}><span>Récapitulatif</span></a></li>
       </ul>
     </li>
     {% else %}

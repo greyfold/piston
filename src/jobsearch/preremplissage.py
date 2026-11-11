@@ -120,6 +120,11 @@ def jobroom(reg, emp):
         raise PreremplissageImpossible("pas de preuve Job-Room pour une candidature qui n'est pas partie")
     if f.get("jobroom_saisie_le"):
         raise PreremplissageImpossible("preuve déjà saisie le %s selon le registre" % f["jobroom_saisie_le"])
+    from .doublons import decrire, meme_poste_engage
+    deja = [g for g, _ in meme_poste_engage(reg, f) if g.get("jobroom_saisie_le")]
+    if deja:
+        raise PreremplissageImpossible("preuve déjà saisie pour le même poste : %s"
+                                       % "; ".join(decrire(g) for g in deja))
     if not (f.get("extra") or {}).get("adresse_employeur"):
         # Dossier produit avant que l'adresse ne soit cherchée avec lui : on la cherche maintenant.
         from . import adresses

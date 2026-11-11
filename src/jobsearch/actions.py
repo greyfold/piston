@@ -82,6 +82,21 @@ def _appliquer(reg, emp, t, d):
                             "rien n'est changé. Choisis le bon bouton.")
     if t == "go" and ancien == "retenue":
         return "Déjà retenue : rien à changer."
+    # Le même poste sous une autre fiche (doublon OMPI du 05.11 : Go, dossier, envoi et preuve
+    # Job-Room une seconde fois). Go et preuve refusés ; l'envoi, un fait, est noté avec l'alerte.
+    meme = []
+    if t in ("go", "candidature", "jobroom_saisie"):
+        from .doublons import decrire, meme_poste_engage
+        meme = meme_poste_engage(reg, f)
+    issue = ("Si c'est bien un autre poste, marque la paire « différentes » (doublons, page Sources, "
+             "ou `jobsearch doublons differentes`) ; si c'est le même, fusionne les deux fiches.")
+    if t == "go" and meme:
+        raise ActionRefusee("même poste déjà engagé : %s. Go refusé. %s"
+                            % ("; ".join(decrire(g) for g, _ in meme), issue))
+    if t == "jobroom_saisie" and any(g.get("jobroom_saisie_le") for g, _ in meme):
+        raise ActionRefusee("preuve Job-Room déjà saisie pour le même poste : %s. Une seconde ligne "
+                            "serait un doublon dans Job-Room. %s"
+                            % ("; ".join(decrire(g) for g, _ in meme if g.get("jobroom_saisie_le")), issue))
 
     ch = {}
     raisons = [r for r in (d.get("raisons") or []) if r]
@@ -200,4 +215,9 @@ def _appliquer(reg, emp, t, d):
     reg.noter(emp, "tableau de bord · %s%s%s" % (
         TYPES[t], " · %s → %s" % (ancien, nouveau) if nouveau != ancien else "",
         " · " + ", ".join(raisons) if raisons else ""))
-    return "%s — %s : %s" % (f.get("entreprise"), f.get("titre"), TYPES[t])
+    msg = "%s — %s : %s" % (f.get("entreprise"), f.get("titre"), TYPES[t])
+    if t == "candidature" and meme:
+        alerte = "même poste déjà engagé : %s" % "; ".join(decrire(g) for g, _ in meme)
+        reg.noter(emp, "alerte · " + alerte)
+        msg += ". Attention, %s. Pas de preuve Job-Room pour cette fiche : %s" % (alerte, issue)
+    return msg

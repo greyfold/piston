@@ -27,13 +27,15 @@ SCHEMA = """CREATE TABLE IF NOT EXISTS ce_qui_compte (
   cle TEXT PRIMARY KEY, valeur TEXT NOT NULL, repondu_le TEXT
 )"""
 CONTEXTE = "_contexte"             # ce que l'IA a préparé, gardé avec les réponses
+ENREGISTRE = "_enregistre"         # les réponses ont été écrites dans le profil : il fait foi désormais
 
 TRI = "Le tri du matin écarte d'office les autres annonces."
 
 # Formes de contrat, langues, organisations : les mêmes choix que les critères du profil (profil.CRITERES). Le tri
 # du matin ne distingue pas toutes les formes de contrat (une règle pour les CDD et missions, une pour le
 # freelance) : la nuance passe dans le critère, que l'IA vérifie en notant chaque annonce.
-from .profil import CONTRATS, LANGUES, ORGANISATIONS, TRAJETS  # noqa: E402
+from .profil import (CONTRATS, DEPLACEMENTS, ENCADREMENT, LANGUES, ORGANISATIONS, TELETRAVAIL,  # noqa: E402
+                     TRAJETS)
 
 # Métiers voisins sans IA : le libellé montré, et les mots d'intitulé que le tri écarte.
 VOISINS = {"Vente ou commercial": ["vente", "commercial", "sales"],
@@ -48,8 +50,7 @@ QUESTIONS = [
      "choix": TRAJETS + [("", "Peu importe")],
      "champs": [{"nom": "depuis", "libelle": "Depuis", "exemple": "ta localité", "defaut": "ville"}]},
     {"cle": "teletravail", "question": "Combien de jours de télétravail par semaine te faut-il au moins ?",
-     "choix": [("0", "Aucun"), ("1", "1 jour"), ("2", "2 jours"), ("3", "3 jours ou plus"),
-               ("5", "Entièrement à distance")]},
+     "choix": [("0", "Pas d'exigence")] + TELETRAVAIL},
     {"cle": "taux", "question": "Quel taux d'activité acceptes-tu ?",
      "aide": "En pourcentage, de … à … (par exemple de 90 à 100). Sous 100 %, le tri du matin garde aussi les "
              "annonces à temps partiel ; l'IA vérifie ta fourchette en les notant.",
@@ -67,11 +68,11 @@ QUESTIONS = [
                                 "analyser des données", "former et transmettre", "développer une offre")],
      "champs": [{"nom": "autres", "libelle": "Autres activités", "exemple": "séparées par des virgules"}]},
     {"cle": "encadrement", "question": "Veux-tu encadrer une équipe ?",
-     "choix": [("non", "Non, je préfère contribuer"), ("egal", "Pourquoi pas"), ("oui", "Oui, c'est important")]},
+     "choix": [ENCADREMENT[0], ("egal", "Peu importe"), ENCADREMENT[1]]},
     {"cle": "organisation", "question": "Dans quels types d'organisation veux-tu travailler ?", "multiple": True,
      "aide": "Plusieurs choix possibles ; aucun : peu importe.",
      "choix": ORGANISATIONS,
-     "champs": [{"nom": "eviter", "libelle": "Secteurs à éviter", "exemple": "tabac, armement…"}]},
+     "champs": [{"nom": "eviter", "libelle": "Secteurs exclus", "exemple": "tabac, armement…"}]},
     {"cle": "metiers", "question": "Les métiers voisins : quels intitulés de poste veux-tu qu'on écarte d'office ?",
      "multiple": True, "contexte": "voisins", "vide": "Rien à écarter",
      "aide": "Coche ceux que le tri du matin doit écarter. Aucune case : rien n'est écarté.",
@@ -81,7 +82,7 @@ QUESTIONS = [
      "aide": "Remplis ce qui compte ; le reste peut rester vide.",
      "champs": [{"nom": "heures", "libelle": "Heures par semaine, au plus", "type": "nombre", "exemple": "42"},
                 {"nom": "vacances", "libelle": "Semaines de vacances, au moins", "type": "nombre", "exemple": "5"}],
-     "choix": [("non", "Pas de déplacements"), ("occasionnels", "Déplacements occasionnels"), ("", "Peu importe")]},
+     "choix": DEPLACEMENTS + [("", "Peu importe")]},
     {"cle": "interet", "question": "Qu'est-ce qui rend un poste intéressant pour toi ?", "vide": "Rien à ajouter",
      "champs": [{"nom": "texte", "libelle": "En quelques mots", "long": True, "contexte": "interet",
                  "exemple": "un produit utile, une équipe qui expérimente, de l'autonomie…"}]},
@@ -203,27 +204,10 @@ def repondre(reg, cle, choix=(), champs=None, passer=False):
 
 
 def questions(reg):
-    """Toutes les questions, avec les exemples adaptés au poste et la réponse déjà donnée (réglages)."""
+    """Toutes les questions, avec les exemples adaptés au poste et la réponse déjà donnée."""
     rep = reponses(reg)
     ctx = rep.get(CONTEXTE)
     return [{"question": resolue(q, ctx, rep.get(q["cle"])), "deja": rep.get(q["cle"], {})} for q in QUESTIONS]
-
-
-def repondre_tout(reg, valeurs):
-    """Les réponses des réglages, toutes à la fois : {clé: (choix, {champ: texte})}. Une question jamais
-    répondue et laissée vide reste sans réponse. Rend les erreurs ; les réponses valides sont gardées."""
-    rep, erreurs = reponses(reg), []
-    for q in QUESTIONS:
-        choix, champs = valeurs.get(q["cle"], ([], {}))
-        # Laissée vide : une question jamais répondue, ou passée, le reste (rien à valider).
-        vide = not choix and not any(str(v or "").strip() for v in champs.values())
-        if vide and (q["cle"] not in rep or rep[q["cle"]].get("passe")):
-            continue
-        try:
-            repondre(reg, q["cle"], choix, champs)
-        except ReponseInvalide as e:
-            erreurs.append("« %s » : %s" % (q["question"], e))
-    return erreurs
 
 
 def recommencer(reg):
@@ -241,8 +225,9 @@ def libelle(q, r):
     noms = dict(q.get("choix", []))
     morceaux = []
     ch = r.get("choix")
-    if isinstance(ch, list):
-        morceaux.append(", ".join(noms.get(c, c) for c in ch) if ch else q.get("vide", "Peu importe"))
+    if isinstance(ch, list):                   # rien de coché : « Peu importe », sauf si un champ dit autre chose
+        if ch:
+            morceaux.append(", ".join(noms.get(c, c) for c in ch))
     elif ch is not None:
         morceaux.append(noms.get(ch, ch))
     for c in q.get("champs", []):
@@ -253,9 +238,13 @@ def libelle(q, r):
     return " · ".join(morceaux) or q.get("vide", "Peu importe")
 
 
-def etat(reg, modifier=None):
-    """Le fil (questions répondues), la question en cours et ce qu'elle a déjà comme réponse."""
+def etat(reg, modifier=None, p=None):
+    """Le fil (questions répondues), la question en cours et ce qu'elle a déjà comme réponse. Une fois les
+    réponses enregistrées, celles montrées sont tirées du profil (`vues_du_profil`) : ce qu'on y a changé
+    depuis, dans les réglages ou le volet, s'y retrouve."""
     rep = reponses(reg)
+    if rep.get(ENREGISTRE):
+        rep = vues_du_profil(rep, p)
     ctx = rep.get(CONTEXTE)
     qs = [resolue(q, ctx, rep.get(q["cle"])) for q in QUESTIONS]
     faites = [q for q in qs if q["cle"] in rep]
@@ -270,7 +259,7 @@ def etat(reg, modifier=None):
     return {"fil": fil, "courante": courante, "deja": rep.get(cle, {}) if cle else {},
             "modification": cle in rep,
             "faites": len(faites), "total": len(qs), "termine": courante is None,
-            "commence": bool(faites), "contexte": ctx, "reponses": rep}
+            "commence": bool(faites), "contexte": ctx, "reponses": rep, "enregistre": bool(rep.get(ENREGISTRE))}
 
 
 def _r(rep, cle):
@@ -297,18 +286,105 @@ def _contrats(rep):
     return [c for c in CONTRATS if c in ch]
 
 
-def proposition(rep, p=None):
+# Les critères (profil.CRITERES) que chaque question remplit ; « autres » n'en a pas, il reste tel quel.
+CRITERES_DE = {"trajet": ["trajet", "trajet_depuis"], "teletravail": ["teletravail"], "taux": ["taux_min", "taux_max"],
+               "contrat": ["contrats"], "langues": ["langues"], "encadrement": ["encadrement"],
+               "organisation": ["organisations", "secteurs_exclus"],
+               "conditions": ["heures_max", "vacances_min", "deplacements"], "eviter": ["a_eviter"]}
+
+
+def regles_des_criteres(criteres, actives, cles=None):
+    """Les règles actives du pré-tri une fois appliqué ce que les critères commandent : le taux d'activité, les
+    formes de contrat et les langues. `actives` : les règles actives jusqu'ici ; `cles` : les critères à appliquer
+    (tous par défaut). Un critère vide laisse ses règles telles quelles."""
+    from . import profil
+    au_choix = [i for _, rs in profil.regles_au_choix() for i, _, _ in rs]
+    cles = {"taux_min", "contrats", "langues"} if cles is None else set(cles)
+    off = set(au_choix) - set(actives)
+    # Taux et contrat commandent ensemble les règles de contrat : une règle est coupée dès qu'un critère
+    # demande de garder ses annonces (le freelance relève des deux).
+    controle, garder = set(), set()
+    # Sous 100 %, les annonces à temps partiel restent ; sous 80 %, aussi celles qui le disent en toutes
+    # lettres (« temps partiel », règle commune avec le freelance).
+    if "taux_min" in cles and (mini := criteres.get("taux_min")):
+        controle |= set(REGLES_TAUX)
+        garder |= ({"taux"} if mini < 100 else set()) | ({"contrat-freelance"} if mini < 80 else set())
+    if "contrats" in cles and (contrats := criteres.get("contrats")):
+        controle |= {i for ids in REGLES_CONTRAT.values() for i in ids}
+        garder |= {i for c in contrats for i in REGLES_CONTRAT.get(c, [])}
+    off = (off - controle) | garder
+    if "langues" in cles and (langues := criteres.get("langues")):
+        off = (off | set(REGLES_ALLEMAND)) if "allemand" in langues else (off - set(REGLES_ALLEMAND))
+    return [i for i in au_choix if i not in off]
+
+
+def critere_vers_pretri(avant, apres, actives):
+    """Réglages › Critères : les règles du pré-tri que commandent les critères qui viennent de changer, et
+    seulement eux (une règle réglée à la main dans le pré-tri reste, tant que son critère ne bouge pas)."""
+    changes = [k for k in ("taux_min", "contrats", "langues") if (avant or {}).get(k) != (apres or {}).get(k)]
+    return regles_des_criteres(apres or {}, actives, changes) if changes else list(actives)
+
+
+def _vide(r):
+    """Une réponse tirée du profil qui ne dit rien : rien de coché qui compte, aucun champ."""
+    ch = r.get("choix")
+    return ch in (None, "", "0", "egal", []) and not r.get("champs")
+
+
+def reponses_du_profil(p=None):
+    """Les réponses que donne le profil tel qu'il est : critères, activités, intérêt, intitulés écartés,
+    objectifs. Le même format que `reponses` ; `proposition` en redonne le profil."""
+    from . import profil
+    p = profil.charger() if p is None else p
+    c = profil.criteres_structures(p)
+    remplis = lambda **kw: {k: v for k, v in kw.items() if v not in (None, "", 0)}
+    o = profil.objectifs_rythme()
+    return {
+        "trajet": {"choix": c.get("trajet", ""), "champs": remplis(depuis=c.get("trajet_depuis"))},
+        "teletravail": {"choix": c.get("teletravail", "0"), "champs": {}},
+        "taux": {"champs": remplis(min=c.get("taux_min"), max=c.get("taux_max", 100) if c.get("taux_min") else None)},
+        "contrat": {"choix": list(c.get("contrats") or []), "champs": {}},
+        "langues": {"choix": list(c.get("langues") or []), "champs": {}},
+        "contenu": {"choix": list(profil.lire(p, "evaluation.activites") or []), "champs": {}},
+        "encadrement": {"choix": c.get("encadrement", "egal"), "champs": {}},
+        "organisation": {"choix": list(c.get("organisations") or []),
+                         "champs": remplis(eviter=", ".join(c.get("secteurs_exclus") or []))},
+        "metiers": {"choix": [], "champs": remplis(mots=", ".join(profil.lire(p, "exclusions.mots_titre") or []))},
+        "conditions": {"choix": c.get("deplacements", ""),
+                       "champs": remplis(heures=c.get("heures_max"), vacances=c.get("vacances_min"))},
+        "interet": {"champs": remplis(texte=profil.lire(p, "evaluation.interet"))},
+        "eviter": {"champs": remplis(texte=c.get("a_eviter"))},
+        "rythme": {"champs": remplis(semaine=o["semaine"], mois=o["mois"])},
+    }
+
+
+def vues_du_profil(rep, p=None):
+    """Les réponses `rep`, chacune remplacée par ce que le profil en dit aujourd'hui. Une question passée le
+    reste tant que le profil n'a rien pour elle ; le contexte préparé par l'IA est gardé."""
+    du_profil = reponses_du_profil(p)
+    out = dict(rep)
+    for cle, r in du_profil.items():
+        if cle in rep and not (rep[cle].get("passe") and _vide(r)):
+            out[cle] = r
+    return out
+
+
+def proposition(rep, p=None, regles=True):
     """Ce que les réponses donnent, sans IA : critères, intérêt, règles actives du pré-tri,
-    intitulés à écarter, objectifs. Une question passée ou sans réponse garde le profil tel quel."""
+    intitulés à écarter, objectifs. On part du profil : une question passée ou sans réponse le garde tel
+    quel, une question répondue remplace ce qu'elle commande. `regles` faux : le pré-tri reste celui du profil."""
     from . import profil
     from .prefilter import plier
     p = profil.charger() if p is None else p
     noms = lambda cle: dict(PAR_CLE[cle].get("choix", []))
-    # Les critères : un champ par élément (profil.CRITERES). Les « autres critères » du profil, qu'aucune
-    # question ne remplit, restent. Un choix enregistré qui n'existe plus dans la question ne donne rien.
-    criteres = {k: v for k, v in profil.criteres_structures(p).items() if k == "autres"}
-    if (t := _r(rep, "trajet")) and t.get("choix") in noms("trajet") and t["choix"]:
-        criteres["trajet"] = t["choix"]
+    # Les critères : un champ par élément (profil.CRITERES). Un choix enregistré qui n'existe plus dans la
+    # question ne donne rien.
+    repondues = [cle for cle in CRITERES_DE if _r(rep, cle)]
+    criteres = {k: v for k, v in profil.criteres_structures(p).items()
+                if not any(k in CRITERES_DE[cle] for cle in repondues)}
+    if t := _r(rep, "trajet"):
+        if t.get("choix") in noms("trajet") and t["choix"]:
+            criteres["trajet"] = t["choix"]
         if t["champs"].get("depuis"):
             criteres["trajet_depuis"] = t["champs"]["depuis"]
     if (t := _r(rep, "teletravail")) and t.get("choix") in noms("teletravail") and t["choix"] != "0":
@@ -337,24 +413,13 @@ def proposition(rep, p=None):
     criteres = profil.normaliser_criteres(criteres)
     lignes = profil.lignes_criteres(criteres, avec_cles=True)
 
-    # Pré-tri : on part des règles actives du profil, les réponses en coupent ou en remettent.
-    au_choix = [i for _, rs in profil.regles_au_choix() for i, _, _ in rs]
-    off = set(au_choix) - set(profil.effectif("exclusions.regles", p))
-    # Taux et contrat commandent ensemble les règles de contrat : une règle est coupée dès qu'une
-    # réponse demande de garder ses annonces (le freelance relève des deux).
-    controle, garder = set(), set()
-    # Sous 100 %, les annonces à temps partiel restent ; sous 80 %, aussi celles qui le disent en toutes
-    # lettres (« temps partiel », règle commune avec le freelance).
-    if f := _fourchette(rep):
-        controle |= set(REGLES_TAUX)
-        garder |= ({"taux"} if f[0] < 100 else set()) | ({"contrat-freelance"} if f[0] < 80 else set())
-    if contrats:
-        controle |= {i for ids in REGLES_CONTRAT.values() for i in ids}
-        garder |= {i for c in contrats for i in REGLES_CONTRAT[c]}
-    off = (off - controle) | garder
-    if (t := _r(rep, "langues")) and t.get("choix"):
-        off = (off | set(REGLES_ALLEMAND)) if "allemand" in t["choix"] else (off - set(REGLES_ALLEMAND))
-    regles = [i for i in au_choix if i not in off]
+    # Pré-tri : on part des règles actives du profil ; les critères que les réponses donnent en coupent ou en
+    # remettent (seulement ceux des questions répondues).
+    actives = profil.effectif("exclusions.regles", p)
+    if regles:
+        commandes = [k for k, q in (("taux_min", "taux"), ("contrats", "contrat"), ("langues", "langues"))
+                     if q in repondues]
+        actives = regles_des_criteres(criteres, actives, commandes)
 
     mots = profil.lire(p, "exclusions.mots_titre") or []
     if (t := _r(rep, "metiers")) is not None:
@@ -379,7 +444,7 @@ def proposition(rep, p=None):
         texte = t["champs"].get("texte", "")
     return {"criteres": criteres, "lignes": [x for _, x in lignes],
             "sources": [VERS_QUESTION.get(k) for k, _ in lignes], "activites": activites, "interet_texte": texte,
-            "regles": regles, "mots_titre": mots, "semaine": o["semaine"], "mois": o["mois"]}
+            "regles": actives, "mots_titre": mots, "semaine": o["semaine"], "mois": o["mois"]}
 
 
 def _en_lignes(v):
@@ -393,13 +458,17 @@ VERS_QUESTION = {"trajet": "trajet", "teletravail": "teletravail", "taux_min": "
                  "deplacements": "conditions", "a_eviter": "eviter"}
 
 
-def enregistrer(reg):
+def enregistrer(reg, cle=None):
     """Écrit dans le profil ce que les réponses donnent, dès la fin du questionnaire : critères, intérêt,
-    angles (si l'IA en a proposé), règles du pré-tri, intitulés écartés, objectifs ; le différenciateur
-    proposé seulement si le profil n'en a pas. Lève profil.ProfilInvalide sans critère."""
+    angles (ceux de l'IA si le profil n'en a pas), règles du pré-tri, intitulés écartés, objectifs ; le
+    différenciateur proposé seulement si le profil n'en a pas. `cle` : une réponse modifiée après coup, qui ne
+    réécrit que ce qu'elle commande (le reste du profil, réglé ailleurs depuis, reste). Lève
+    profil.ProfilInvalide sans critère."""
     from . import profil
     p = profil.charger()
     rep = reponses(reg)
+    if cle is not None:
+        rep = {k: v for k, v in rep.items() if k in (cle, CONTEXTE)}
     prop = proposition(rep, p)
     ctx = rep.get(CONTEXTE) or {}
     if not prop["lignes"]:
@@ -409,12 +478,13 @@ def enregistrer(reg):
         "evaluation.criteres": prop["criteres"],
         "evaluation.activites": garder("evaluation.activites", prop["activites"]),
         "evaluation.interet": garder("evaluation.interet", prop["interet_texte"]),
-        "evaluation.angles": "\n".join(ctx.get("angles") or profil.lire(p, "evaluation.angles") or [])})
+        "evaluation.angles": "\n".join(profil.lire(p, "evaluation.angles") or ctx.get("angles") or [])})
     profil.enregistrer("pretri", {"exclusions.regles": " ".join(prop["regles"]),
                                   "exclusions.mots_titre": "\n".join(prop["mots_titre"])})
     profil.enregistrer_objectifs(str(prop["semaine"] or ""), str(prop["mois"] or ""))
     if ctx.get("differenciateur") and not profil.lire(profil.charger(), "dossier.differenciateur"):
         profil.poser_valeur("dossier.differenciateur", ctx["differenciateur"])
+    _ecrire(reg, ENREGISTRE, maintenant())
     return prop
 
 
@@ -461,8 +531,8 @@ def preparer(reg, c=None):
 def _preparer(reg, c=None):
     from . import parcours, profil
     p = profil.charger()
-    poste = ", ".join(profil.lire(p, "recherche.requetes") or []) or "(non précisé)"
-    niveau = profil.lire(p, "recherche.niveau") or ""
+    poste = ", ".join(x["intitule"] for x in profil.postes_saisis(p)) or "(non précisé)"
+    niveau = str(profil.lire(p, "recherche.niveau") or "").lower()
     t = moteur.Tache("ce-qui-compte-contexte", CONSIGNE_CONTEXTE % {"prenom": parcours._prenom()},
                      contexte="<base>\n%s\n</base>" % (parcours.rendu(reg) or "(vide)"), schema=Contexte,
                      effort="low", delai_s=180)

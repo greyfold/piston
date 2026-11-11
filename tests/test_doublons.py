@@ -104,3 +104,43 @@ def test_pas_de_chaine_dans_un_passage(reg):
         annonce(reg, entreprise=nom, titre="Manager - AI & Data", empreinte="e%d" % i, cree_le="2026-10-0%d" % (i + 1))
     assert sorted(doublons.traiter(reg)["fusionnees"]) == ["e1", "e2"]
     assert {reg.get(e)["extra"]["doublon_de"] for e in ("e1", "e2")} == {"e0"}
+
+
+def test_sigle_d_employeur():
+    assert doublons.sigle("World Intellectual Property Organization") == "wipo"
+    assert doublons.sigle("Organisation Mondiale de la Propriété Intellectuelle (OMPI / WIPO)") == "ompi"
+    assert doublons.sigle("Nexthink SA") is None
+
+
+def test_meme_employeur_par_le_sigle_cas_ompi():
+    # Doublon du 05.11 : la candidature du 29.10 venait d'Indeed en anglais, l'ajout à la main en français.
+    assert doublons.meme_employeur("World Intellectual Property Organization",
+                                   "Organisation Mondiale de la Propriété Intellectuelle (OMPI / WIPO)")
+    assert doublons.comparer(_f(entreprise="World Intellectual Property Organization", titre="UX Lead"),
+                             _f(entreprise="Organisation Mondiale de la Propriété Intellectuelle (OMPI / WIPO)",
+                                titre="UX Lead"))[0] == "sur"
+    # Des mots en commun sans inclusion : deux employeurs, même si un sigle tombe juste.
+    assert not doublons.meme_employeur("Banque Cantonale Vaudoise (BCV)", "Banque Cantonale du Valais")
+    assert not doublons.meme_employeur("World Intellectual Property Organization", "World Health Organization")
+
+
+def test_detecter_trouve_la_paire_au_sigle(reg):
+    a = annonce(reg, entreprise="World Intellectual Property Organization", titre="UX Lead", statut="candidature",
+                postulee_le="2026-10-29")
+    b = annonce(reg, entreprise="Organisation Mondiale de la Propriété Intellectuelle (OMPI / WIPO)",
+                titre="UX Lead", statut="nouvelle", vue_le="2026-11-05")
+    surs = doublons.detecter(reg)["surs"]
+    assert [(p["empreinte"], s["empreinte"]) for p, s, _ in surs] == [(a, b)]
+
+
+def test_meme_poste_engage(reg):
+    a = annonce(reg, entreprise="World Intellectual Property Organization", titre="UX Lead", statut="candidature",
+                postulee_le="2026-10-29", jobroom_saisie_le="2026-11-03")
+    b = annonce(reg, entreprise="Organisation Mondiale de la Propriété Intellectuelle (OMPI / WIPO)",
+                titre="UX Lead", statut="retenue")
+    c = annonce(reg, entreprise="World Intellectual Property Organization", titre="Senior Business Analyst",
+                statut="nouvelle")
+    assert [g["empreinte"] for g, _ in doublons.meme_poste_engage(reg, reg.get(b))] == [a]
+    assert doublons.meme_poste_engage(reg, reg.get(c)) == []
+    doublons.differentes(reg, a, b)                     # la personne a tranché : deux postes
+    assert doublons.meme_poste_engage(reg, reg.get(b)) == []
