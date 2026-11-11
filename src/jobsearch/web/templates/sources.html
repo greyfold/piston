@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import icone %}
 {% block titre %}Sources · Recherche d'emploi{% endblock %}
 {% block contenu %}
 <h1>Répertoire des sources</h1>
@@ -48,19 +49,53 @@
       <input type="text" name="remarques" placeholder="Remarques (facultatif)" aria-label="Remarques" style="flex:1">
       <button class="go">Ajouter</button>
     </div>
+    <div class="champ">
+      <div class="cases"><label><input type="checkbox" name="examiner" value="1" checked> Faire examiner la source par l'IA</label></div>
+      <div class="aide">L'IA lit ses conditions générales et cherche une API publique ou un serveur MCP : tu sauras si elle peut être branchée et par quelle voie. Une tâche sur ton abonnement Claude.</div>
+    </div>
   </form>
 </details>
+
+{% set verdicts = {"permise": ("B", "Accès automatisé permis"), "sous conditions": ("nouvelle", "Permis sous conditions"),
+                   "interdite": ("retard", "Accès automatisé interdit"), "inconnue": ("", "Conditions non établies")} %}
+{% set apis = {"publique": "API publique", "sur accord": "API sur accord ou payante", "aucune": "Aucune API", "inconnue": "API : rien trouvé"} %}
+{% set mcps = {"officiel": "Serveur MCP officiel", "communautaire": "Serveur MCP communautaire", "aucun": "Aucun serveur MCP", "inconnu": "MCP : rien trouvé"} %}
+{% macro examen_source(s, ex) %}
+  {% set e = ex.examen %}
+  {% set v = verdicts.get(e.automatisation, ("", e.automatisation)) %}
+  <details class="raisons">
+    <summary><span class="puce {{ v[0] }}">{{ v[1] }}</span> Examen de la source</summary>
+    <div class="pile">
+      <div><span class="badge-ia">{{ icone("modele") }}Examen de l'IA</span> <span class="muet">le {{ ex.examinee_le[:10] | date_fr(True) }}</span></div>
+      <div>{{ e.nature }}</div>
+      <div><b>Conditions générales</b> : {% if e.conditions_url %}<a href="{{ e.conditions_url }}" target="_blank" rel="noopener noreferrer">{{ "lues" if e.conditions_lues else "trouvées, pas lues" }}</a>{% else %}introuvables{% endif %}.
+        {% for x in e.extraits %}<div class="muet">« {{ x }} »</div>{% endfor %}
+        {% if e.robots %}<div class="muet">robots.txt : {{ e.robots }}</div>{% endif %}</div>
+      <div><b>{{ apis.get(e.api, e.api) }}</b>{% if e.api_url %} · <a href="{{ e.api_url }}" target="_blank" rel="noopener noreferrer">documentation</a>{% endif %}{% if e.api_detail %} · {{ e.api_detail }}{% endif %}</div>
+      <div><b>{{ mcps.get(e.mcp, e.mcp) }}</b>{% if e.mcp_nom %} · {% if e.mcp_url %}<a href="{{ e.mcp_url }}" target="_blank" rel="noopener noreferrer">{{ e.mcp_nom }}</a>{% else %}{{ e.mcp_nom }}{% endif %}{% endif %}</div>
+      {% if e.autres_voies %}<div><b>Autres voies</b> : {{ e.autres_voies }}</div>{% endif %}
+      <div><b>Accès conseillé : « {{ e.acces_conseille }} »</b>. {{ e.raisons }}</div>
+      {% if s.manuelle and not s.branchee and s.acces != e.acces_conseille %}
+      <form method="post" action="/sources/appliquer"><input type="hidden" name="id" value="{{ s.id }}"><input type="hidden" name="acces" value="{{ e.acces_conseille }}">
+        <button class="petit">Noter l'accès « {{ e.acces_conseille }} »</button></form>
+      {% endif %}
+      <div class="muet">Ce n'est pas un avis juridique : relis les conditions avant de brancher une source.</div>
+    </div>
+  </details>
+{% endmacro %}
 <div class="tableau"><table>
   <thead><tr><th>Source</th><th>Accès</th><th>État de la route</th><th class="nb">Vues</th><th class="nb">A/B</th><th class="nb">Go</th><th class="nb">Envoyées</th><th class="nb">Entretiens</th><th class="nb">Refus</th></tr></thead>
   <tbody>
   {% for s in lignes %}
-    <tr>
+    {% set ex = examens.get(s.id) %}
+    <tr id="source-{{ s.id }}">
       <td><b>{% if s.url %}<a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">{{ s.nom }}</a>{% else %}{{ s.nom }}{% endif %}</b>
         {% if s.manuelle %} <span class="puce">ajoutée le {{ s.ajoutee_le[:10] | date_fr(True) }}</span>{% endif %}
         <div class="muet petit">{{ s.nature or "" }}</div>{% if s.remarques %}<div class="petit">{{ s.remarques }}</div>{% endif %}
         <div class="boutons">
         {% if s.branchee %}<form method="post" action="/sources/{{ s.id }}/{{ 'desactiver' if s.actif else 'activer' }}"><button class="discret petit">{{ "Désactiver" if s.actif else "Réactiver" }}</button></form>{% endif %}
         {% if s.manuelle %}<form method="post" action="/sources/retirer" onsubmit="return confirm('Retirer cette source du répertoire ?')"><input type="hidden" name="id" value="{{ s.id }}"><button class="discret petit">Retirer</button></form>{% endif %}
+        {% if s.id not in examens_en_cours %}<form method="post" action="/sources/examiner"><input type="hidden" name="id" value="{{ s.id }}"><button class="discret petit">{{ "Réexaminer" if ex and ex.examen else "Examiner avec l'IA" }}</button></form>{% endif %}
         </div></td>
       <td class="petit">{{ s.acces }}</td>
       <td class="petit">
@@ -72,6 +107,14 @@
       <td class="nb">{{ s.n.vues or 0 }}</td><td class="nb">{{ s.n.ab or 0 }}</td><td class="nb">{{ s.n.go or 0 }}</td>
       <td class="nb">{{ s.n.envoyees or 0 }}</td><td class="nb">{{ s.n.entretiens or 0 }}</td><td class="nb">{{ s.n.refus or 0 }}</td>
     </tr>
+    {% if s.id in examens_en_cours or ex %}
+    <tr><td colspan="9">
+      {% if s.id in examens_en_cours %}<div class="statut-ia petit" role="status" data-recharger="10"><span class="spinner" aria-hidden="true"></span>
+        <span>L'IA examine les conditions de {{ s.nom }}, son API et ses serveurs MCP…</span></div>
+      {% elif ex.examen %}{{ examen_source(s, ex) }}
+      {% elif ex.erreur %}<span class="echec-tache" role="alert">Examen impossible : {{ ex.erreur[:160] }}</span>{% endif %}
+    </td></tr>
+    {% endif %}
   {% endfor %}
   </tbody>
 </table></div>

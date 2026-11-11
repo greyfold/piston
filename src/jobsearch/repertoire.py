@@ -88,6 +88,23 @@ def ajouter(reg, nom, url="", nature="", acces="en session", remarques=""):
     return sid
 
 
+def changer_acces(reg, sid, acces):
+    """Change l'accès noté d'une source ajoutée à la main (par exemple celui que l'examen de l'IA
+    conseille). Une source branchée garde « automatique » : on la désactive à part."""
+    _schema(reg)
+    if acces not in ACCES:
+        raise SourceRefusee("accès inconnu : %s (choix : %s)" % (acces, ", ".join(ACCES)))
+    if sid in du_fichier():
+        raise SourceRefusee("« %s » vient de config/sources.yaml : son accès se change dans le fichier" % sid)
+    f = lister(reg).get(sid)
+    if not f:
+        raise SourceRefusee("aucune source ajoutée à la main sous « %s »" % sid)
+    if f.get("branchee"):
+        raise SourceRefusee("« %s » est branchée : la désactiver plutôt que changer son accès" % f["nom"])
+    reg.cx.execute("UPDATE repertoire SET acces=? WHERE id=?", (acces, sid))
+    reg.commit()
+
+
 def retirer(reg, sid):
     """Retire une source ajoutée à la main. Les annonces qui la citent restent."""
     _schema(reg)

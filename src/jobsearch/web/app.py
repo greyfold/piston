@@ -582,7 +582,9 @@ def sources(request: Request, essai=None):
         for sid in list(repertoire) + [s for s in compte if s not in repertoire]:
             lignes.append({"id": sid, **(repertoire.get(sid) or {"nom": sid, "acces": "non répertoriée"}),
                            "etat": etats.get(sid), "n": compte.get(sid, {})})
+        from ..sources import examen
         return page(request, "sources.html", lignes=lignes, acces=repertoire_mod.ACCES, essai=essai,
+                    examens=examen.lire_tous(reg), examens_en_cours=examen.EN_COURS,
                     a_verifier=doublons.detecter(reg)["a_verifier"], fusions=doublons.recentes(reg))
     finally:
         reg.fermer()
@@ -658,16 +660,50 @@ def doublons_action(action: str, a: str = Form(""), b: str = Form("")):
 
 
 def _retour(url, msg, ok):
-    return RedirectResponse("%s?msg=%s&ok=%d" % (url, quote(msg), int(ok)), status_code=303)
+    url, _, ancre = url.partition("#")
+    return RedirectResponse("%s?msg=%s&ok=%d%s" % (url, quote(msg), int(ok), "#" + ancre if ancre else ""),
+                            status_code=303)
 
 
 @app.post("/sources/ajouter")
 def sources_ajouter(nom: str = Form(""), url: str = Form(""), nature: str = Form(""),
-                    acces: str = Form("en session"), remarques: str = Form("")):
+                    acces: str = Form("en session"), remarques: str = Form(""), examiner: str = Form("")):
     reg = _reg()
     try:
-        repertoire_mod.ajouter(reg, nom, url, nature, acces, remarques)
+        sid = repertoire_mod.ajouter(reg, nom, url, nature, acces, remarques)
+        if examiner:
+            from ..sources import examen
+            examen.examiner_en_tache(sid)
+            return _retour("/sources#source-%s" % sid, "Source ajoutée : %s. L'IA examine ses conditions." % nom.strip(), True)
         return _retour("/sources", "Source ajoutée : %s" % nom.strip(), True)
+    except repertoire_mod.SourceRefusee as e:
+        return _retour("/sources", "Refusé : %s" % e, False)
+    finally:
+        reg.fermer()
+
+
+@app.post("/sources/examiner")
+def sources_examiner(id: str = Form("")):
+    """L'IA examine la source : conditions générales, API publique, serveur MCP (en arrière-plan)."""
+    from ..sources import examen
+    reg = _reg()
+    try:
+        source = repertoire_mod.lister(reg).get(id)
+    finally:
+        reg.fermer()
+    if not source:
+        return _retour("/sources", "Source inconnue.", False)
+    examen.examiner_en_tache(id)
+    return _retour("/sources#source-%s" % id, "L'IA examine %s : le résultat s'affichera sur sa ligne." % source["nom"], True)
+
+
+@app.post("/sources/appliquer")
+def sources_appliquer(id: str = Form(""), acces: str = Form("")):
+    """Note l'accès que l'examen conseille, pour une source ajoutée à la main."""
+    reg = _reg()
+    try:
+        repertoire_mod.changer_acces(reg, id, acces)
+        return _retour("/sources#source-%s" % id, "Accès noté : « %s »." % acces, True)
     except repertoire_mod.SourceRefusee as e:
         return _retour("/sources", "Refusé : %s" % e, False)
     finally:

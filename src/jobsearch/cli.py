@@ -182,6 +182,17 @@ def cmd_source(a):
         elif a.action == "retirer":
             repertoire.retirer(reg, a.nom)
             print("Source retirée : %s" % a.nom)
+        elif a.action == "examiner":
+            from .sources import examen
+            try:
+                e = examen.examiner(reg, a.nom)
+            except examen.ExamenImpossible as ex:
+                print("Examen impossible : %s" % ex)
+                return 1
+            print("%s\nAccès automatisé : %s%s\nAPI : %s%s\nServeur MCP : %s%s\nAccès conseillé : %s — %s" % (
+                e.nature, e.automatisation, " (%s)" % e.conditions_url if e.conditions_url else "",
+                e.api, " (%s)" % e.api_url if e.api_url else "", e.mcp, " (%s)" % (e.mcp_url or e.mcp_nom) if e.mcp_nom else "",
+                e.acces_conseille, e.raisons))
         else:
             for sid, f in repertoire.lister(reg).items():
                 print("%-22s %-28.28s %-24s %s%s" % (sid, f.get("nom"), f.get("acces") or "",
@@ -460,9 +471,9 @@ def main(argv=None):
                    choices=["liste", "appliquer", "fusionner", "differentes", "separer"])
     s.add_argument("annonces", nargs="*", help="empreintes (ou préfixes) : deux pour fusionner ou differentes, une pour separer")
     s.set_defaults(f=cmd_doublons)
-    s = sp.add_parser("source", help="répertoire des sources : liste, ajouter, retirer")
-    s.add_argument("action", choices=["liste", "ajouter", "retirer"])
-    s.add_argument("nom", nargs="?", help="nom de la source (ou son identifiant pour retirer)")
+    s = sp.add_parser("source", help="répertoire des sources : liste, ajouter, retirer, examiner (conditions, API, MCP par l'IA)")
+    s.add_argument("action", choices=["liste", "ajouter", "retirer", "examiner"])
+    s.add_argument("nom", nargs="?", help="nom de la source (ou son identifiant pour retirer ou examiner)")
     s.add_argument("--url")
     s.add_argument("--nature")
     s.add_argument("--acces", default="en session", choices=ACCES)

@@ -63,6 +63,10 @@ noVNC. Le **travailleur** (`travailleur/`) y répond sur 127.0.0.1:8766 (jeton) 
 - **Passage du matin** : sauvegarde, test des routes, sourcing, lecture des annonces nouvelles,
   ingestion sans doublon, fusion des doublons, pré-tri, échéances. Une étape en panne n'arrête pas
   les suivantes.
+- **Examen d'une source** (page Sources, ou `jobsearch source examiner <id>`) : l'IA lit sur le web
+  les conditions générales et le robots.txt de la source, et cherche une API publique, un serveur MCP
+  ou des alertes e-mail. Elle conseille un accès, que Python vérifie (`sources/examen.py`) : sans
+  conditions lues, rien n'est « permis ». L'examen ne branche rien ; la personne décide.
 - **Planification** : l'application appelle `jobsearch echeances` toutes les cinq minutes
   (`src/jobsearch/echeances.py`) : le passage part une fois par jour dès l'heure du réglage
   `passage.heure` (Mac en veille ou application fermée : au réveil ou à l'ouverture), l'alerte du
