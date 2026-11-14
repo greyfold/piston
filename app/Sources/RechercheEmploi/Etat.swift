@@ -44,6 +44,9 @@ final class Etat: ObservableObject {
     @Published var connexionDemandee = false
     /// Une page du tableau de bord à montrer dans la fenêtre (« navigateur » : l'écran de la VM).
     @Published var pageDemandee: String?
+    /// Au lancement, la machine virtuelle démarre pendant que l'accueil s'affiche : une fois qu'elle
+    /// répond, l'accueil se recharge pour dire si l'IA est connectée (bandeau de l'accueil).
+    @Published var rechargerAccueil = false
     @Published var ouvertureAuto = SMAppService.mainApp.status == .enabled
 
     let racine: String                    // le code embarqué : src, config, pyproject.toml
@@ -99,7 +102,9 @@ final class Etat: ObservableObject {
             await assurerTableau()
             await rafraichir()
             if mode == "distant", vmStatut != "Running" {
-                executer(["vm", "demarrer"], titre: "Démarrage de la machine virtuelle")
+                executer(["vm", "demarrer"], titre: "Démarrage de la machine virtuelle") { [weak self] in
+                    self?.rechargerAccueil = true
+                }
             }
             lancerEcheances()
         }
@@ -211,8 +216,8 @@ final class Etat: ObservableObject {
 
     // MARK: - Commandes
 
-    /// Une commande `jobsearch` en arrière-plan ; une seule à la fois.
-    func executer(_ arguments: [String], titre: String) {
+    /// Une commande `jobsearch` en arrière-plan ; une seule à la fois. `apres` : une fois terminée et l'état relu.
+    func executer(_ arguments: [String], titre: String, apres: (@MainActor () -> Void)? = nil) {
         guard occupe == nil else { return }
         occupe = titre
         let p = processus(arguments)
@@ -227,6 +232,7 @@ final class Etat: ObservableObject {
                 let derniere = texte.split(separator: "\n").last.map(String.init) ?? ""
                 self.dernierMessage = code == 0 ? "\(titre) : terminé." : "\(titre) : échec. \(derniere)"
                 await self.rafraichir()
+                apres?()
             }
         }
         do { try p.run() } catch {

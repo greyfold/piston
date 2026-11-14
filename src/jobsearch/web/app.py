@@ -212,12 +212,17 @@ def accueil(request: Request, ensuite: str = ""):
         tache_jobroom = agent_claude.vue(agent_claude.derniere(reg, "jobroom"))
         retenues = sorted(reg.liste(["retenue"]), key=lambda f: priorite(f, note(f)))
         p = profil_mod.charger()
-        premiers = (profil_mod.premiers_pas(p, ia_connectee=bool(etat_claude().get("connecte")))
+        claude = etat_claude()
+        premiers = (profil_mod.premiers_pas(p, ia_connectee=bool(claude.get("connecte")))
                     if p.get(profil_mod.PREMIERS_PAS) == "affichee" else [])
-        if all(t[5] for t in premiers):            # tout est fait : « Bien démarrer » disparaît
-            premiers = []
+        if premiers:                               # une étape faite le reste ; tout fait : « Bien démarrer » s'en va pour de bon
+            profil_mod.noter_premiers_pas(premiers)
+            if all(t[5] for t in premiers):
+                premiers = []
+        # L'IA joignable mais plus connectée (hors checklist, qui le dit déjà) : un bandeau à l'ouverture, pas le tutoriel.
+        ia_deconnectee = bool(claude.get("installe")) and not claude.get("connecte") and not premiers
         reponse = page(request, "accueil.html", etat=etat_passage(reg), a_trancher=a_trancher, evals=evals,
-                    premiers_pas=premiers,
+                    premiers_pas=premiers, ia_deconnectee=ia_deconnectee,
                     taches=taches, tache_jobroom=tache_jobroom, etats_taches=agent_claude.ETATS,
                     dossiers=dossiers, courrier_a_trancher=courrier.pour_le_tableau(reg, reg.liste(["candidature", "entretien", "offre"])),
                     courrier_recent=courrier.recents(reg), ouvertes=reg.liste(["candidature", "entretien", "offre"]),

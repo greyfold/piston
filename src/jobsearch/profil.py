@@ -225,7 +225,8 @@ def terminer_accueil():
 
 # --- Accueil : l'objectif et la recherche, en un écran -------------------------------
 
-PREMIERS_PAS = "premiers_pas"          # checklist du tableau de bord : affichee · masquee
+PREMIERS_PAS = "premiers_pas"          # checklist du tableau de bord : affichee · masquee · terminee
+PREMIERS_PAS_FAITS = "premiers_pas_faits"   # étapes déjà vues faites : une étape faite ne redevient pas « à faire »
 
 # L'objectif de l'écran « Ta recherche » : ce qu'il change au pré-tri (règles désactivées).
 OBJECTIFS = [
@@ -437,12 +438,31 @@ def premiers_pas(p=None, ia_connectee=False):
     """La checklist du tableau de bord après l'accueil : [(id, libellé, pourquoi, durée, lien, fait)].
 
     Une étape du profil est faite quand ses champs obligatoires sont remplis et qu'au moins
-    un de ses champs a été enregistré.
+    un de ses champs a été enregistré. Une étape vue faite une fois (noter_premiers_pas) le reste :
+    l'IA qui se déconnecte ne ramène pas la checklist, le tableau de bord le dit autrement.
     """
     p = charger() if p is None else p
     if p.get(PREMIERS_PAS) != "affichee":
         return []
-    return _taches_checklist(p, ia_connectee)
+    faits = set(p.get(PREMIERS_PAS_FAITS) or [])
+    return [t[:5] + (bool(t[5]) or t[0] in faits,) for t in _taches_checklist(p, ia_connectee)]
+
+
+def noter_premiers_pas(pas):
+    """Retient les étapes faites de la checklist ; toutes faites : « Bien démarrer » est terminé et ne
+    revient plus, même si une étape (la connexion de l'IA) se défait ensuite."""
+    p = copy.deepcopy(charger())
+    if p.get(PREMIERS_PAS) != "affichee":
+        return
+    if all(x[5] for x in pas):
+        p[PREMIERS_PAS] = "terminee"
+        p.pop(PREMIERS_PAS_FAITS, None)
+        ecrire(p)
+        return
+    faits = sorted({*(p.get(PREMIERS_PAS_FAITS) or []), *(x[0] for x in pas if x[5])})
+    if faits != sorted(p.get(PREMIERS_PAS_FAITS) or []):
+        p[PREMIERS_PAS_FAITS] = faits
+        ecrire(p)
 
 
 def _taches_checklist(p, ia_connectee):

@@ -10,6 +10,8 @@
                    or relances.a_classer or limites) %}
 <div class="bandeau {{ etat.niveau }}"><span class="point"></span><span>{{ etat.texte }} <a href="/sante">Système</a></span></div>
 
+{# L'IA n'est plus connectée : un bandeau (Nexus Banner) qui ouvre la modale de connexion, jamais la checklist de retour. #}
+{% if ia_deconnectee %}<div class="bandeau attention" id="ia-deconnectee"><span class="point"></span><span>Ton IA n'est plus connectée : sans elle, les annonces ne sont pas notées et aucun dossier n'est préparé. <a href="/ia" data-connexion-ia="claude" data-nom="Claude">Se connecter à Claude</a>.</span></div>{% endif %}
 {% if rythme.alerte and not rien %}<div class="bandeau alerte"><span class="point"></span><span>{{ rythme.semaine.n }} postulation{{ 's' if rythme.semaine.n > 1 }} cette semaine, l'objectif est {{ rythme.semaine.min }} : il en manque {{ rythme.semaine.manque }} d'ici dimanche.</span></div>{% endif %}
 
 {% if premiers_pas %}{% set faits = premiers_pas | selectattr(5) | list | length %}

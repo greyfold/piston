@@ -252,6 +252,11 @@ def test_taches_de_la_checklist_sans_assistant(neuve, monkeypatch, reg):
                                                  "identite.email": "alex@exemple.ch"}, follow_redirects=False)
     assert r.headers["location"].startswith("/?msg=") and r.headers["location"].endswith("#premiers-pas")
     assert [x[5] for x in profil.premiers_pas(ia_connectee=True)][2] is True
+    # Une étape vue faite le reste : l'IA déconnectée ne rouvre pas « Connecter ton IA ».
+    assert [x[5] for x in profil.premiers_pas(ia_connectee=False)][0] is False
+    profil.noter_premiers_pas(profil.premiers_pas(ia_connectee=True))
+    assert profil.charger()[profil.PREMIERS_PAS_FAITS] == ["ia", "identite", "recherche"]
+    assert [x[5] for x in profil.premiers_pas(ia_connectee=False)][0] is True
     assert web.post("/premiers-pas/masquer", follow_redirects=False).headers["location"] == "/"
     assert profil.charger()[profil.PREMIERS_PAS] == "masquee"
 
@@ -303,9 +308,20 @@ def test_bien_demarrer_disparait_une_fois_tout_fait_et_etat_vide(neuve, monkeypa
     web = TestClient(appmod.app)
     monkeypatch.setattr(profil, "premiers_pas", lambda p=None, ia_connectee=False: faites(4))
     assert "Bien démarrer" in web.get("/").text
+    assert profil.charger()[profil.PREMIERS_PAS_FAITS] == ["dossier", "ia", "identite", "recherche"]   # retenues
     monkeypatch.setattr(profil, "premiers_pas", lambda p=None, ia_connectee=False: faites(5))
     page = web.get("/").text
     assert "Bien démarrer" not in page
+    assert profil.charger()[profil.PREMIERS_PAS] == "terminee" and profil.PREMIERS_PAS_FAITS not in profil.charger()
+    # L'IA se déconnecte ensuite : la checklist ne revient pas, le bandeau de l'accueil prend le relais.
+    monkeypatch.setattr(profil, "premiers_pas", lambda p=None, ia_connectee=False: faites(4))
+    monkeypatch.setattr(appmod, "etat_claude", lambda: {"installe": True, "connecte": False, "message": "pas connecté"})
+    page = web.get("/").text
+    assert "Bien démarrer" not in page and 'id="ia-deconnectee"' in page
+    assert "Ton IA n'est plus connectée" in page and 'data-connexion-ia="claude"' in page
+    monkeypatch.setattr(appmod, "etat_claude", lambda: {"installe": True, "connecte": True, "message": "connecté"})
+    page = web.get("/").text
+    assert 'id="ia-deconnectee"' not in page
     assert "Aucun poste identifié pour le moment" in page and 'href="/offres">Voir les offres' in page
     # Rien à faire : l'état vide remplace la page ; aucune section vide, pas de courrier sans candidature.
     for titre in ("À faire aujourd'hui", "À trancher", "Go donné", "Courrier des employeurs", "Relances dues",

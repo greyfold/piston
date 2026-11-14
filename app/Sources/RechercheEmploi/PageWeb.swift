@@ -35,6 +35,12 @@ struct PageWeb: NSViewRepresentable {
                 vue.load(URLRequest(url: url.appendingPathComponent(page)))
             }
         }
+        if etat.rechargerAccueil {
+            DispatchQueue.main.async {
+                etat.rechargerAccueil = false
+                if vue.url?.path == "/" { vue.reload() }   // seulement si la personne est encore sur l'accueil
+            }
+        }
     }
 
     final class Coordinateur: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
