@@ -16,7 +16,7 @@ validation.
 
 Les coordonnées de la personne ne partent jamais : `ouvrir()` rend un moteur `Protege`,
 qui les remplace par des balises avant l'envoi et les remet à la réception
-(`confidentialite.py`), que la tâche tourne sur ce Mac ou dans la machine virtuelle.
+(`confidentialite.py`). Claude Code ne tourne que dans la machine virtuelle.
 
 La consigne et le contexte passent par un fichier temporaire lisible du seul
 compte (`--system-prompt-file`), la demande par l'entrée standard : rien du
@@ -109,8 +109,18 @@ def reglage(cle, defaut=None):
     return (reglages().get("moteur") or {}).get(cle, defaut)
 
 
+def dans_la_vm():
+    """Vrai dans la machine virtuelle du travailleur (vm.py y pose JOBSEARCH_VM=1) : seul endroit
+    où `claude` se lance. Sur le Mac, il ne se lance jamais."""
+    return bool(os.environ.get("JOBSEARCH_VM"))
+
+
 def executable():
-    """Chemin de `claude` : launchd ne connaît pas le PATH du terminal."""
+    """Chemin de `claude`, dans la machine virtuelle : l'environnement d'un service n'a pas le PATH
+    du terminal. Hors de la VM : LancementImpossible, le Mac ne lance jamais `claude`."""
+    if not dans_la_vm():
+        raise LancementImpossible("Claude Code ne tourne que dans la machine virtuelle : "
+                                  "démarrer la machine virtuelle (travailleur.mode: distant)")
     for chemin in (reglage("claude"), shutil.which("claude"), os.path.expanduser("~/.local/bin/claude"),
                    "/opt/homebrew/bin/claude", "/usr/local/bin/claude"):
         if chemin and os.path.exists(os.path.expanduser(chemin)):
@@ -280,12 +290,12 @@ class Protege:
             return self.interne.executer(tache, message)
         from .. import confidentialite
         m = (self.masque or confidentialite.construire(documents=tache.contexte)).copie()
-        consigne_, contexte_ = m.masquer(tache.consigne, contexte=True), m.masquer(tache.contexte, contexte=True)
+        consigne_, contexte_ = m.masquer(tache.consigne, contexte=True), m.masquer(tache.contexte, contexte=True, neutraliser=True)
         balises = m.balises_dans(consigne_ + "\n" + contexte_)
         if balises:                  # tiré du seul contexte fixe : la consigne reste la même d'un appel à l'autre (cache)
             consigne_ += "\n\n" + confidentialite.consigne(balises)
         masquee = dataclasses.replace(tache, consigne=consigne_, contexte=contexte_)
-        r = self.interne.executer(masquee, m.masquer(message))
+        r = self.interne.executer(masquee, m.masquer(message, neutraliser=True))
         brut = r.brut if r.brut is not None or not hasattr(r.objet, "model_dump") else r.objet.model_dump()
         r.texte, r.brut, r.objet = m.demasquer(r.texte), m.demasquer_objet(brut), None
         return valider(tache, r) if tache.schema is not None else r
@@ -293,12 +303,13 @@ class Protege:
 
 def ouvrir(verifier=connecte):
     """Le moteur, après avoir vérifié que Claude Code est là et connecté : celui du
-    travailleur (machine virtuelle) si les réglages le disent, sinon celui de ce Mac ;
-    toujours derrière `Protege`, qui garde les coordonnées sur ce Mac."""
+    travailleur (machine virtuelle), derrière `Protege`, qui garde les coordonnées sur le Mac.
+    Le Mac ne lance jamais `claude` : hors de la VM et sans travailleur distant, c'est une erreur ;
+    dans la VM, le moteur est local."""
     from ..travailleur import client as travailleur
     if travailleur.distant():
         return Protege(travailleur.Distant.depuis_reglages().verifie())
-    executable()
+    executable()                     # LancementImpossible hors de la machine virtuelle
     if not verifier():
         raise MoteurImpossible("Claude Code n'est pas connecté : se connecter à son compte Claude", bloquant=True)
     return Protege(Moteur())

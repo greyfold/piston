@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "src/jobsearch/web/templates/base.html"
+        ],
+        "createdAt": "2026-11-11T10:39:22.500Z",
+        "reason": "Project design system: the active link's 3px green left border is the Nexus ResponsiveNavLink style, already used by the settings menu before this session and documented in style.css and .claude/rules/design-system.md"
+      }
+    ]
+  }
+}

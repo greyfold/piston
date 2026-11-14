@@ -152,7 +152,7 @@ def test_etats_vides(web, reg):
     assert "<table" not in offres and 'class="filtres"' not in offres and 'href="/offres/ajouter"' in offres
     assert '<h1 class="titre-vide" id="etat-vide-titre">Aucune candidature pour le moment</h1>' in cands
     assert "<table" not in cands
-    assert '<div class="etat-vide compact">' in sante and '<h3 class="titre-vide" id="passages-vide">' in sante
+    assert '<div class="etat-vide compact">' in sante and '<h3 class="titre-vide" id="notifications-vide">' in sante
     for html in (offres, cands, sante, accueil):
         assert 'class="etat-vide' in html and 'class="pastille-vide" aria-hidden="true"' in html
         assert 'class="vide"' not in html and "page-vide" not in html
@@ -162,10 +162,10 @@ def test_etats_vides(web, reg):
     assert 'class="filtres"' in filtre and "<table" not in filtre
     assert "Aucune annonce avec ces filtres" in web.get("/offres?statut=refus").text
     offres = web.get("/offres").text
-    assert "<table" in offres and "etat-vide" not in offres
+    assert "<table" in offres and "etat-vide" not in offres.split("<main>")[1]
     annonce(reg, titre="UX Lead", statut="candidature", postulee_le="2026-11-02")
     cands = web.get("/candidatures").text
-    assert "etat-vide" not in cands and "<table" in cands and "<h2>En cours" in cands
+    assert "etat-vide" not in cands.split("<main>")[1] and "<table" in cands and "<h2>En cours" in cands
     assert "<h2>Refus" not in cands and 'id="sans-suite"' not in cands        # sections vides masquées
 
 
@@ -175,24 +175,74 @@ def test_anciennes_adresses_redirigees(web, reg):
         assert r.status_code == 301 and r.headers["location"] == nouvelle
 
 
-def test_barre_et_reglages(web, reg):
+def test_menu_lateral_et_reglages(web, reg):
+    """Un menu latéral sur toutes les pages : les espaces de travail, les notifications, et tous les réglages."""
     html = web.get("/").text
-    for href in ('href="/offres"', 'href="/candidatures"', 'href="/reglages"'):
-        assert href in html
-    assert 'href="/connecteurs"' not in html.split("</header>")[0]      # rangés sous Réglages
-    r = web.get("/reglages", follow_redirects=False)                     # pas de vue d'ensemble :
-    assert r.status_code == 303 and r.headers["location"] == "/profil"    # Réglages ouvre Ma recherche
-    reglages = web.get("/reglages").text
+    menu = html.split("</aside>")[0]
+    assert 'class="menu-lateral"' in menu and 'class="barre' not in html
+    for href in ('href="/"', 'href="/offres"', 'href="/candidatures"', 'href="/reglages"'):
+        assert href in menu
+    for href in ('href="/profil"', 'href="/sources"', 'href="/connecteurs"', 'href="/sante"'):
+        assert href not in menu                                          # les réglages ont leur page
+    assert '<a href="/" class="actif" aria-current="page">' in menu and "data-ouvrir-notifications" in menu
+    r = web.get("/reglages", follow_redirects=False)
+    assert r.status_code == 200
+    reglages = r.text
+    contenu = reglages.split("<main>")[1]
     for href in ("/profil", "/reglages/parcours", "/fonctions", "/sources", "/ia", "/connecteurs",
                  "/confidentialite", "/sante"):
-        assert 'href="%s"' % href in reglages
-    assert "Vue d&#39;ensemble" not in reglages and "Vue d'ensemble" not in reglages
-    assert "Fournisseur d'IA" in unescape(reglages) and "Connexions" not in reglages      # IA à part des connecteurs
-    assert 'class="lien-reglages actif"' in web.get("/ia").text
+        assert 'class="reglage-ligne" href="%s"' % href in contenu
+    assert "Fournisseur d'IA" in unescape(contenu) and "Connexions" not in contenu      # IA à part des connecteurs
+    assert '<a href="/reglages" class="actif" aria-current="page">' in reglages
+    assert 'class="retour" href="/reglages"' not in reglages             # pas de retour vers elle-même
     sources = web.get("/sources").text
-    assert 'class="lien-reglages actif"' in sources and 'aria-label="Réglages"' in sources   # menu des réglages
-    assert '<a href="/sources" class="actif" aria-current="page">' in sources
-    assert 'aria-label="Réglages"' not in html                                    # pas hors des réglages
+    assert '<a href="/reglages" class="actif" aria-current="true">' in sources
+    assert 'class="retour" href="/reglages"' in sources
+    profil = web.get("/profil/identite").text
+    onglets = profil.split('class="onglets-annonce"')[1].split("</nav>")[0]
+    assert 'href="/profil/langues"' in onglets and 'class="actif" aria-current="step">Identité' in onglets
+    assert 'class="reglages-contenu"' in sources and 'class="reglages-contenu"' not in html
+
+
+def test_etat_passage_dit_que_le_dernier_passage_a_ete_interrompu(reg):
+    import datetime as dt
+    from jobsearch.web.app import etat_passage
+    il_y_a = lambda h: (dt.datetime.now() - dt.timedelta(hours=h)).isoformat(sep=" ", timespec="minutes")
+    reg.cx.execute("INSERT INTO runs (debut, fin, statut, declencheur, resume) VALUES (?,?,'complet','application','')",
+                   (il_y_a(5), il_y_a(4)))
+    reg.cx.execute("INSERT INTO runs (debut, fin, statut, declencheur, resume) VALUES (?,?,'interrompu','application','')",
+                   (il_y_a(2), il_y_a(1)))
+    reg.commit()
+    e = etat_passage(reg)
+    assert e["niveau"] == "attention" and "interrompu" in e["texte"] and "complet" not in e["texte"]
+
+
+def test_passages_en_notifications(web, reg):
+    """Les passages s'affichent en notifications : le plus récent d'abord, avec son résumé et ses étapes ;
+    ceux qui suivent le dernier vu (cookie) sont comptés dans le menu, coloré comme le plus grave."""
+    import datetime as dt
+    il_y_a = lambda h: (dt.datetime.now() - dt.timedelta(hours=h)).isoformat(sep=" ", timespec="minutes")
+    vide = web.get("/").text
+    assert 'id="notifications"' in vide and 'id="notifications-vide"' in vide and 'class="compte-notifs' not in vide
+    reg.cx.execute("INSERT INTO runs (debut, fin, statut, declencheur, resume) VALUES (?,?,'complet','application',?)",
+                   (il_y_a(30), il_y_a(29), "3 nouvelles annonces, 1 écartée au pré-tri (dont 0 limites), 2 à trancher."))
+    cur = reg.cx.execute("INSERT INTO runs (debut, fin, statut, declencheur, resume) VALUES (?,?,'partiel','manuel',?)",
+                         (il_y_a(2), il_y_a(1), "⚠ jobup en panne\n0 nouvelles annonces."))
+    reg.cx.execute("INSERT INTO run_etapes (run_id, etape, debut, statut, compteurs, erreur) VALUES (?, 'sourcing', ?, 'erreur', '{}', 'délai dépassé')",
+                   (cur.lastrowid, il_y_a(2)))
+    reg.commit()
+    html = web.get("/").text
+    volet = html[html.index('id="notifications"'):html.index("</dialog>", html.index('id="notifications"'))]
+    assert volet.index("Passage terminé, une étape a échoué") < volet.index("Passage terminé<")
+    assert "jobup en panne" in volet and "⚠" not in volet and "délai dépassé" in volet and "lancé à la main" in volet
+    assert volet.count("notification attention nouvelle") == 1 and "notification ok nouvelle" not in volet   # sans cookie : le dernier
+    assert '<span class="compte-notifs attention">1<' in html
+    web.cookies.set("notifs_vues", str(cur.lastrowid))
+    vu = web.get("/").text
+    assert 'class="compte-notifs' not in vu and ' nouvelle"' not in vu.split('id="notifications"')[1].split("</dialog>")[0]
+    web.cookies.set("notifs_vues", "0")
+    assert '<span class="compte-notifs attention">2<' in web.get("/").text
+    assert "Passage terminé" not in web.get("/sante").text.split("<main>")[1]       # plus de journal sur la page Système
 
 
 def test_registre_montre_la_source(web, reg):
@@ -253,13 +303,69 @@ def test_post_autre_origine_refuse(web, reg):
     assert r.status_code == 403
 
 
-def test_reseau_sans_jeton_redirige(reg, monkeypatch):
+def test_sans_jeton_redirige(reg):
     from jobsearch.web import app as appmod
-    monkeypatch.setattr("jobsearch.web.auth.depuis_le_mac", lambda req: False)
-    monkeypatch.setattr(appmod, "autorise", lambda req: False)
     c = TestClient(appmod.app)
+    c.cookies.clear()                                    # même en local : le jeton est exigé (web/auth.py)
     r = c.get("/", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/connexion"
+
+
+def test_preremplir_et_claude_repondent_en_json_ou_redirigent(web, reg, monkeypatch):
+    from jobsearch import agent_claude, preremplissage
+    e = annonce(reg, statut="go")
+    lances = []
+    monkeypatch.setattr(preremplissage, "employeur", lambda reg, emp: None)
+    monkeypatch.setattr(preremplissage, "lancer_en_arriere_plan", lambda emp, jobroom=False: lances.append(emp))
+    monkeypatch.setattr(agent_claude, "lancer", lambda reg, type_, emp: lances.append((type_, emp)))
+    json_ = {"accept": "application/json"}
+    r = web.post("/annonce/%s/preremplir" % e, data={"retour": "/annonce/x#postuler"}, headers=json_)
+    assert r.status_code == 200 and r.json()["ok"] is True and "Pré-remplissage" in r.json()["msg"]
+    r = web.post("/annonce/%s/preremplir" % e, data={"retour": "/annonce/x#postuler"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/annonce/x?msg=")
+    assert r.headers["location"].endswith("#postuler")
+    r = web.post("/annonce/%s/claude" % e, data={"type": "formulaire"}, headers=json_)
+    assert r.status_code == 200 and r.json()["ok"] is True and "Claude" in r.json()["msg"]
+    r = web.post("/annonce/%s/claude" % e, data={"type": "formulaire", "retour": "/candidatures"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/candidatures?msg=")
+    assert lances == [e, e, ("formulaire", e), ("formulaire", e)]
+
+
+def test_retour_reste_sur_le_site(web, reg):
+    from jobsearch.web.app import retour_sur
+    for mauvais in ("//ailleurs.example", "/\\ailleurs.example", "/\\/ailleurs", "https://ailleurs.example",
+                    "/a\nb", "/a\tb", "/a\x00", "", None, "ailleurs"):
+        assert retour_sur(mauvais) == "/", mauvais
+    assert retour_sur("/annonce/x?y=1#postuler") == "/annonce/x?y=1#postuler"
+    e = annonce(reg, statut="A")
+    r = web.post("/action", data={"empreinte": e, "type": "go", "retour": "/\\ailleurs.example"}, follow_redirects=False)
+    assert r.headers["location"].startswith("/?msg=")
+
+
+def test_api_etat_dit_quel_serveur_repond(web, reg):
+    import os
+    from pathlib import Path
+    import jobsearch
+    d = web.get("/api/etat").json()
+    assert d["pid"] == os.getpid() and d["racine"] == str(Path(jobsearch.__file__).resolve().parent)
+
+
+def test_texte_html_neutralise_le_html_brut():
+    from jobsearch.web.app import texte_html
+    h = str(texte_html("# Titre\n\n<script>alert(1)</script>\n\nTexte <img src=x onerror=alert(1)> **gras**\n\n"
+                       "[lien](javascript:alert(1)) [bon](https://exemple.ch)\n\n<div onclick=x>bloc</div>"))
+    assert "<script" not in h and "<img" not in h and "<div" not in h and "javascript:" not in h
+    assert "&lt;script&gt;" in h and "&lt;img" in h
+    assert "<h1>Titre</h1>" in h and "<strong>gras</strong>" in h and 'href="https://exemple.ch"' in h
+
+
+def test_texte_html_ne_charge_aucune_image_distante():
+    from jobsearch.web.app import texte_html
+    h = str(texte_html("![pixel](https://exemple.invalid/?d=secret) ![](//exemple.invalid/x.png) "
+                       "![local](/static/a.png) [lien](https://exemple.ch)"))
+    assert "<img" in h and h.count("<img") == 1 and 'src="/static/a.png"' in h
+    assert 'src="https://' not in h and 'src="//' not in h
+    assert '<a href="https://exemple.invalid/?d=secret">pixel</a>' in h and 'href="https://exemple.ch"' in h
 
 
 def test_ajouter_et_retirer_une_source(web, reg):
@@ -571,10 +677,41 @@ def test_page_confidentialite_montre_ce_que_l_ia_recoit(web, monkeypatch):
 def test_reglages_sans_dossier_et_comptes_mail_dans_connecteurs(web):
     profil_page = web.get("/profil/identite").text
     assert 'href="/profil/dossier"' not in profil_page and 'href="/profil/objectifs"' in profil_page
-    assert "Objectifs de postulation" in profil_page and 'href="/fonctions"' in profil_page
+    assert "Objectifs de postulation" in profil_page and 'href="/fonctions"' in web.get("/reglages").text
     assert 'name="courrier.comptes"' not in web.get("/profil/objectifs").text
     r = web.post("/connecteurs/apple-mail/comptes", data={"comptes": "iCloud\nTravail"}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].endswith("#apple-mail")
     assert profil.comptes_courrier() == ["iCloud", "Travail"]
     assert "iCloud\nTravail</textarea>" in web.get("/connecteurs").text
     assert web.get("/premiers-pas/dossier?formulaire=1").status_code == 200       # toujours l'entretien
+
+
+def test_passage_sans_ia_le_dit_et_le_rattrapage_resserre_le_pre_tri(reg, monkeypatch):
+    """13.11 : la VM éteinte, 31 annonces restaient à trancher sans note ni pré-sélection, et le
+    bilan n'en disait rien. Le passage le dit désormais ; et le pré-tri reprend les « nouvelle »
+    d'avant, qu'un filtre resserré écarte."""
+    from jobsearch import evaluation
+    monkeypatch.setattr(evaluation, "profil", lambda: "P")
+    ancienne = annonce(reg, titre="Senior Software Engineer", entreprise="Vieille SA", texte=FR)   # laissée par un passage d'avant
+    jr = FausseSource("job-room", [Annonce("job-room", "1", "Exemple SA", "AI Product Manager")])
+    r = pipeline.Passage(reg, sources={"job-room": jr}).lancer()
+    assert r["statut"] == "partiel" and "1 annonce(s) sans note ni pré-sélection de l'IA" in r["resume"]
+    assert reg.get(ancienne)["statut"] == "C" and "1 annonce(s) d'avant" in r["resume"]
+    assert reg.stats()["par_statut"] == {"nouvelle": 1, "C": 1}
+
+
+def test_passage_avec_ia_pre_selectionne(reg, monkeypatch):
+    from jobsearch import evaluation
+    from jobsearch.moteur import FauxMoteur
+    from test_evaluation import _ev
+    monkeypatch.setattr(evaluation, "profil", lambda: "P")
+    jr = FausseSource("job-room", [Annonce("job-room", "1", "Resto SA", "Product Manager cuisine"),
+                                   Annonce("job-room", "2", "Exemple SA", "AI Product Manager")])
+    p = pipeline.Passage(reg, sources={"job-room": jr})
+    p._moteur = FauxMoteur([_ev(), _ev(perimetre="hors", perimetre_motif="Cuisine.")])   # lot dans l'ordre des entreprises
+    r = p.lancer()
+    assert r["statut"] == "complet", r
+    assert "IA : 2 annonce(s) notée(s), 1 écartée(s) comme hors des postes visés" in r["resume"]
+    assert reg.stats()["par_statut"] == {"nouvelle": 1, "C": 1}
+    c = next(f for f in reg.liste(["C"]))
+    assert c["passe_ecart"] == 2 and c["limite"] and c["titre"] == "Product Manager cuisine"

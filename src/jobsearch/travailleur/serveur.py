@@ -159,6 +159,8 @@ async def detail(nom: str, request: Request):
 PORT_DEVTOOLS = 9222
 # Outils du serveur MCP de Chrome refusés aux sessions : rien qui exécute du code dans la page,
 # installe quelque chose ou lit au-delà de la page (le reste suffit pour lire, cliquer, remplir).
+# Liste de refus et non d'outils permis : la liste exacte des outils de la version figée
+# (vm.MCP_CHROME) reste à relever dans son paquet avant d'en faire une liste d'outils permis.
 OUTILS_REFUSES = ["evaluate_script", "install_extension", "install_pwa", "launch_pwa", "execute_webmcp_tool",
                   "get_network_request", "list_network_requests", "get_console_message", "list_console_messages",
                   "lighthouse_audit", "performance_start_trace", "performance_stop_trace", "take_heapsnapshot"]

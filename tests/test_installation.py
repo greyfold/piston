@@ -80,7 +80,7 @@ def test_accueil_recherche_ia_offres_puis_checklist(neuve, monkeypatch, reg):
     assert web.get("/", follow_redirects=False).headers["location"] == "/bienvenue"
     assert web.get("/bienvenue", follow_redirects=False).headers["location"] == "/bienvenue/recherche"   # la recherche d'abord
     page = web.get("/bienvenue/recherche").text
-    assert 'class="onglets"' not in page and 'aria-current="step"' in page and "Ta recherche" in page
+    assert 'class="menu-lateral"' not in page and 'aria-current="step"' in page and "Ta recherche" in page
     assert page.index("Ta recherche") < page.index("Tes sources") < page.index("Ton IA") < page.index("Premières offres")
     assert "Passer pour l'instant" in page and page.count('class="carte-choix"') == 3
 
@@ -117,7 +117,7 @@ def test_accueil_recherche_ia_offres_puis_checklist(neuve, monkeypatch, reg):
     assert [x[0] for x in pas] == ["ia", "recherche", "identite", "dossier", "criteres"]
     assert [x[5] for x in pas][:3] == [True, True, False]
     accueil = web.get("/").text
-    assert "Bien démarrer" in accueil and "2 sur 5 faits" in accueil and 'class="onglets"' in accueil
+    assert "Bien démarrer" in accueil and "2 sur 5 faits" in accueil and 'class="menu-lateral"' in accueil
     assert "Profil incomplet" not in accueil                                       # la checklist remplace le bandeau
     web.post("/premiers-pas/masquer")
     assert "Bien démarrer" not in web.get("/").text

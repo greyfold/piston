@@ -7,3 +7,5 @@ __pycache__/
 dist/
 app/.build/
 .cache/
+.ruff_cache/
+.impeccable/hook.cache.json

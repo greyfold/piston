@@ -78,8 +78,9 @@ def test_formulaire_consigne_ne_pas_envoyer(reg, sans_preparation):
     assert "upload_file" in consigne
 
 
-def test_connecte_lit_auth_status():
+def test_connecte_lit_auth_status(monkeypatch):
     import subprocess
+    monkeypatch.setenv("JOBSEARCH_VM", "1")                           # côté VM : c'est là que `claude` se lance
     oui = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout='{"loggedIn": true}', stderr="")
     non = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout='{"loggedIn": false}', stderr="")
     assert agent_claude.connecte(oui) and not agent_claude.connecte(non)
@@ -164,16 +165,20 @@ def test_releve_applique_et_verifie(reg, sans_preparation, monkeypatch):
     f = agent_claude.dossier_tache(t) / "evenements.jsonl"
     lignes = [{"type": "etat", "etat": "a_envoyer", "message": "relis"},
               {"type": "etat", "etat": "pirate"},                                   # état inconnu : ignoré
+              {"type": "etat", "etat": "envoi_a_confirmer"},                        # pas un état de session
               {"type": "envoyee", "empreinte": "une-autre-annonce", "url": "x"},    # hors de la tâche : ignoré
-              {"type": "jobroom_fait", "empreinte": e},                             # pas une tâche Job-Room : ignoré
-              {"type": "envoyee", "empreinte": e, "url": "https://exemple.ch/merci"}]
+              {"type": "jobroom_fait", "empreinte": e}]                             # pas une tâche Job-Room : ignoré
     f.write_text("\n".join(json.dumps(x) for x in lignes) + "\npas du json\n", encoding="utf-8")
-    assert agent_claude.relever(reg) == 2
-    assert agent_claude.lire(reg, t)["etat"] == "a_envoyer" and envois == [(e, "https://exemple.ch/merci")]
+    assert agent_claude.relever(reg) == 1
+    assert agent_claude.lire(reg, t)["etat"] == "a_envoyer"
     assert agent_claude.relever(reg) == 0                                           # déjà relevé
     with open(f, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps({"type": "etat", "etat": "fait"}) + "\n")
+        fh.write(json.dumps({"type": "etat", "etat": "en_cours"}) + "\n" + '{"type": "etat", "etat": "fa')
+    assert agent_claude.relever(reg) == 1                                           # ligne inachevée : plus tard
+    with open(f, "a", encoding="utf-8") as fh:
+        fh.write('it"}\n')
     assert agent_claude.relever(reg) == 1 and agent_claude.lire(reg, t)["etat"] == "fait"
+    assert envois == [] and not agent_claude.dossier_tache(t).exists()              # terminée : dossier effacé
 
 
 def test_preremplissage_sans_claude_passe_par_la_vm(reg, sans_preparation, monkeypatch):
@@ -187,3 +192,17 @@ def test_preremplissage_sans_claude_passe_par_la_vm(reg, sans_preparation, monke
     assert agent_claude.vue(agent_claude.lire(reg, t))["libelle"].startswith("Pré-remplissage ouvert")
     with pytest.raises(preremplissage.PreremplissageImpossible, match="occupé"):
         preremplissage.lancer_en_arriere_plan(e, jobroom_=True)
+
+
+def test_balayage_garde_la_tache_active_recente_et_note_arret_la_perdue(reg, sans_preparation, monkeypatch):
+    monkeypatch.setattr("jobsearch.notify.notifier", lambda *a, **k: None)
+    monkeypatch.setattr("jobsearch.notify.alerte_action", lambda *a, **k: None)
+    recente = agent_claude.lancer(reg, "jobroom")
+    agent_claude.noter(reg, recente, "connexion")
+    agent_claude._balayer(reg)
+    assert agent_claude.dossier_tache(recente).exists() and agent_claude.lire(reg, recente)["etat"] == "connexion"
+    reg.cx.execute("UPDATE taches_claude SET maj='2026-01-01 08:00', debut='2026-01-01 08:00' WHERE id=?", (recente,))
+    reg.commit()
+    agent_claude._balayer(reg)
+    assert not agent_claude.dossier_tache(recente).exists()
+    assert agent_claude.lire(reg, recente)["etat"] == "arret"

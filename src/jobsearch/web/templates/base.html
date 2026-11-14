@@ -14,38 +14,58 @@
 <script src="/static/compositeur.js?v={{ version_css() }}" defer></script>
 </head>
 <body class="{% block classe_corps %}{{ 'accueil' if accueil }}{% endblock %}">
-{# Une page peut retirer la barre de menu (mode concentré : l'entretien de « Ton parcours »). #}
+{# Une page peut retirer le menu latéral (mode concentré : le tri, l'entretien de « Ton parcours »). L'accueil
+   n'a que la marque, centrée. #}
 {% block barre %}
-<header class="barre"><div class="dedans">
-  {% if accueil %}
-  <span class="marque">Recherche <span>d'emploi</span></span>
-  {% else %}
-  <a class="marque" href="/">Recherche <span>d'emploi</span></a>
-  {# Trois espaces de travail, puis les réglages. Pour un nouvel utilisateur, Offres s'ouvre avec
-     la recherche et Candidatures avec la possibilité de postuler. #}
-  <nav class="onglets" aria-label="Navigation principale">
-    {% for href, nom, fonction in [("/", "Aujourd'hui", none), ("/offres", "Offres", "offres"), ("/candidatures", "Candidatures", "postuler")]
-       if fonctions is not defined or not fonction or fonctions[fonction] %}
-    {% set actif = nav == href or (href != '/' and nav.startswith(href ~ '/')) %}
-    <a href="{{ href }}" class="{{ 'actif' if actif }}"{% if actif %} aria-current="page"{% endif %}>{{ nom }}</a>
-    {% endfor %}
-  </nav>
-  <a href="/reglages" class="lien-reglages{{ ' actif' if dans_reglages }}">{{ icone("reglages") }}<span>Réglages</span></a>
-  {% endif %}
-</div></header>
+{% if accueil %}
+<header class="barre-accueil"><span class="marque">Recherche <span>d'emploi</span></span></header>
+{% else %}
+{% include "_menu_lateral.html" %}
+{% include "_notifications.html" %}
+{% endif %}
 {% endblock %}
 <main>
 {% if profil_manquants and not accueil and not concentre and not premiers_pas_affiches and not nav.startswith(('/profil', '/connexion')) %}<div class="bandeau attention"><span class="point"></span><span>Profil incomplet ({{ profil_manquants | map('last') | join(', ') }}) : <a href="/profil">le compléter</a>.</span></div>{% endif %}
 {% if a_configurer and not accueil and nav in ('/', '/sante') %}{% for c in a_configurer %}<div class="bandeau attention"><span class="point"></span><span>{{ c.nom }} n'est pas branché : {{ c.message }}. Les autres sources tournent normalement, et {{ c.nom }} reprendra de lui-même une fois le réglage fait. <a href="/connecteurs#{{ c.id }}">Que faire</a></span></div>{% endfor %}{% endif %}
-{# Réglages : menu à gauche, la page ouverte à droite, sur une seule colonne. #}
+{# Réglages : la page ouverte sur une seule colonne, de la largeur d'un formulaire, avec un retour vers la
+   page Réglages (sauf sur celle-ci). #}
 {% set cadre_reglages = dans_reglages and not accueil %}
-{% if cadre_reglages %}<div class="reglages-cadre">{% include "_reglages_nav.html" %}<div class="reglages-contenu">{% endif %}
+{% if cadre_reglages %}<div class="reglages-contenu">{% if nav != '/reglages' %}
+<a class="retour" href="/reglages">{{ icone("precedent") }} Réglages</a>{% endif %}{% endif %}
 {% block message %}{% if msg %}<div class="flash {{ '' if ok else 'ko' }}" role="status">{{ msg }}</div>{% endif %}{% endblock %}
 {% block contenu %}{% endblock %}
-{% if cadre_reglages %}</div></div>{% endif %}
+{% if cadre_reglages %}</div>{% endif %}
 </main>
 {% include "_connexion_ia.html" %}
 <script>
+// Notifications (volet à droite, _notifications.html) : s'ouvrent par le bouton du menu ou l'adresse
+// #notifications ; les ouvrir marque les passages comme vus (cookie lu par le serveur) et retire le compte.
+(function () {
+  var v = document.getElementById("notifications");
+  if (!v) return;
+  var origine = null;
+  var fermer = function () { v.classList.add("ferme"); setTimeout(function () { v.close(); v.classList.remove("ferme"); }, 180); };
+  var ouvrir = function (depuis) {
+    origine = depuis || null;
+    if (!v.open) v.showModal();
+    document.cookie = "notifs_vues=" + v.dataset.dernier + "; path=/; max-age=31536000; samesite=strict";
+    document.querySelectorAll(".compte-notifs").forEach(function (c) { c.hidden = true; });
+  };
+  document.querySelectorAll("[data-ouvrir-notifications]").forEach(function (b) {
+    b.addEventListener("click", function () { ouvrir(b); });
+  });
+  v.querySelector("[data-fermer-volet]").addEventListener("click", fermer);
+  v.addEventListener("cancel", function (ev) { ev.preventDefault(); fermer(); });
+  v.addEventListener("click", function (ev) { if (ev.target === v) fermer(); });   // clic sur le fond
+  v.addEventListener("close", function () {
+    v.querySelectorAll(".notification.nouvelle").forEach(function (n) { n.classList.remove("nouvelle"); });
+    if (location.hash === "#notifications") history.replaceState(null, "", location.pathname + location.search);
+    if (origine) origine.focus({preventScroll: true});
+  });
+  if (location.hash === "#notifications") ouvrir();
+  window.addEventListener("hashchange", function () { if (location.hash === "#notifications") ouvrir(); });
+})();
+
 // Dossier en préparation : l'étape se met à jour toutes les 5 s, la page se recharge quand il est fait.
 document.querySelectorAll("[data-suivi-dossier]").forEach(function (el) {
   var minuterie = setInterval(function () {

@@ -5,13 +5,20 @@ Deux tâches :
   dès qu'une candidature est notée envoyée ; une seule session traite toutes les preuves en
   attente, l'une après l'autre.
 - « formulaire » : remplir le formulaire de l'employeur après un Go, sans l'envoyer ; la
-  session guette ensuite la page de confirmation et note l'envoi (ce qui déclenche Job-Room).
+  session guette ensuite la page de confirmation et la signale. Ce signal ne vaut pas envoi (une
+  page piégée peut l'afficher) : la tâche passe « envoi à confirmer », et c'est la personne qui
+  note l'envoi (« Marquer envoyée » du tableau de bord), ce qui déclenche Job-Room.
 
 Claude Code et Chrome tournent dans la machine virtuelle, jamais sur le Mac. La session n'a que
 les outils du serveur MCP de Chrome (sans exécution de script) et la commande `jobsearch-session`
 (session_vm.py) : elle n'a ni la base ni le profil. Le Mac prépare ce qu'il lui faut dans le
 dossier partagé (`taches/<id>/donnees.json`, documents copiés), puis relève ce qu'elle y note
 (`relever`), en vérifiant chaque ligne avant de l'appliquer à la base.
+
+Le dossier partagé est inscriptible par la VM : le Mac n'y suit aucun lien symbolique (dossier de
+la tâche préparé à part puis déplacé d'un coup, fichiers ouverts sans suivre de lien), ne relit
+rien de ce qu'il y a écrit pour décider (ce qui est permis à la tâche est gardé dans la base), et
+efface le dossier de la tâche, CV et coordonnées compris, dès qu'elle est terminée.
 
 Elle ne tape jamais de mot de passe : quand une connexion est nécessaire, elle le signale
 (notification) et attend que la personne se connecte, dans la fenêtre « Navigateur » de
@@ -20,7 +27,11 @@ l'application (l'écran de la VM).
 
 import datetime as dt
 import json
+import os
 import shutil
+import stat
+import tempfile
+from pathlib import Path
 
 from . import profil
 from .config import DATA, reglages
@@ -37,7 +48,11 @@ CREATE TABLE IF NOT EXISTS taches_claude (
 """
 
 ETATS = {"en_file": "En file : Chrome est occupé par une autre session", "en_cours": "Claude travaille…", "connexion": "En attente de ta connexion",
-         "a_envoyer": "Rempli : relis et envoie", "fait": "Fait par Claude", "arret": "Arrêté"}
+         "a_envoyer": "Rempli : relis et envoie", "fait": "Fait par Claude", "arret": "Arrêté",
+         "envoi_a_confirmer": "Envoi signalé : vérifie, puis « Marquer envoyée »"}
+ETATS_SESSION = ("en_cours", "connexion", "a_envoyer", "fait", "arret")   # ce qu'une session peut noter
+TERMINAUX = ("fait", "arret", "envoi_a_confirmer")                         # Chrome libéré, dossier effacé
+EVENEMENTS_MAX = 2_000_000                     # octets lus au plus dans evenements.jsonl
 
 COMMANDES = ["jobroom-attente", "jobroom-fait", "tache", "formulaire", "envoyee"]
 
@@ -78,6 +93,93 @@ def partage():
 def dossier_tache(tache):
     """Le dossier de la tâche dans le dossier partagé avec la VM (vu là-bas sous /donnees)."""
     return partage() / "taches" / str(tache)
+
+
+class PreparationRefusee(Exception):
+    pass
+
+
+_REP = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+
+
+def _taches_fd(creer=False):
+    """Le dossier `taches/` du partage, ouvert sans suivre de lien (la VM pourrait en poser un)."""
+    racine = partage()
+    if creer:
+        racine.mkdir(parents=True, exist_ok=True)
+    fr = os.open(racine, os.O_RDONLY | os.O_DIRECTORY)          # le partage lui-même : côté Mac
+    try:
+        if creer:
+            try:
+                os.mkdir("taches", 0o755, dir_fd=fr)
+            except FileExistsError:
+                pass
+        return os.open("taches", _REP, dir_fd=fr)
+    finally:
+        os.close(fr)
+
+
+def _deposer(source, tache):
+    """Déplace d'un coup le dossier préparé hors du partage vers `taches/<id>`. Refuse un dossier
+    (ou un lien) déjà là : la VM aurait pu le poser pour détourner les écritures."""
+    ft = _taches_fd(creer=True)
+    try:
+        try:
+            os.lstat(str(tache), dir_fd=ft)
+        except FileNotFoundError:
+            pass
+        else:
+            raise PreparationRefusee("le dossier de la tâche %s existe déjà dans le dossier partagé" % tache)
+        os.rename(source, str(tache), dst_dir_fd=ft)
+    finally:
+        os.close(ft)
+
+
+def purger(tache):
+    """Efface `taches/<id>/` du partage (CV, lettre, coordonnées), sans suivre aucun lien."""
+    try:
+        ft = _taches_fd()
+    except OSError:
+        return False
+    try:
+        nom = str(tache)
+        try:
+            st = os.lstat(nom, dir_fd=ft)
+        except FileNotFoundError:
+            return False
+        if stat.S_ISDIR(st.st_mode):
+            shutil.rmtree(nom, dir_fd=ft)
+        else:
+            os.unlink(nom, dir_fd=ft)
+        return True
+    finally:
+        os.close(ft)
+
+
+def _lire_evenements(tache):
+    """Les lignes complètes de `taches/<id>/evenements.jsonl`, ou None. Ni lien symbolique, ni
+    autre chose qu'un fichier ordinaire ; une ligne pas encore terminée attend la relève suivante."""
+    try:
+        ft = _taches_fd()
+    except OSError:
+        return None
+    try:
+        fd = os.open(str(tache), _REP, dir_fd=ft)
+    except OSError:
+        return None
+    finally:
+        os.close(ft)
+    try:
+        fe = os.open("evenements.jsonl", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+    with os.fdopen(fe, "rb") as fh:
+        if not stat.S_ISREG(os.fstat(fh.fileno()).st_mode):
+            return None
+        brut = fh.read(EVENEMENTS_MAX)
+    return brut.decode("utf-8", errors="replace").split("\n")[:-1]
 
 
 def _schema(reg):
@@ -155,10 +257,26 @@ def preparer(reg, tache, type_, empreinte):
     """Écrit dans le dossier partagé ce dont la session a besoin, et rien d'autre : les preuves
     à saisir (Job-Room), ou les valeurs du formulaire et une copie du CV et de la lettre."""
     from . import preremplissage
-    d = dossier_tache(tache)
-    if d.exists():
-        shutil.rmtree(d)
-    (d / "documents").mkdir(parents=True)
+    # Préparé hors du partage (même disque), puis déplacé d'un coup : aucune écriture du Mac ne
+    # passe par un chemin que la VM aurait pu remplacer par un lien.
+    partage().mkdir(parents=True, exist_ok=True)
+    d = Path(tempfile.mkdtemp(prefix=".tache-%s-" % tache, dir=partage().parent))
+    try:
+        contenu = _preparer_dans(reg, d, tache, type_, empreinte, preremplissage)
+        os.chmod(d, 0o755)
+        _deposer(d, tache)
+    except BaseException:
+        shutil.rmtree(d, ignore_errors=True)
+        raise
+    # Ce que la tâche peut noter, gardé côté Mac : jamais relu dans le partage.
+    permis = ([p["empreinte"] for p in contenu.get("preuves", [])] if type_ == "jobroom" else [empreinte])
+    reg.poser_meta("tache_%d_permis" % int(tache), json.dumps(permis))
+    reg.commit()
+    return contenu
+
+
+def _preparer_dans(reg, d, tache, type_, empreinte, preremplissage):
+    (d / "documents").mkdir()
     if type_ == "jobroom":
         from . import followups
         from .navigateur import jetons_poste
@@ -184,8 +302,7 @@ def preparer(reg, tache, type_, empreinte):
                 shutil.copy2(chemin, d / "documents" / nom)
                 documents.setdefault(genre, {})[fmt] = "/donnees/taches/%s/documents/%s" % (tache, nom)
         contenu = {"type": type_, "empreinte": empreinte, "lien": url, "valeurs": valeurs, "documents": documents}
-    f = d / "donnees.json"
-    f.write_text(json.dumps(contenu, ensure_ascii=False, indent=1), encoding="utf-8")
+    (d / "donnees.json").write_text(json.dumps(contenu, ensure_ascii=False, indent=1), encoding="utf-8")
     return contenu
 
 
@@ -209,6 +326,7 @@ def _demarrer(reg, tache, type_, empreinte, executer=None):
         (executer or lancer_dans_la_vm)(tache, type_, consigne)
     except Exception as e:                       # préparation, VM éteinte, Claude non connecté…
         message = "Claude n'a pas démarré dans la machine virtuelle : %s" % str(e)[:200]
+        purger(tache)
         noter(reg, tache, "arret", message)
         raise LancementImpossible(message) from e
     reg.cx.execute("UPDATE taches_claude SET session=? WHERE id=?", ("vm", tache))
@@ -221,7 +339,9 @@ def _demarrer(reg, tache, type_, empreinte, executer=None):
 
 def relever(reg):
     """Applique ce que les sessions ont noté dans le dossier partagé depuis la dernière relève.
-    Chaque ligne est vérifiée : état connu, annonce de la tâche ; le reste est ignoré."""
+    Chaque ligne est vérifiée : état qu'une session peut noter, annonce permise à la tâche (liste
+    gardée dans la base au moment de la préparer) ; le reste est ignoré. Une tâche terminée voit
+    son dossier effacé du partage, une fois ses événements relevés."""
     import datetime as _dt
     from . import actions, preremplissage
     _schema(reg)
@@ -229,27 +349,29 @@ def relever(reg):
     for t in reg.cx.execute("SELECT * FROM taches_claude WHERE session='vm' AND etat IN "
                             "('en_cours','connexion','a_envoyer') ORDER BY id").fetchall():
         t = dict(t)
-        d = dossier_tache(t["id"])
-        f = d / "evenements.jsonl"
-        if not f.exists():
+        lignes = _lire_evenements(t["id"])
+        if lignes is None:
             continue
         cle = "tache_%d_lus" % t["id"]
         lus = int(reg.meta(cle) or 0)
-        lignes = f.read_text(encoding="utf-8").splitlines()
-        try:
-            prevu = json.loads((d / "donnees.json").read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            prevu = {}
-        permis = ({p["empreinte"] for p in prevu.get("preuves", [])} if t["type"] == "jobroom"
-                  else {t["empreinte"]})
+        if t["type"] == "jobroom":
+            try:
+                permis = set(json.loads(reg.meta("tache_%d_permis" % t["id"]) or "[]"))
+            except ValueError:
+                permis = set()
+        else:
+            permis = {t["empreinte"]} - {None}
         jobroom, formulaire = t["type"] in ("jobroom", "pre-jobroom"), t["type"] in ("formulaire", "pre-formulaire")
         apres = []                                   # ce qui ouvre sa propre connexion à la base : après le commit
+        signale = False                              # envoi signalé : la suite de la session n'y change rien
         for ligne in lignes[lus:]:
             try:
                 e = json.loads(ligne)
             except ValueError:
                 continue
-            if e.get("type") == "etat" and e.get("etat") in ETATS and e.get("etat") != "en_file":
+            if not isinstance(e, dict):
+                continue
+            if e.get("type") == "etat" and e.get("etat") in ETATS_SESSION and not signale:
                 noter(reg, t["id"], e["etat"], (e.get("message") or None) and str(e["message"])[:300])
             elif e.get("type") == "jobroom_fait" and t["type"] == "pre-jobroom" and e.get("empreinte") in permis:
                 apres.append((preremplissage.noter_preuve, (e["empreinte"],)))
@@ -259,8 +381,13 @@ def relever(reg):
                         "Job-Room : saisie le %s par Claude (compteur %s, ligne constatée une seule fois)"
                         % (_dt.date.today().isoformat(), str(e.get("compteur") or "?")[:40]))
                 actions.appliquer(reg, e["empreinte"], "jobroom_saisie", {"date": _dt.date.today().isoformat(), "note": note})
-            elif e.get("type") == "envoyee" and formulaire and e.get("empreinte") in permis:
-                apres.append((preremplissage.noter_envoi, (e["empreinte"], str(e.get("url") or "")[:500])))
+            elif e.get("type") == "envoyee" and formulaire and e.get("empreinte") in permis and not signale:
+                # Ne vaut pas envoi : la personne vérifie et note elle-même « Marquer envoyée ».
+                f = reg.get(e["empreinte"])
+                if not f or f["statut"] != "retenue":
+                    continue
+                signale = True
+                noter(reg, t["id"], "envoi_a_confirmer", preremplissage.envoi_signale(f, str(e.get("url") or "")))
             else:
                 continue
             appliques += 1
@@ -268,7 +395,34 @@ def relever(reg):
         reg.commit()
         for f, args in apres:
             f(*args)
+        if (lire(reg, t["id"]) or {}).get("etat") in TERMINAUX:
+            purger(t["id"])
+    _balayer(reg)
     return appliques
+
+
+def _balayer(reg, heures=12):
+    """Efface du partage les dossiers des tâches terminées ou inconnues de la base (restes d'une
+    installation précédente…). Une tâche encore active mais sans nouvelle depuis `heures` est d'abord
+    notée « arret » (chemin normal : notification, file suivante), puis purgée ; une tâche active
+    plus récente garde son dossier, la session l'attend peut-être encore."""
+    try:
+        ft = _taches_fd()
+    except OSError:
+        return
+    try:
+        noms = os.listdir(ft)
+    finally:
+        os.close(ft)
+    for nom in noms:
+        if not nom.isdigit():
+            continue
+        t = lire(reg, int(nom))
+        if t and t["etat"] not in TERMINAUX:
+            if (t["maj"] or t["debut"]) >= _depuis(heures * 60):
+                continue
+            noter(reg, t["id"], "arret", "Sans nouvelle depuis plus de %d h : tâche tenue pour perdue." % heures)
+        purger(nom)
 
 
 def noter(reg, tache, etat, message=None):
@@ -283,7 +437,6 @@ def noter(reg, tache, etat, message=None):
     reg.commit()
     from .notify import alerte_action
     sujet = "Job-Room" if t["type"] == "jobroom" else "Formulaire"
-    tableau = 'open "http://localhost:%s/"' % ((reglages().get("web") or {}).get("port", 8765))
     if etat == "connexion":
         texte = "Claude attend ta connexion%s : ouvre « Navigateur » dans l'application." % (" à " + message if message else "")
         notifier("%s : connecte-toi" % sujet, texte, urgent=True)
@@ -292,10 +445,14 @@ def noter(reg, tache, etat, message=None):
         texte = "Le formulaire est rempli dans « Navigateur » : relis et envoie toi-même. %s" % (message or "")
         notifier("Formulaire rempli", texte)
         alerte_action("Formulaire rempli", texte)
+    elif etat == "envoi_a_confirmer":
+        texte = message or "La page semble confirmer l'envoi : vérifie, puis « Marquer envoyée »."
+        notifier("Candidature envoyée ?", texte)
+        alerte_action("Candidature envoyée ?", texte)
     elif etat == "arret":
         notifier("%s : arrêté" % sujet, message or "Voir le tableau de bord.", urgent=True)
-        alerte_action("%s : arrêté" % sujet, message or "Voir le tableau de bord.", "Ouvrir le tableau de bord", tableau)
-    if etat in ("fait", "arret"):
+        alerte_action("%s : arrêté" % sujet, message or "Voir le tableau de bord.")
+    if etat in TERMINAUX:
         suivante(reg)
 
 

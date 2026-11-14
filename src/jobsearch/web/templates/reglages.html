@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icone %}
+{% block titre %}Réglages · Recherche d'emploi{% endblock %}
+{% block contenu %}
+{# Page Réglages : les réglages vivent ici, hors du menu latéral (qui ne garde que les espaces de travail).
+   Une liste de lignes de réglage par groupe ; chaque ligne ouvre sa page, qui a un retour vers celle-ci. #}
+{% set groupes = [
+  ("Toi", [
+    ("/profil", "Ma recherche", "identite", "Identité, poste recherché, pré-tri, critères, langues et objectifs."),
+    ("/reglages/parcours", "Ton parcours", "base", "Expériences, formations et compétences ; export et import d'un fichier."),
+  ]),
+  ("Recherche et IA", [
+    ("/sources", "Sources", "globe", "Les sites et pages carrière interrogés à chaque passage."),
+    ("/ia", "Fournisseur d'IA", "ia", "L'IA qui note les annonces et écrit tes dossiers."),
+    ("/connecteurs", "Connecteurs", "prise", "Ce que la plateforme peut lire pour toi : courrier, sites d'emploi, navigateur."),
+    ("/confidentialite", "Confidentialité", "cadenas", "Ce que l'IA voit de toi, et ce qui lui est masqué."),
+  ]),
+  ("Application", [
+    ("/fonctions", "Fonctions", "objectifs", "Ce que la plateforme fait pour toi, et ce qui ouvre chaque fonction."),
+    ("/sante", "Système", "systeme", "Les 30 derniers matins, les sauvegardes et les clés d'accès."),
+  ]),
+] %}
+<h1>Réglages</h1>
+<p class="muet">Ton profil, d'où viennent les annonces, l'IA et le fonctionnement de l'application.</p>
+{% for titre, lignes in groupes %}
+<section class="groupe-reglages" aria-labelledby="groupe-{{ loop.index }}">
+  <h2 class="section-base" id="groupe-{{ loop.index }}">{{ titre }}</h2>
+  <ul class="reglages-liste">
+    {% for href, nom, ic, description in lignes %}
+    <li><a class="reglage-ligne" href="{{ href }}">
+      {{ icone(ic) }}
+      <span class="texte"><span class="titre">{{ nom }}
+          {% if href == "/profil" and profil_manquants %}<span class="puce nouvelle">à compléter</span>{% endif %}</span>
+        <span class="description">{{ description }}</span></span>
+      {{ icone("suivant") }}
+    </a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endfor %}
+{% endblock %}

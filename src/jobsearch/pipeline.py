@@ -27,6 +27,52 @@ class Delai(Exception):
     pass
 
 
+def clore_interrompus(reg):
+    """Clôt en « interrompu » les passages restés « démarré » dont le processus est mort.
+
+    Tout passage tient un verrou `flock` sur `passage.lock` pendant qu'il travaille ; le système le
+    libère à la mort du processus. Verrou libre + passage « démarré » = passage tué. On garde le
+    verrou pendant la clôture, pour qu'un passage qui démarre à cet instant ne soit pas clos.
+    Renvoie les identifiants clos."""
+    DATA.mkdir(parents=True, exist_ok=True)
+    with open(DATA / "passage.lock", "w") as verrou:
+        try:
+            fcntl.flock(verrou, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return []                                  # un passage tourne vraiment
+        try:
+            ids = [r[0] for r in reg.cx.execute("SELECT id FROM runs WHERE statut='demarre'")]
+            for i in ids:
+                reg.cx.execute("UPDATE runs SET fin=?, statut='interrompu', "
+                               "resume=COALESCE(resume, '') || ? WHERE id=?",
+                               (maintenant(), "Passage interrompu avant la fin (Mac en veille ou "
+                                              "application fermée).", i))
+                reg.cx.execute("UPDATE run_etapes SET fin=?, statut='interrompu' WHERE run_id=? AND fin IS NULL",
+                               (maintenant(), i))
+            if ids:
+                reg.commit()
+            return ids
+        finally:
+            fcntl.flock(verrou, fcntl.LOCK_UN)
+
+
+@contextmanager
+def verrou_sans_attendre():
+    """Prend `passage.lock` sans attendre : rend True (verrou tenu le temps du bloc) ou False si un
+    passage tourne déjà (le bloc s'exécute alors sans verrou : à celui qui l'appelle de passer son tour)."""
+    DATA.mkdir(parents=True, exist_ok=True)
+    with open(DATA / "passage.lock", "w") as verrou:
+        try:
+            fcntl.flock(verrou, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            fcntl.flock(verrou, fcntl.LOCK_UN)
+
+
 def _libelle(nom):
     return (CATALOGUE.get(nom) or {}).get("nom") or nom
 
@@ -119,6 +165,9 @@ class Passage:
     # --- Le passage -------------------------------------------------------
 
     def lancer(self):
+        # Un passage resté « démarré » alors que personne ne tient plus le verrou est mort
+        # (veille, fermeture, exception) : on le clôt avant d'en ouvrir un autre.
+        clore_interrompus(self.reg)
         verrou = open(DATA / "passage.lock", "w")
         try:
             fcntl.flock(verrou, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -157,6 +206,8 @@ class Passage:
             if self.p.get("courrier", True) and not getattr(self, "_sans_courrier", False) and not self.leger:
                 try:
                     n.update(courrier.relever(self.reg))
+                except courrier.CourrierNonConfigure as e:
+                    n["ignore"] = str(e)[:200]      # serveur non réglé : étape ignorée, pas un échec
                 except courrier.CourrierImpossible as e:
                     n["ignore"] = str(e)[:200]
                     self.echecs.append(("courrier", str(e)[:200]))
@@ -259,10 +310,14 @@ class Passage:
             nouvelles = [e for e in nouvelles if e not in res["fusionnees"]]
 
         with self.etape("pre_tri") as n:
-            ecartees = prefilter.pre_trier(self.reg, nouvelles)
-            n["ecartees"] = len(ecartees)
+            # Toutes les annonces encore « nouvelle », pas seulement celles du jour : un filtre resserré
+            # (postes du profil, exclusions) rattrape ce qu'un passage précédent avait laissé à trancher.
+            ecartees = prefilter.pre_trier(self.reg)
+            du_jour = set(nouvelles)
+            n["ecartees"] = sum(1 for f, _ in ecartees if f["empreinte"] in du_jour)
+            n["reprises"] = len(ecartees) - n["ecartees"]
             n["limites"] = sum(1 for _, r in ecartees if r.get("limite"))
-            n["a_trier"] = len(nouvelles) - len(ecartees)
+            n["a_trier"] = len(nouvelles) - n["ecartees"]
             par_regle = {}
             for _, r in ecartees:
                 par_regle[r["id"]] = par_regle.get(r["id"], 0) + 1
@@ -288,23 +343,33 @@ class Passage:
                 n["_tronquee"] = True
 
         with self.etape("evaluation") as n:
-            # Note d'adéquation et signaux d'alerte des annonces à trancher (moteur IA).
+            # Note d'adéquation, signaux d'alerte et pré-sélection (métier hors des postes visés)
+            # des annonces à trancher, par le moteur IA.
             try:
-                c = self._moteur if hasattr(self, "_moteur") else moteur.ouvrir()
                 texte_profil = evaluation.profil()
-            except (evaluation.EvaluationImpossible, FileNotFoundError) as e:
+            except FileNotFoundError as e:           # pas encore de parcours : rien à noter, rien de cassé
                 n["ignoree"] = str(e)
             else:
                 lot = evaluation.a_evaluer(self.reg, texte_profil=texte_profil)
                 lot = lot[:int(self.p.get("evaluations_par_passage", 30))]
                 n["a_evaluer"] = len(lot)
                 try:
-                    n.update(evaluation.evaluer_lot(self.reg, lot, c=c, texte_profil=texte_profil,
-                                                    budget=self._budget))
-                except Delai:
-                    n["_tronquee"] = True
-                if n.get("echecs"):
-                    self.echecs.append(("évaluation", "; ".join(n["erreurs"][:3])))
+                    c = self._moteur if hasattr(self, "_moteur") else moteur.ouvrir()
+                except evaluation.EvaluationImpossible as e:
+                    # Sans l'IA, les annonces restent à trancher sans note ni pré-sélection : la
+                    # personne doit le savoir (13.11 : 31 annonces hors métier faute de VM démarrée).
+                    n["ignoree"] = str(e)
+                    if lot:
+                        self.echecs.append(("évaluation", "%d annonce(s) sans note ni pré-sélection de l'IA : %s"
+                                            % (len(lot), e)))
+                else:
+                    try:
+                        n.update(evaluation.evaluer_lot(self.reg, lot, c=c, texte_profil=texte_profil,
+                                                        budget=self._budget))
+                    except Delai:
+                        n["_tronquee"] = True
+                    if n.get("echecs"):
+                        self.echecs.append(("évaluation", "; ".join(n["erreurs"][:3])))
 
         with self.etape("dossiers") as n:
             # Rattrapage : un Go dont le dossier n'a pas pu se faire au moment du clic.
@@ -363,7 +428,7 @@ class Passage:
             "SELECT etape, statut, compteurs FROM run_etapes WHERE run_id=?", (self.id,))}
         statut = "complet" if not self.echecs else "partiel"
         c = lambda e: json.loads(etapes.get(e, {}).get("compteurs") or "{}")
-        ing, pt, ech = c("ingestion"), c("pre_tri"), c("echeances")
+        ing, pt, ech, ev = c("ingestion"), c("pre_tri"), c("echeances"), c("evaluation")
         lignes = []
         if self.echecs:
             lignes.append("⚠ " + " ; ".join("%s : %s" % e for e in self.echecs)[:300])
@@ -373,6 +438,11 @@ class Passage:
         lignes.append("%d nouvelles annonces, %d écartées au pré-tri (dont %d limites), %d à trancher."
                       % (ing.get("nouvelles", 0), pt.get("ecartees", 0), pt.get("limites", 0),
                          pt.get("a_trier", 0)))
+        if pt.get("reprises"):
+            lignes.append("%d annonce(s) d'avant, écartée(s) par le pré-tri resserré." % pt["reprises"])
+        if ev.get("evaluees"):
+            lignes.append("IA : %d annonce(s) notée(s), %d écartée(s) comme hors des postes visés "
+                          "(à revoir dans « Écartées limites »)." % (ev["evaluees"], ev.get("ecartees", 0)))
         dbl = c("doublons")
         if dbl.get("fusionnees") or dbl.get("a_verifier"):
             lignes.append("Doublons entre plateformes : %d fusionnés, %d à vérifier."
@@ -396,7 +466,7 @@ class Passage:
         (self.dossier / "resume.txt").write_text(texte, encoding="utf-8")
         if self.notifier_fin:
             notifier("Recherche d'emploi · passage %s" % ("complet" if statut == "complet" else "partiel"),
-                     texte, urgent=bool(self.echecs), lien="/sante",
+                     texte, urgent=bool(self.echecs), lien="/sante#notifications",
                      telephone=False)    # le téléphone reçoit l'alerte du matin, pas ce bilan technique
         for nom, message, nouveau in self.a_configurer:
             if nouveau and self.notifier_fin:        # une seule fois, pas à chaque passage

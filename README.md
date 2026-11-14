@@ -35,8 +35,8 @@ Signature locale seulement, pas encore de notarisation. Rien à installer sur le
 `LIMA_HOME` = dossier des données, à part de tout autre Lima. Elle installe depuis leurs sources
 officielles Python, uv, Claude Code, Google Chrome (arm64), Node.js 22 (somme vérifiée) et le
 serveur MCP de Chrome (`chrome-devtools-mcp`, version figée), plus un écran : TigerVNC, Openbox,
-noVNC. Le **travailleur** (`travailleur/`) y répond sur 127.0.0.1:8766 (jeton) ; l'écran sur
-127.0.0.1:8767 (mot de passe), montré par la page **Navigateur** de l'application.
+noVNC. Le **travailleur** (`travailleur/`) y répond sur 127.0.0.1:8776 (jeton) ; l'écran sur
+127.0.0.1:8777 (mot de passe), montré par la page **Navigateur** de l'application.
 
 - **Ce que la VM voit** : le seul sous-dossier `partage-vm/` des données (jeton, mot de passe de
   l'écran, journaux du travailleur, et pour chaque tâche Chrome `taches/<id>/` : ce que le Mac lui
@@ -61,8 +61,15 @@ noVNC. Le **travailleur** (`travailleur/`) y répond sur 127.0.0.1:8766 (jeton) 
 - **Ton parcours** : import du CV, puis un entretien avec l'IA poste après poste ; la base
   d'expérience qui en sort est ce que l'IA reçoit pour noter les annonces et écrire les dossiers.
 - **Passage du matin** : sauvegarde, test des routes, sourcing, lecture des annonces nouvelles,
-  ingestion sans doublon, fusion des doublons, pré-tri, échéances. Une étape en panne n'arrête pas
-  les suivantes.
+  ingestion sans doublon, fusion des doublons, pré-tri, note et pré-sélection par l'IA, échéances.
+  Une étape en panne n'arrête pas les suivantes.
+- **Pré-tri en trois passes** : les passes 0 et 1 sont des règles (`prefilter.py`, `config/criteres.yaml`,
+  postes et exclusions du profil) ; l'intitulé doit porter un mot du métier des postes visés, pas
+  seulement un mot de fonction (« chef », « responsable », « manager »). La passe 2 est l'IA
+  (`evaluation.py`) : en notant chaque annonce à trancher, elle dit si le métier est dans, à la limite
+  ou hors des postes visés ; « hors » écarte l'annonce en « limite », visible et réversible dans
+  « Écartées limites ». Le doute profite à l'annonce. Si l'IA n'a pas répondu pendant le passage, le
+  bilan le dit et `echeances.py` rattrape les annonces sans note dès qu'elle répond.
 - **Examen d'une source** (page Sources, ou `jobsearch source examiner <id>`) : l'IA lit sur le web
   les conditions générales et le robots.txt de la source, et cherche une API publique, un serveur MCP
   ou des alertes e-mail. Elle conseille un accès, que Python vérifie (`sources/examen.py`) : sans
@@ -90,8 +97,8 @@ session Claude reçoit les vraies coordonnées (elle doit les taper). Le pré-re
 les saisit sans l'IA.
 
 **Sécurité des données** : dossier des données en 0700 et fichiers créés en 0600 (`umask` posé à
-l'import du paquet) ; tableau de bord sur 127.0.0.1, jeton exigé dès que la connexion ou le nom
-d'hôte demandé ne sont pas locaux (protection contre le « DNS rebinding », `web/auth.py`) ;
+l'import du paquet) ; tableau de bord sur 127.0.0.1, qui exige désormais son jeton pour toute
+requête, même locale ; l'application le pose elle-même dans sa fenêtre (`web/auth.py`) ;
 l'écran de la VM ne s'ouvre que depuis le Mac.
 
 ## Ce que l'application ne fait pas

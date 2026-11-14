@@ -51,6 +51,35 @@ def test_texte_allemand_exige_et_atout():
     assert regle({"titre": "Product Manager", "texte": FR + " Anglais courant."}) is None
 
 
+@pytest.mark.parametrize("texte,attendu", [
+    # Un niveau d'allemand demandé écarte l'annonce (13.11) : la forme « (B2-C1) », entre parenthèses
+    # et sans mot d'exigence, passait au travers et l'annonce restait à trancher.
+    ("Français courant et très bonnes connaissances de l'allemand (B2-C1).", "allemand-exige"),
+    ("Niveau B2 en allemand demandé.", "allemand-exige"),
+    ("Sehr gute Deutschkenntnisse.", "allemand-exige"),
+    ("German C1 required.", "allemand-exige"),
+    ("Notions d'allemand (A2) nécessaires.", "allemand-exige"),
+    ("Maîtrise de l'allemand.", "allemand-exige"),
+    # Le doute profite à l'annonce (R-51) : l'allemand offert en atout ne bloque pas.
+    ("Des connaissances d'allemand sont un atout.", None),
+    ("Allemand B2 serait un plus.", None),
+    ("Un niveau d'allemand est souhaité.", None),
+    ("L'allemand est bienvenu mais pas requis.", None),
+])
+def test_niveau_d_allemand_demande(texte, attendu):
+    assert regle({"titre": "Product Manager", "entreprise": "Exemple SA", "texte": FR + " " + texte}) == attendu
+
+
+@pytest.mark.parametrize("titre,attendu", [
+    # L'intitulé suffit : l'annonce est écartée sans que son texte soit lu (constat du 13.11).
+    ("Responsable Produits et Solutions Digitales Français / Allemand - 80-100%", "allemand-exige"),
+    ("Product Manager bilingue français-allemand", "allemand-exige"),
+    ("Product Manager Digital", None),
+])
+def test_intitule_bilingue_allemand(titre, attendu):
+    assert regle({"titre": titre, "entreprise": "Exemple SA"}) == attendu
+
+
 def test_contrat_taux_canton():
     assert regle({"titre": "Product Manager", "texte": FR + " CDD de 12 mois."}) == "contrat-cdd"
     assert regle({"titre": "Product Manager", "permanent": False}) == "contrat-api-duree-determinee"

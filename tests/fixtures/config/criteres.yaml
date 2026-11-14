@@ -145,15 +145,31 @@ regles:
     regex: ^de$
   - id: allemand-exige
     passe: 1
-    champ: texte
+    champ: titre_texte
     motif: "Langue : allemand exigé"
+    # Un niveau d'allemand demandé écarte l'annonce, sous toutes ses formes : un mot d'exigence
+    # (« courant », « required »), un niveau du cadre européen (« allemand (B2-C1) » : la forme qui
+    # passait au travers le 13.11), des connaissances ou des notions demandées, un intitulé bilingue
+    # (« Français / Allemand »). L'intitulé compte autant que le texte : l'annonce est écartée sans
+    # même être lue. Chaque ligne du motif finit par « | » : les blocs YAML repliés collent les
+    # retours à la ligne, et seules les espaces autour d'un « | » sont retirées à la compilation.
+    # L'allemand demandé en atout ne bloque pas (décision du 28.10, ELCA) : les formes qui ne
+    # disent pas l'exigence par elles-mêmes vérifient que la suite de la phrase ne l'offre pas.
     regex: >-
-      (allemand|german|deutsch|schweizerdeutsch|suisse allemand)[^.\n]{0,60}
-      (courant|indispensable|requis|exige|obligatoire|parfait|maternel|c1|c2|b2|fluent|fluency|
-      required|mandatory|native|proficien|business level)
-      |(courant|indispensable|parfaite maitrise|maitrise|fluent|fluency|native)[^.\n]{0,30}(en )?(allemand|german)
-  # L'allemand demandé en atout ne bloque plus une annonce (décision du 28.10, ELCA) :
-  # seul l'allemand exigé l'écarte.
+      (allemand|german|deutsch|schweizerdeutsch|suisse allemand)[^.\n]{0,60}(?<!pas )(?<!non )\b(courant|indispensable|requis|
+      exige|obligatoire|parfait|maternel|fluent|fluency|required|mandatory|native|proficien|business level)|
+      (courant|indispensable|parfaite maitrise|maitrise|fluent|fluency|native)[^.\n]{0,30}(en )?(allemand|german)|
+      (allemand|german|deutsch)[^.\n]{0,40}\b(a2|b1|b2|c1|c2)\b(?![^.\n]{0,40}(atout|un plus|asset|souhaite|
+      bienvenu|apprecie|avantage))|
+      \b(a2|b1|b2|c1|c2)\b[^.\n]{0,40}(allemand|german|deutsch)(?![^.\n]{0,40}(atout|un plus|asset|souhaite|
+      bienvenu|apprecie|avantage))|
+      (connaissances?|kenntnisse|niveau|level|notions)[^.\n]{0,40}(allemand|german|deutsch)(?![^.\n]{0,40}(atout|
+      un plus|asset|souhaite|bienvenu|apprecie|avantage))|
+      (allemand|german|deutsch)[^.\n]{0,20}(connaissances?|kenntnisse)(?![^.\n]{0,40}(atout|un plus|asset|
+      souhaite|bienvenu|apprecie|avantage))|
+      (francais|french)\s*[/&+]\s*(allemand|german|deutsch)|
+      (allemand|german|deutsch)\s*[/&+]\s*(francais|french)|
+      bilingue[^.\n]{0,20}(allemand|german|deutsch)
   - id: contrat-api-duree-determinee
     passe: 1
     champ: permanent

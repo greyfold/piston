@@ -19,7 +19,6 @@ La méthode, les modèles Word et la mesure sont ceux livrés avec l'application
 import datetime as dt
 import json
 import re
-import subprocess
 import threading
 from pathlib import Path
 
@@ -148,14 +147,16 @@ PAGES_CV = 2                 # pages A4 au plus : un CV plus long est raccourci 
 
 
 def lignes_par_page(pdf):
-    """Lignes de texte de chaque page du PDF (pdftotext de poppler), None si l'outil manque."""
+    """Lignes de texte de chaque page du PDF (pypdf), None si le PDF est absent ou illisible."""
+    if not pdf or not Path(pdf).exists():
+        return None
     try:
-        r = subprocess.run(["pdftotext", "-layout", str(pdf), "-"], capture_output=True, text=True, timeout=30)
-    except (OSError, subprocess.SubprocessError):
+        from pypdf import PdfReader
+        pages = PdfReader(str(pdf)).pages
+        return [sum(1 for l in (p.extract_text(extraction_mode="layout") or "").splitlines() if l.strip())
+                for p in pages]
+    except Exception:
         return None
-    if r.returncode:
-        return None
-    return [sum(1 for l in page.splitlines() if l.strip()) for page in r.stdout.split("\f")][:nombre_pages(pdf) or None]
 
 
 def nombre_pages(pdf):

@@ -1,0 +1,33 @@
+{# Menu latéral (Nexus ResponsiveNavLink), sur toutes les pages sauf l'accueil et le mode concentré : la marque,
+   les notifications (les passages, dans un volet), les trois espaces de travail, et en bas un seul lien
+   « Réglages » vers la page qui liste les réglages (il reste actif sur chacune d'elles). Le lien de la page
+   ouverte porte la bordure verte et aria-current. Sous 760 px, il devient une barre en haut, en ligne,
+   et Réglages passe en icône à côté de la cloche.
+   Pour un nouvel utilisateur, Offres s'ouvre avec la recherche et Candidatures avec la possibilité de postuler. #}
+{% from "_macros.html" import icone %}
+{% set travail = [("/", "Aujourd'hui", "accueil", none), ("/offres", "Offres", "recherche", "offres"),
+                  ("/candidatures", "Candidatures", "candidatures", "postuler")] %}
+<aside class="menu-lateral">
+  <div class="tete-menu">
+    <a class="marque" href="/">Recherche <span>d'emploi</span></a>
+    <div class="actions-menu">
+      <button type="button" class="bouton-notifications" data-ouvrir-notifications aria-haspopup="dialog" aria-controls="notifications">
+        {{ icone("cloche") }}<span class="libelle">Notifications</span>
+        {% if notifs.nouvelles %}<span class="compte-notifs {{ notifs.niveau }}">{{ notifs.nouvelles }}<span class="cache"> nouvelle{{ 's' if notifs.nouvelles > 1 }}</span></span>{% endif %}
+      </button>
+      {# Sous 760 px, Réglages passe ici, en icône, à côté de la cloche (le lien du bas est masqué). #}
+      <a href="/reglages" class="lien-reglages-etroit{{ ' actif' if dans_reglages }}" aria-label="Réglages">{{ icone("reglages") }}</a>
+    </div>
+  </div>
+  <nav class="menu-principal" aria-label="Navigation principale">
+    <ul>
+      {% for href, nom, ic, fonction in travail if fonctions is not defined or not fonction or fonctions[fonction] %}
+      {% set actif = nav == href or (href != '/' and nav.startswith(href ~ '/')) %}
+      <li><a href="{{ href }}" class="{{ 'actif' if actif }}"{% if actif %} aria-current="page"{% endif %}>{{ icone(ic) }}<span>{{ nom }}</span></a></li>
+      {% endfor %}
+    </ul>
+    <ul class="pied-menu">
+      <li><a href="/reglages" class="{{ 'actif' if dans_reglages }}"{% if nav == '/reglages' %} aria-current="page"{% elif dans_reglages %} aria-current="true"{% endif %}>{{ icone("reglages") }}<span>Réglages</span>{% if profil_manquants %}<span class="a-remplir" title="Profil à compléter"><span class="cache">, profil à compléter</span></span>{% endif %}</a></li>
+    </ul>
+  </nav>
+</aside>

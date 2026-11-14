@@ -82,9 +82,18 @@ def canal_depuis(url):
     return "portail %s" % hote.removeprefix("www.") if hote else "portail"
 
 
+def envoi_signale(f, url):
+    """Ce qu'on dit à la personne quand une session de la VM signale une page de confirmation.
+    Ce signal ne vaut pas envoi (une page piégée peut l'afficher) : rien n'est noté au registre,
+    la personne vérifie et clique elle-même « Marquer envoyée », qui lance la preuve Job-Room."""
+    return ("%s — %s : la page de %s semble confirmer l'envoi. Si la candidature est bien partie, "
+            "clique « Marquer envoyée » dans le tableau de bord." % (f["entreprise"], f["titre"], canal_depuis(url)))[:300]
+
+
 def noter_envoi(emp, url):
-    """Appelé par le navigateur quand la page confirme l'envoi : « Marquer envoyée » (date du jour,
-    canal d'après le site), lettre figée à cette date. Une seule fois, et seulement depuis un Go."""
+    """« Marquer envoyée » (date du jour, canal d'après le site), lettre figée à cette date. Une
+    seule fois, et seulement depuis un Go. Réservé à ce que la personne demande elle-même
+    (`jobsearch envoyee`) : ce qu'une session de la VM signale passe par `envoi_signale`."""
     import datetime as dt
     from . import actions
     from .db import Registre

@@ -56,7 +56,7 @@ COULEUR = r"#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\("
 BASE_STYLE_EN_LIGNE = {
     "_macros.html": 6, "accueil.html": 7, "ajout.html": 2, "annonce.html": 11,
     "connexion.html": 2, "dossier.html": 8, "ia.html": 2,
-    "registre.html": 2, "sante.html": 5, "sources.html": 16,
+    "registre.html": 2, "sante.html": 3, "sources.html": 16,
 }
 
 

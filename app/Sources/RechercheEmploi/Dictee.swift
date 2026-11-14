@@ -135,6 +135,14 @@ final class Dictee: NSObject, WKScriptMessageHandler {
         moteurAudio.stop()
         moteurAudio.inputNode.removeTap(onBus: 0)
         requete?.endAudio()
+        // Garde : sans résultat final ni erreur sous 5 s, la reconnaissance est abandonnée et la
+        // page en est informée (« fin »), pour ne pas rester « en cours ».
+        let attendue = tache
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+            guard let self, self.enCours, self.tache === attendue else { return }
+            self.tache?.cancel()
+            self.terminer()
+        }
     }
 
     private func terminer() {

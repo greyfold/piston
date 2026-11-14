@@ -50,10 +50,13 @@ CHAMPS_DOCUMENT = [
 ]
 SECTIONS_IDENTITE = re.compile(r"identit|coordonn|contact|personnel|personal|kontakt|persönlich", re.I)
 
+# Une balise écrite dans un texte reçu de l'extérieur : ses accolades sont remplacées par ces signes pendant
+# le passage par l'IA, puis rendues telles quelles (elle n'est pas rétablie en vraie valeur).
+ABRI_OUVRANT, ABRI_FERMANT = "\u2983", "\u2984"
 BALISE = re.compile(r"\{\{?\s*([A-Z][A-Z_]*?(?:_\d+)?)\s*\}?\}", re.I)
 EMAIL = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 TELEPHONE = re.compile(r"(?<![\w+])(?:(?:\+|00)\d{1,3}[\s.\-/]?(?:\(0\)[\s.\-/]?)?\d{1,4}(?:[\s.\-/]?\d{2,4}){2,4}"
-                       r"|0\d{2}[\s.\-/]?\d{3}[\s.\-/]?\d{2}[\s.\-/]?\d{2})(?!\d)")
+                       r"|\(?0\d{2}\)?[\s.\-/]?\d{3}[\s.\-/]?\d{2}[\s.\-/]?\d{2})(?!\d)")
 AVS = re.compile(r"(?<!\d)756[.\s]?\d{4}[.\s]?\d{4}[.\s]?\d{2}(?!\d)")
 
 MOIS = {
@@ -128,10 +131,10 @@ def _motifs_telephone(v):
         else pays_mod.code_telephone_defaut()
     code = telephone.INDICATIFS.get(p, "")
     national = telephone.national(v, p) or chiffres
-    sep = r"[\s.\-/]?"
+    sep = r"[\s.\-/)(]{0,2}"             # « (079) 123 45 67 » : l'indicatif régional entre parenthèses
     corps = sep.join(national)
     prefixe = r"(?:(?:\+|00)%s%s(?:\(0\)%s)?|0%s)?" % (code, sep, sep, sep) if code else r"(?:0%s)?" % sep
-    return [re.compile(r"(?<![\w+])%s%s(?!\d)" % (prefixe, corps))]
+    return [re.compile(r"(?<![\w+])\(?%s%s(?!\d)" % (prefixe, corps))]
 
 
 def _date(v):
@@ -140,7 +143,7 @@ def _date(v):
     m = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", t)
     if m:
         return int(m.group(3)), int(m.group(2)), int(m.group(1))
-    m = re.search(r"(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{4})", t)
+    m = re.search(r"(?<!\d)(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[./-]\s*(\d{4}|\d{2})(?!\d)", t)
     if m:
         return int(m.group(1)), int(m.group(2)), int(m.group(3))
     for n, noms in MOIS.items():
@@ -160,23 +163,42 @@ def _motifs_date(v):
     j, m, a = d
     jj = r"0?%d" % j
     noms = "|".join(_souple(x) for x in sorted(MOIS[m], key=len, reverse=True))
-    return [re.compile(p, re.I) for p in (
-        r"(?<!\d)%s\s*[./-]\s*0?%d\s*[./-]\s*%d(?!\d)" % (jj, m, a),
-        r"(?<!\d)%d-%02d-%02d(?!\d)" % (a, m, j),
-        r"(?<!\d)%s(?:er|st|nd|rd|th)?\.?\s+(?:%s)\.?\s+%d(?!\d)" % (jj, noms, a),
-        r"(?<![\w])(?:%s)\.?\s+%s(?:st|nd|rd|th)?,?\s+%d(?!\d)" % (noms, jj, a),
-    )]
+    # Une année sur deux chiffres (« 12.03.85 ») : 1985 ou 2085 en toutes lettres, et « 85 » en numérique.
+    annees = ["%d" % a] if a >= 100 else ["19%02d" % a, "20%02d" % a]
+    annee = "(?:%s)" % "|".join(annees)
+    court = "%02d" % (a % 100)
+    motifs = [r"(?<!\d)%s\s*[./-]\s*0?%d\s*[./-]\s*(?:%s|%s)(?!\d)" % (jj, m, "|".join(annees), court),
+              r"(?<!\d)%s(?:er|st|nd|rd|th)?\.?\s+(?:%s)\.?\s+%s(?!\d)" % (jj, noms, annee),
+              r"(?<![\w])(?:%s)\.?\s+%s(?:st|nd|rd|th)?,?\s+%s(?!\d)" % (noms, jj, annee)]
+    if a >= 100:
+        motifs.append(r"(?<!\d)%d-%02d-%02d(?!\d)" % (a, m, j))
+    return [re.compile(p, re.I) for p in motifs]
+
+
+def _variantes_rue(rue):
+    """Motifs d'une rue et de son numéro, dans les deux ordres : « Rue du Lac 12 » et « 12, rue du Lac »."""
+    rue = (rue or "").strip()
+    out = [_souple(rue)]
+    m = re.match(r"^(?P<nom>.+?)[,\s]+(?P<num>\d+\s?[a-zA-Z]?)$", rue) or \
+        re.match(r"^(?P<num>\d+\s?[a-zA-Z]?)[,\s]+(?P<nom>[^\d].*)$", rue)
+    if m:
+        nom, num = _souple(m.group("nom").strip(" ,")), _souple(m.group("num"))
+        out += [r"%s\s*,?\s*%s" % (nom, num), r"%s\s*,?\s*%s" % (num, nom)]
+    return out
 
 
 def _motifs_adresse(rue, npa, ville):
     motifs = []
     if rue and npa and ville:
-        motifs.append(re.compile(r"%s\s*[,·|]?\s*%s\s+%s" % (_souple(rue), re.escape(npa), _souple(ville)), re.I))
+        for r in _variantes_rue(rue):
+            motifs.append(re.compile(r"%s\s*[,·|]?\s*%s\s+%s" % (r, re.escape(npa), _souple(ville)), re.I))
     return motifs
 
 
 def _motifs_rue(rue):
-    return [re.compile(_mot(_souple(rue)), re.I)] if rue and len(rue.strip()) >= 4 else []
+    if not rue or len(rue.strip()) < 4:
+        return []
+    return [re.compile(_mot(r), re.I) for r in _variantes_rue(rue)]
 
 
 def _motifs_nom_complet(prenom, nom):
@@ -187,12 +209,55 @@ def _motifs_nom_complet(prenom, nom):
     return [re.compile(_mot(r"%s\s+%s" % (_souple(prenom), _souple(nom))), re.I)]
 
 
-def _motifs_seul(mot):
+CIVILITES = ("M.", "Mr", "Mme", "Mlle", "Me", "Dr", "Dre", "Pr", "Prof.", "Mrs", "Ms",
+             "Monsieur", "Madame", "Mademoiselle", "Docteur", "Maître", "Professeur")
+
+
+def _motifs_seul(mot, autre="", balise_autre=""):
     """Prénom ou nom seul : à la casse près (un nom comme « Rose » ou « Bell » est aussi un mot courant),
-    ou tout en capitales."""
-    if not mot or len(mot.strip()) < 3:
+    ou tout en capitales. Un nom de moins de trois lettres (« Li », mais aussi « Le », « Ma ») est un mot
+    courant : il n'est pris seul que précédé d'une civilité (« M. Li ») ou accolé à l'autre nom
+    (« Jean Li », « Li Jean ») ; jamais comme mot isolé. Les formes jointes (« jean-li ») passent par
+    les motifs composés."""
+    mot = (mot or "").strip()
+    if len(mot) < 2:
         return []
-    return [re.compile(_mot(_souple(mot))), re.compile(_mot(_souple(mot.upper())))]
+    if len(mot) > 2:
+        return [re.compile(_mot(_souple(mot))), re.compile(_mot(_souple(mot.upper())))]
+    mot = mot[0].upper() + mot[1:].lower()
+    coeur = "(?:%s|%s)" % (_souple(mot), _souple(mot.upper()))
+    conditions = [r"(?<=\b(?i:%s)\s)" % re.escape(c) for c in CIVILITES]
+    if (autre or "").strip():
+        voisin = _souple(autre)
+        conditions.append(r"(?<=\b(?i:%s)\s)" % voisin.replace(r"\s+", r"\s"))
+        conditions.append(r"(?=%s\s+(?i:%s)(?![\w@}]))" % (coeur, voisin))
+        # « Jean-Li » : l'autre nom, déjà remplacé par sa balise ou pas encore, joint par - _ ou .
+        for autre_forme in (voisin, re.escape("{%s}" % balise_autre)):
+            conditions.append(r"(?<=(?i:%s)[-_.])" % autre_forme)
+        conditions.append(r"(?=[-_.](?:%s|(?i:%s)(?![\w@}])))" % (re.escape("{%s}" % balise_autre), voisin))
+    return [re.compile(r"(?<![\w@.{])(?:%s)%s(?![\w@}])" % ("|".join(conditions), coeur))]
+
+
+def _motifs_composes(prenom, nom):
+    """« jean-li », « jean.li », « li_jean » : le prénom et le nom joints par - _ ou ., quelle que soit la casse.
+    Chaque motif rend (premier mot, séparateur, second mot) ; Masque.masquer remet les balises de chacun."""
+    if not (prenom and nom):
+        return []
+    p, n = _souple(prenom), _souple(nom)
+    return [re.compile(r"(?<![\w@.{])(%s)([-_.])(%s)(?![\w@}])" % (a, b), re.I) for a, b in ((p, n), (n, p))]
+
+
+def _mots_nom(valeur):
+    """Les mots d'un nom, sans accents, en minuscules (au moins deux lettres)."""
+    return [w for w in re.split(r"[^a-z]+", plier(valeur).lower()) if len(w) >= 2]
+
+
+def _local_contient_nom(local, noms):
+    """Le début d'une adresse e-mail (avant @) est-il bâti sur un nom ? Mot entier, ou, pour un nom de
+    quatre lettres ou plus, n'importe où (« cfontaine »)."""
+    local = plier(local).lower()
+    mots = [w for w in re.split(r"[^a-z]+", local) if w]
+    return any(n in mots or (len(n) >= 4 and n in local) for n in noms)
 
 
 # --- Valeurs ---------------------------------------------------------------------------
@@ -232,6 +297,8 @@ class Masque:
     valeurs: dict = field(default_factory=dict)        # balise → ce qu'elle rend
     motifs: list = field(default_factory=list)         # [(balise, motif)] dans l'ordre d'application
     numeros: dict = field(default_factory=dict)        # valeur détectée → balise numérotée
+    noms: list = field(default_factory=list)           # mots du prénom et du nom (e-mails bâtis dessus)
+    composes: list = field(default_factory=list)       # [(balise du 1er motif, balise du 2d, motif)] : « jean-li »
 
     def ajouter(self, balise, rendu, motifs):
         if not rendu or not motifs:
@@ -244,7 +311,7 @@ class Masque:
         return self
 
     def copie(self):
-        return Masque(dict(self.valeurs), list(self.motifs), dict(self.numeros))
+        return Masque(dict(self.valeurs), list(self.motifs), dict(self.numeros), list(self.noms), list(self.composes))
 
     def _numerotee(self, base, valeur):
         cle = (base, re.sub(r"\s+", " ", valeur.strip()).lower())
@@ -255,13 +322,24 @@ class Masque:
             self.valeurs[balise] = valeur.strip()
         return "{%s}" % self.numeros[cle]
 
-    def masquer(self, texte, contexte=False):
+    def masquer(self, texte, contexte=False, neutraliser=False):
         """Le texte, coordonnées remplacées par leurs balises. `contexte` : toute autre adresse
-        e-mail et tout autre numéro de téléphone reçoivent aussi la leur (profil, méthode)."""
+        e-mail et tout autre numéro de téléphone reçoivent aussi la leur (profil, méthode).
+        `neutraliser` : les balises déjà écrites dans ce texte (annonce, contenu non fiable) sont
+        mises à l'abri, pour que `demasquer` ne les remplace pas par une vraie valeur."""
         if not texte:
             return texte
-        for balise, motif in self.motifs:
+        if neutraliser:
+            texte = BALISE.sub(lambda m: m.group(0).replace("{", ABRI_OUVRANT).replace("}", ABRI_FERMANT), texte)
+        for balise, motif in (bm for bm in self.motifs if bm[0] in ("AVS", "EMAIL")):
             texte = motif.sub("{%s}" % balise, texte)
+        if self.noms:               # une autre adresse bâtie sur le nom (« j.li@autre.ch ») : balise numérotée
+            texte = EMAIL.sub(lambda m: self._numerotee("EMAIL", m.group(0))
+                              if _local_contient_nom(m.group(0).rsplit("@", 1)[0], self.noms) else m.group(0), texte)
+        for balise, motif in (bm for bm in self.motifs if bm[0] not in ("AVS", "EMAIL")):
+            texte = motif.sub("{%s}" % balise, texte)
+        for premier, second, motif in self.composes:      # ce que la casse a laissé : « jean-li »
+            texte = motif.sub(lambda m, p=premier, d=second: "{%s}%s{%s}" % (p, m.group(2), d), texte)
         texte = AVS.sub(lambda m: self._numerotee("AVS", m.group(0)), texte)
         if contexte:
             texte = EMAIL.sub(lambda m: self._numerotee("EMAIL", m.group(0)), texte)
@@ -272,7 +350,8 @@ class Masque:
         """Chaque balise connue reprend sa valeur ; une balise inconnue reste telle quelle."""
         if not isinstance(texte, str) or "{" not in texte:
             return texte
-        return BALISE.sub(lambda m: self.valeurs.get(m.group(1).upper(), m.group(0)), texte)
+        texte = BALISE.sub(lambda m: self.valeurs.get(m.group(1).upper(), m.group(0)), texte)
+        return texte.replace(ABRI_OUVRANT, "{").replace(ABRI_FERMANT, "}")
 
     def demasquer_objet(self, o):
         """Même chose dans une réponse structurée (dictionnaires, listes, textes)."""
@@ -310,13 +389,17 @@ def construire(identite=None, documents=""):
     for v in complets:
         mots = v.split()
         m.ajouter("NOM_COMPLET", v, _motifs_nom_complet(mots[0], " ".join(mots[1:])))
-    m.ajouter("PRENOM", prenom, _motifs_seul(prenom))
-    m.ajouter("NOM", nom, _motifs_seul(nom))
+    m.ajouter("PRENOM", prenom, _motifs_seul(prenom, nom, "NOM"))
+    m.ajouter("NOM", nom, _motifs_seul(nom, prenom, "PRENOM"))
     for v in doc.get("prenom", []):
-        m.ajouter("PRENOM", v, _motifs_seul(v))
+        m.ajouter("PRENOM", v, _motifs_seul(v, nom, "NOM"))
     for v in doc.get("nom", []):
         if len(v.split()) == 1:
-            m.ajouter("NOM", v, _motifs_seul(v))
+            m.ajouter("NOM", v, _motifs_seul(v, prenom, "PRENOM"))
+    if prenom and nom and "PRENOM" in m.valeurs and "NOM" in m.valeurs:
+        m.composes = [("PRENOM", "NOM", _motifs_composes(prenom, nom)[0]),
+                      ("NOM", "PRENOM", _motifs_composes(prenom, nom)[1])]
+    m.noms = sorted({w for v in (prenom, nom, *doc.get("prenom", []), *doc.get("nom", [])) for w in _mots_nom(v)})
 
     rue, npa, ville = i.get("adresse", ""), i.get("npa", ""), i.get("ville", "")
     adresses_doc = [a for a in map(_adresse_document, doc.get("adresse", [])) if a]

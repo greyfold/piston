@@ -8,8 +8,6 @@
                                               or (tache_jobroom and tache_jobroom.active)) %}
 {% set rien = not (a_trancher or retenues or entretiens or courrier_utile or jobroom_utile or relances.dues
                    or relances.a_classer or limites) %}
-<div class="bandeau {{ etat.niveau }}"><span class="point"></span><span>{{ etat.texte }} <a href="/sante">Système</a></span></div>
-
 {# L'IA n'est plus connectée : un bandeau (Nexus Banner) qui ouvre la modale de connexion, jamais la checklist de retour. #}
 {% if ia_deconnectee %}<div class="bandeau attention" id="ia-deconnectee"><span class="point"></span><span>Ton IA n'est plus connectée : sans elle, les annonces ne sont pas notées et aucun dossier n'est préparé. <a href="/ia" data-connexion-ia="claude" data-nom="Claude">Se connecter à Claude</a>.</span></div>{% endif %}
 {% if rythme.alerte and not rien %}<div class="bandeau alerte"><span class="point"></span><span>{{ rythme.semaine.n }} postulation{{ 's' if rythme.semaine.n > 1 }} cette semaine, l'objectif est {{ rythme.semaine.min }} : il en manque {{ rythme.semaine.manque }} d'ici dimanche.</span></div>{% endif %}
@@ -39,7 +37,7 @@
 
 {% if rien %}
 {% call etat_vide("recherche", "Aucun poste identifié pour le moment", titre_balise="h1",
-     description="Le tri n'a encore retenu aucune annonce pour toi ; le prochain passage en cherchera de nouvelles. L'onglet Offres montre tout ce qui a été trouvé, et ce que le tri a écarté.") %}
+     description="Le tri n'a encore retenu aucune annonce pour toi ; le prochain passage en cherchera de nouvelles. La page Offres montre tout ce qui a été trouvé, et ce que le tri a écarté.") %}
     <a class="bouton" href="/offres/ajouter">Ajouter une annonce trouvée ailleurs</a>
     <a class="bouton go" href="/offres">Voir les offres {{ icone("suivant") }}</a>
 {% endcall %}

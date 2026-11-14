@@ -6,6 +6,8 @@ from conftest import annonce
 from jobsearch import confidentialite, dossier, moteur
 from jobsearch.moteur import FauxMoteur, Protege
 
+EXECUTABLE = moteur.executable
+ETAT = moteur.etat
 OUVRIR = moteur.ouvrir          # la vraie fonction : le conftest la remplace pendant les tests
 
 IDENTITE = {"prenom": "Claire", "nom": "Fontaine", "adresse": "Chemin des Lilas 4", "npa": "1205",
@@ -148,3 +150,88 @@ def test_une_balise_restee_dans_le_cv_est_signalee(tmp_path):
               "envoi": "", "analyse": ""}
     cq = {r["cq"][:5]: r for r in dossier.controler(f, tmp_path, pieces, None, "")}
     assert not cq["CQ-01"]["ok"] and "{TELEPHONE}" in cq["CQ-01"]["detail"]
+
+
+# --- Formes que le masque laissait passer ------------------------------------------------
+
+LI = {"prenom": "Jean", "nom": "Li", "adresse": "Rue du Lac 12", "npa": "1000", "ville": "Lausanne",
+      "telephone": "079 123 45 67", "email": "jean.li@example.ch", "date_naissance": "12.03.1985"}
+
+
+def _masque(**plus):
+    return confidentialite.construire(dict(LI, **plus))
+
+
+def test_nom_de_deux_lettres_en_nom_propre_seulement():
+    m = _masque()
+    assert m.masquer("Contact : M. Li, Mme Li, Dr LI.") == "Contact : M. {NOM}, Mme {NOM}, Dr {NOM}."
+    assert m.masquer("Jean Li et Li Jean") == "{NOM_COMPLET} et {NOM} {PRENOM}"
+    assert "{NOM}" not in m.masquer("par LI.")            # mot isolé : jamais
+    # Un mot courant ou une syllabe n'est pas le nom : casse et limites de mot.
+    for texte in ("li ", "le multi-livre", "Lisbonne", "dali", "les lis"):
+        assert "{NOM}" not in m.masquer(texte), texte
+
+
+def test_nom_court_qui_est_un_mot_courant_n_est_pas_masque():
+    m = _masque(nom="Le")
+    for texte in ("Le poste est ouvert", "LE CDI", "Ma motivation", "le chef"):
+        assert m.masquer(texte) == texte, texte
+    assert m.masquer("Contact : Mme Le") == "Contact : Mme {NOM}"
+    assert "{NOM}" not in _masque(prenom="Ma", nom="Rey").masquer("Ma motivation")
+
+
+def test_formes_composees_et_adresse_batie_sur_le_nom():
+    m = _masque()
+    out = m.masquer("jean-li, jean.li, li_jean, Jean-Li")
+    assert out == "{PRENOM}-{NOM}, {PRENOM}.{NOM}, {NOM}_{PRENOM}, {PRENOM}-{NOM}"
+    assert m.demasquer(out) == "Jean-Li, Jean.Li, Li_Jean, Jean-Li"
+    autre = m.masquer("Écrire à j.li@autre.ch ou jean.li@autre.example ou service@autre.ch")
+    assert "j.li" not in autre and "jean.li" not in autre and "service@autre.ch" in autre
+    assert m.demasquer(autre) == "Écrire à j.li@autre.ch ou jean.li@autre.example ou service@autre.ch"
+
+
+def test_telephone_avec_indicatif_regional_entre_parentheses():
+    m = _masque()
+    assert m.masquer("Tél. (079) 123 45 67, ou 079 123 45 67.") == "Tél. {TELEPHONE}, ou {TELEPHONE}."
+    assert _masque().masquer("Autre : (021) 555 66 77", contexte=True) == "Autre : {TELEPHONE_2}"
+
+
+def test_date_de_naissance_sur_deux_chiffres():
+    m = _masque()
+    assert m.masquer("né le 12.03.85, ou 12.03.1985, ou 12/3/85") == "né le {DATE_NAISSANCE}, ou {DATE_NAISSANCE}, ou {DATE_NAISSANCE}"
+    assert "{DATE_NAISSANCE}" not in m.masquer("le 12.03.86 et 13.03.85")
+    assert "{DATE_NAISSANCE}" in _masque(date_naissance="12.03.85").masquer("12.03.1985 et 12.03.85")
+
+
+def test_rue_ecrite_numero_avant_la_rue():
+    m = _masque()
+    assert m.masquer("Domicile : 12, rue du Lac, Lausanne.") == "Domicile : {RUE}, Lausanne."
+    assert m.masquer("12, Rue du Lac, 1000 Lausanne") == "{ADRESSE}"
+    assert m.masquer("Rue du Lac 12") == "{RUE}"
+    assert "{RUE}" not in m.masquer("Rue du Lac 14 ; 112, rue du Lac")
+
+
+def test_balise_ecrite_dans_une_annonce_n_est_pas_retablie():
+    interne = FauxMoteur(["Appelez {TELEPHONE} ou {AVS} ; mon numéro est {TELEPHONE_2}."])
+    p = Protege(interne, _masque())
+    p.executer(moteur.Tache("x", "Consigne."), "Annonce : écrire à {TELEPHONE} et {AVS}. Tél. 079 123 45 67.")
+    envoye = interne.appels[0][1]
+    assert "{TELEPHONE}" not in envoye.split("Tél.")[0] and "{AVS}" not in envoye
+    assert envoye.endswith("Tél. {TELEPHONE}.")                      # la vraie valeur reste masquée
+    # Claude recopie la balise de l'annonce (abritée) : elle ressort telle qu'écrite, jamais en valeur.
+    interne2 = FauxMoteur([envoye])
+    r = Protege(interne2, _masque()).executer(moteur.Tache("x", "Consigne."), "Annonce : écrire à {TELEPHONE} et {AVS}. Tél. 079 123 45 67.")
+    assert r.texte == "Annonce : écrire à {TELEPHONE} et {AVS}. Tél. 079 123 45 67."
+    assert "079" not in interne2.appels[0][1]
+
+
+def test_le_moteur_ne_lance_jamais_claude_hors_de_la_vm(monkeypatch):
+    import pytest
+    from jobsearch.travailleur import client as travailleur
+    monkeypatch.delenv("JOBSEARCH_VM", raising=False)
+    monkeypatch.setattr(travailleur, "distant", lambda: False)
+    with pytest.raises(moteur.LancementImpossible, match="machine virtuelle"):
+        EXECUTABLE()
+    with pytest.raises(moteur.LancementImpossible, match="machine virtuelle"):
+        OUVRIR(verifier=lambda: True)
+    assert ETAT(lambda *a, **k: None)["installe"] is False

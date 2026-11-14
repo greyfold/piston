@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone, etat_vide %}
+{% from "_macros.html" import icone %}
 {% block titre %}Santé · Recherche d'emploi{% endblock %}
 {% block contenu %}
-<div class="bandeau {{ etat.niveau }}"><span class="point"></span><span>{{ etat.texte }}</span></div>
 <h1>Santé du système</h1>
+<p class="muet">Chaque passage s'affiche dans les <button type="button" class="lien-neutre" data-ouvrir-notifications aria-haspopup="dialog" aria-controls="notifications">notifications</button>, avec le détail de ses étapes.</p>
 
 <h2>30 derniers matins</h2>
 <div class="calendrier" aria-label="Jours avec un passage">
@@ -39,29 +39,4 @@
 {% endfor %}
 </div>
 
-<h2>Passages <span class="compte">{{ runs | length }}</span></h2>
-{% if runs %}
-<div class="pile">
-{% for r in runs %}
-  <details class="carte" {{ 'open' if loop.first }}>
-    <summary><b>n°{{ r.id }}</b> · {{ r.debut }} → {{ r.fin or "…" }} · <span class="puce {{ 'retard' if r.statut != 'complet' }}">{{ r.statut }}</span> <span class="muet petit">({{ r.declencheur }})</span></summary>
-    {% if r.resume %}<pre class="petit" style="white-space:pre-wrap;margin:.6rem 0">{{ r.resume }}</pre>{% endif %}
-    <div class="tableau"><table>
-      <thead><tr><th>Étape</th><th>Statut</th><th>Compteurs</th></tr></thead>
-      <tbody>
-      {% for e in r.etapes %}
-        <tr><td>{{ e.etape }}</td><td><span class="puce {{ 'retard' if e.statut != 'ok' }}">{{ e.statut }}</span></td>
-            <td class="petit">{% for k, v in e.compteurs.items() %}{{ k }} : {{ v }}{{ " · " if not loop.last }}{% endfor %}{% if e.erreur %}<div style="color:var(--alerte)">{{ e.erreur }}</div>{% endif %}</td></tr>
-      {% endfor %}
-      </tbody>
-    </table></div>
-  </details>
-{% endfor %}
-</div>
-{% else %}
-{% call etat_vide("systeme", "Aucun passage pour le moment", titre_balise="h3", compact=true, id="passages-vide",
-     description="Un passage lit tes sources, trie les annonces et prépare ta journée. L'application les lance d'elle-même ; leur journal s'affichera ici.") %}
-    <a class="bouton" href="/sources">Voir mes sources</a>
-{% endcall %}
-{% endif %}
 {% endblock %}

@@ -301,11 +301,12 @@ def test_reglages_export_et_import(base, monkeypatch):
     from jobsearch.web import app as appmod
     monkeypatch.setattr(appmod, "ia_connectee", lambda: True)
     web = TestClient(appmod.app)
-    page = web.get("/profil").text
+    page = web.get("/reglages").text
     assert 'href="/reglages/parcours"' in page and "Importer un fichier" not in page   # le détail vit dans sa sous-page
     page = web.get("/reglages/parcours").text
     assert 'id="parcours"' in page and "/reglages/parcours/exporter" not in page   # base vide : rien à exporter
-    assert '<a href="/reglages/parcours" class="actif" aria-current="page">' in page   # le menu la montre ouverte
+    assert '<a href="/reglages" class="actif" aria-current="true">' in page   # le menu : Réglages ouvert
+    assert 'class="retour" href="/reglages"' in page
     _base_avec_entretien(base)
     page = web.get("/reglages/parcours").text
     assert "5 éléments" in page and "Remplacer ma base" in page

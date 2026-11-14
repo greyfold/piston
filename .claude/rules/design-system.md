@@ -79,9 +79,10 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
 | Interrupteur (Toggle) | `button.interrupteur` (réglage immédiat, sans bouton Enregistrer) |
 | Étapes (Stepper), Checklist | `.stepper` ; `.checklist` ; onboarding en `.carte-accueil` (une action principale par écran) |
 | Modale (Modal) | `dialog.modale` (`.modale-tete`, `.actions-modale`) ; confirmation d'une action destructrice : macro `confirmation()`, jamais `confirm()` du navigateur |
-| Volet (SlideOver) | `dialog.volet` (`.tete-volet`, `.corps-volet`, `.pied-volet`, `.fermer-volet`) |
-| Navigation | barre `nav.onglets` (`base.html`) ; réglages `.reglages-nav` (ResponsiveNavLink, `_reglages_nav.html`) ; onglets de page `nav.onglets-annonce` ; tri `.tri` ; retour `.retour` |
-| Ligne de réglage | `ul.reglages-liste` > `li` > `.reglage-ligne` (`.texte` > `.titre` + `.description`, action à droite) |
+| Volet (SlideOver) | `dialog.volet` (`.tete-volet`, `.corps-volet`, `.pied-volet`, `.fermer-volet`) ; à gauche par défaut, `.droite` pour entrer par la droite |
+| Navigation | menu latéral `aside.menu-lateral` (ResponsiveNavLink, `_menu_lateral.html`, inclus par `base.html`) : les espaces de travail et, en bas, un seul lien « Réglages ». Les réglages n'entrent pas dans le menu : ils ont leur page `/reglages` (`reglages.html`), et chaque page de réglage reçoit de `base.html` un retour `.retour` vers elle ; onglets de page `nav.onglets-annonce` (vues d'une annonce, étapes du profil) ; tri `.tri` ; retour `.retour` |
+| Notifications (passages) | volet `dialog.volet.droite#notifications` (`_notifications.html`), ouvert par `[data-ouvrir-notifications]` ; une `li.notification` (`.ok` / `.attention` / `.alerte` / `.en-cours`, `.nouvelle`) par passage. Pas de bandeau d'état du passage dans les pages |
+| Ligne de réglage | `ul.reglages-liste` > `li` > `.reglage-ligne` (`.texte` > `.titre` + `.description`, action à droite) ; ligne qui ouvre une page : `a.reglage-ligne` (icône, texte, chevron `suivant`) |
 | Tableau | `.tableau` > `table` ; nombres `td.nb` |
 | Liste de vérifications | `.verifs` (`li.ok` / `li.ko`) |
 | Tâche en cours / attente | `.etat-tache` (`.ok`, `.erreur`) avec `.spinner` ; attente IA `.statut-ia` |

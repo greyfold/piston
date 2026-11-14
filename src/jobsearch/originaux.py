@@ -7,6 +7,9 @@ l'annonce.
 """
 
 import datetime as dt
+import re
+
+import httpx
 
 from .dates import delai_postulation, fin_publication
 from .db import PIPELINE
@@ -28,8 +31,19 @@ def a_recharger(reg, statuts=ACTIFS):
     return sorted(out, key=lambda f: PRIORITE.get(f["statut"], 9))
 
 
+def _retiree(e):
+    """L'annonce a-t-elle disparu de la plateforme ? Seuls HTTP 404 et 410 le disent. Une limite de
+    débit (429), une panne (5xx), un format changé ou un refus ne prouvent rien."""
+    m = re.search(r"HTTP (\d{3})", str(e))
+    return bool(m) and int(m.group(1)) in (404, 410)
+
+
 def recharger(reg, f, sources):
-    """Va chercher l'original. Renvoie True s'il a été trouvé et enregistré."""
+    """Va chercher l'original. Renvoie True s'il a été trouvé et enregistré.
+
+    Une panne passagère (429, 5xx, délai, connexion) laisse la fiche telle quelle : elle sera
+    retentée au prochain passage. Seule une annonce retirée partout est marquée « introuvable »."""
+    panne = False
     for ids in f.get("ids_source") or []:
         src, _, ident = ids.partition(":")
         if src not in sources or not ident:
@@ -37,8 +51,13 @@ def recharger(reg, f, sources):
         a = Annonce(source=src, id_source=ident, entreprise=f["entreprise"], titre=f["titre"])
         try:
             sources[src].detail(a)
-        except RouteCassee:
-            continue                      # annonce retirée de cette plateforme : on essaie la suivante
+        except RouteCassee as e:
+            if not _retiree(e):
+                panne = True              # panne passagère : à retenter, pas une annonce retirée
+            continue                      # sinon retirée de cette plateforme : on essaie la suivante
+        except httpx.HTTPError:
+            panne = True                  # délai, connexion : panne passagère de cette fiche
+            continue
         if a.texte and a.detail_charge:
             pub = f.get("publiee_le")
             ref = dt.date.fromisoformat(pub[:10]) if pub and len(pub) >= 10 else None
@@ -49,6 +68,8 @@ def recharger(reg, f, sources):
             reg.noter(f["empreinte"], "texte original rechargé depuis %s (%d caractères)" % (src, len(a.texte)))
             reg.commit()
             return True
+    if panne:
+        return False
     reg.maj(f["empreinte"], texte_origine="introuvable")
     reg.noter(f["empreinte"], "texte original introuvable sur les plateformes (annonce retirée ?)")
     reg.commit()

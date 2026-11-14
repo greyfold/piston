@@ -118,7 +118,9 @@ def test_cantons_du_profil_changent_sourcing_et_pre_tri(profil_de_test):
     c = config.criteres()
     assert c["sourcing"]["requetes"] == ["Comptable", "Responsable comptabilité", "Head of accounting"]
     assert c["sourcing"]["linkedin_requetes"] == ["Comptable", '"Responsable comptabilité" OR "Head of accounting"']
-    assert c["familles_cibles"] == r"\b(comptable|responsable|comptabilite|head|accounting)\b"
+    # « responsable » et « head » sont des mots de fonction : seuls les mots du métier filtrent.
+    assert c["familles_cibles"] == r"\b(comptable(?:s|e|es|aux|ale|ales)?|comptabilite(?:s|e|es|aux|ale|ales)?|" \
+                                   r"accounting(?:s|e|es|aux|ale|ales)?)\b"
     assert c["sourcing"]["cantons"] == ["VS", "VD"]
     regle = next(r for r in c["regles"] if r["id"] == "canton")
     assert regle["motif"] == "Lieu : hors des cantons VS, VD"
@@ -245,9 +247,30 @@ def test_exclusions_toutes_cochees_rien_d_ecrit(profil_de_test):
 def test_mots_des_postes_pour_le_pre_tri():
     ps = profil.normaliser_postes([{"intitule": "UX designer (H/F)", "variantes": ["Chef de projet digital"]}])
     mots = profil.mots_postes(ps)
-    assert mots == ["ux", "designer", "chef", "projet", "digital"]
+    assert mots == ["ux", "designer", "digital"]              # ni « chef » ni « projet », mots de fonction
     motif = prefilter._compiler(profil.familles_en_motif(mots))
-    assert motif.search("lead ux") and not motif.search("comptable")
+    assert motif.search("lead ux") and motif.search("chef de projet digital") and motif.search("solutions digitales")
+    assert not motif.search("comptable") and not motif.search("chef de projet construction")
+
+
+def test_mots_de_fonction_seuls_ne_suffisent_pas():
+    """Constat du 13.11 : « chef », « responsable », « manager » laissaient passer cheffe de cuisine,
+    chef de partie et responsable de ligne de production. Un poste fait de ces seuls mots
+    (« Chef de projet ») exige l'intitulé entier."""
+    ps = profil.normaliser_postes([
+        {"intitule": "Innovation Manager", "variantes": ["Responsable innovation", "Chef de projet innovation"]},
+        {"intitule": "Product Owner", "variantes": ["Product Manager", "Responsable produit"]},
+        {"intitule": "Chef de projet", "variantes": []}])
+    mots = profil.mots_postes(ps)
+    assert mots == ["innovation", "product", "owner", "produit", "chef projet"]
+    motif = prefilter._compiler(profil.familles_en_motif(mots))
+    for titre in ("Cheffe de cuisine", "Chef de Partie 100 % (H/F)", "Responsable de ligne de production",
+                  "Infirmier/ère diplômé(e)", "Responsable secteur technique et nettoyage", "Chef d'atelier",
+                  "Manager Medical Safety"):
+        assert not motif.search(prefilter.plier(titre)), titre
+    for titre in ("Head of Innovation", "PRODUCT MANAGER-MOTION SYSTEMS", "Responsable Produits et Solutions Digitales",
+                  "Chef de projet CVC", "Cheffe ou chef de projet en génie civil"):
+        assert motif.search(prefilter.plier(titre)), titre
 
 
 def test_objectifs_et_courrier(profil_de_test):

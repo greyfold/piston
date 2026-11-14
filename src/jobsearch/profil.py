@@ -338,9 +338,36 @@ def requete_linkedin(x):
     return titres[0] if len(titres) == 1 else " OR ".join('"%s"' % t.replace('"', "") for t in titres)
 
 
+# Mots de fonction et de niveau, communs à tous les métiers : « chef », « responsable », « manager »
+# se lisent aussi dans « cheffe de cuisine » ou « responsable de ligne de production ». Ils ne
+# suffisent pas à dire qu'un intitulé vise un des postes recherchés (constat du 13.11 : 31 annonces
+# à trancher, dont une cheffe de partie et des chefs de projet en génie civil).
+MOTS_FONCTION = {"chef", "chefs", "cheffe", "cheffes", "responsable", "responsables", "manager", "managers",
+                 "management", "head", "lead", "leader", "leaders", "directeur", "directrice", "director",
+                 "direction", "coordinateur", "coordinatrice", "coordinator", "specialiste", "specialist",
+                 "consultant", "consultante", "expert", "experte", "officer", "executive", "associate",
+                 "assistant", "assistante", "adjoint", "adjointe", "charge", "chargee", "gestionnaire",
+                 "collaborateur", "collaboratrice", "ingenieur", "ingenieure", "engineer", "analyste",
+                 "analyst", "senior", "sr", "junior", "principal", "global", "international", "group",
+                 "team", "equipe", "projet", "projets", "project", "projects", "poste", "fonction"}
+_FLEXION = "(?:s|e|es|aux|ale|ales)?"       # produit(s), digital(e, es, aux), innovation(s)
+
+
 def mots_postes(ps):
-    """Les mots des intitulés visés : une annonce dont le titre n'en contient aucun est écartée."""
-    return list(dict.fromkeys(m for t in intitules(ps) for m in mots_intitule(t)))
+    """Ce qui, dans les intitulés visés, dit le métier : leurs mots qui ne sont pas de simples mots de
+    fonction (« innovation », « ux », « digital », pas « chef » ni « manager »). Un poste fait de mots
+    de fonction seuls (« Chef de projet ») reste entier : l'intitulé devra en porter tous les mots.
+    Une annonce dont le titre ne touche rien de cette liste est écartée (règle « hors-familles »)."""
+    out = []
+    for t in intitules(ps):
+        mots = mots_intitule(t)
+        if not mots:
+            continue
+        distinctifs = [m for m in mots if m not in MOTS_FONCTION]
+        for x in distinctifs or [" ".join(mots)]:
+            if x not in out:
+                out.append(x)
+    return out
 
 
 def lieux_cantons(p=None):
@@ -669,7 +696,12 @@ def _retirer(d, cle):
 
 
 def familles_en_motif(mots):
-    return r"\b(%s)\b" % "|".join(mots)
+    """Le motif « hors-familles » du pré-tri, d'après `mots_postes` : un mot distinctif, au pluriel ou au
+    féminin près quand il est assez long (« produits », « digitales ») ; un poste entier (« chef de
+    projet ») exige chacun de ses mots, dans n'importe quel ordre."""
+    simples = [m + (_FLEXION if len(m) >= 4 else "") for m in mots if " " not in m]
+    entiers = ["".join(r"(?=.*\b%s\b)" % w for w in m.split()) for m in mots if " " in m]
+    return "|".join(([r"\b(%s)\b" % "|".join(simples)] if simples else []) + entiers)
 
 
 def base(cle):

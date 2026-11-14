@@ -1,7 +1,5 @@
 """Prévenir la personne : notification macOS, et sur le téléphone par ntfy si activé."""
 
-import os
-import shutil
 import subprocess
 
 import httpx
@@ -13,12 +11,17 @@ def _osa(texte):
     return texte.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def alerte_action(titre, texte, bouton="Ouvrir Chrome", ouvrir='open -a "Google Chrome"'):
-    """Fenêtre avec un bouton qui agit (une notification macOS envoyée par osascript ne fait
-    rien quand on clique dessus). Lancée à part : la commande qui l'appelle ne l'attend pas."""
+APPLICATION = "app.rechercheemploi.mac"     # CFBundleIdentifier de l'application (scripts/construire-app.sh)
+
+
+def alerte_action(titre, texte, bouton="Ouvrir l'application"):
+    """Fenêtre avec un bouton qui ouvre l'application (une notification macOS envoyée par
+    osascript ne fait rien quand on clique dessus) : le tableau de bord, et « Navigateur » pour
+    le Chrome de la VM. Le Mac ne lance jamais Chrome. Lancée à part : la commande qui l'appelle
+    ne l'attend pas."""
     script = ('display alert "%s" message "%s" buttons {"Plus tard", "%s"} default button 2 giving up after 900\n'
-              'if button returned of result is "%s" then do shell script "%s"'
-              % (_osa(titre), _osa(texte[:400]), _osa(bouton), _osa(bouton), _osa(ouvrir)))
+              'if button returned of result is "%s" then tell application id "%s" to activate'
+              % (_osa(titre), _osa(texte[:400]), _osa(bouton), _osa(bouton), APPLICATION))
     try:
         subprocess.Popen(["osascript", "-e", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                          start_new_session=True)
@@ -41,32 +44,18 @@ def _hote_telephone():
         return None
 
 
-def _terminal_notifier():
-    return shutil.which("terminal-notifier") or next(
-        (c for c in ("/opt/homebrew/bin/terminal-notifier", "/usr/local/bin/terminal-notifier") if os.path.exists(c)), None)
-
-
 def notifier(titre, texte, urgent=False, lien="/", telephone=True):
-    """Notification sur le Mac (un clic ouvre `lien` du tableau de bord) et, si un sujet ntfy est
-    réglé et `telephone`, sur le téléphone (un clic l'ouvre aussi, sur le Wi-Fi de la maison).
-
-    Sans terminal-notifier, une notification envoyée par osascript appartient à l'Éditeur de
-    scripts : un clic l'ouvre et demande un fichier. On la garde seulement en dernier recours."""
+    """Notification sur le Mac, par ce que macOS fournit (osascript) et, si un sujet ntfy est
+    réglé et `telephone`, sur le téléphone (un clic ouvre `lien` du tableau de bord, sur le Wi-Fi
+    de la maison). Sur le Mac, un clic sur la notification n'ouvre rien d'utile : ce qui demande
+    une action passe aussi par `alerte_action`, dont le bouton ouvre l'application."""
     r = reglages().get("notifications") or {}
     envoyes = []
     if r.get("macos", True):
-        tn = _terminal_notifier()
         try:
-            if tn:
-                cmd = [tn, "-title", titre, "-message", texte[:900], "-open", _adresse(lien),
-                       "-group", "jobsearch-" + titre[:40]]
-                if urgent:
-                    cmd += ["-sound", "Basso"]
-                tn = subprocess.run(cmd, check=False, timeout=10, capture_output=True).returncode == 0
-            if not tn:          # absent, ou pas encore autorisé dans Réglages › Notifications
-                subprocess.run(["osascript", "-e", 'display notification "%s" with title "%s"%s'
-                                % (_osa(texte[:900]), _osa(titre), ' sound name "Basso"' if urgent else "")],
-                               check=False, timeout=10, capture_output=True)
+            subprocess.run(["osascript", "-e", 'display notification "%s" with title "%s"%s'
+                            % (_osa(texte[:900]), _osa(titre), ' sound name "Basso"' if urgent else "")],
+                           check=False, timeout=10, capture_output=True)
             envoyes.append("macos")
         except (OSError, subprocess.SubprocessError):
             pass

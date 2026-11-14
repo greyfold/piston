@@ -5,7 +5,6 @@
   --texte: #1c2326; --texte-2: #4d5b63; --texte-3: #7b878d;
   --alerte: #b42318; --alerte-pale: #fdecea; --attention: #9a6700; --attention-pale: #fff4d6;
   --ok-pale: #e3f3ec; --rayon: 10px; --ombre: 0 1px 2px rgba(20, 30, 35, .06);
-  --hauteur-barre: 3.25rem;        /* barre du haut : ce qui colle dessous (menu des réglages) s'y aligne */
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -33,20 +32,10 @@ h3 { font-size: 1rem; margin: 0; line-height: 1.35; }
 .muet { color: var(--texte-3); }
 .petit { font-size: .85rem; }
 
-header.barre {
-  position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--bord);
-}
-header.barre .dedans { display: flex; align-items: center; gap: 1rem; max-width: 1120px; margin: 0 auto; padding: .6rem 16px;
-  min-height: var(--hauteur-barre); }
+/* Accueil : pas de menu, la marque seule, centrée au-dessus de l'assistant. */
+.barre-accueil { display: flex; justify-content: center; padding: 1.4rem 16px .6rem; }
 .marque { font-weight: 700; color: var(--marine); white-space: nowrap; }
 .marque span { color: var(--vert); }
-nav.onglets { display: flex; gap: .25rem; overflow-x: auto; scrollbar-width: none; }
-nav.onglets a {
-  padding: .35rem .7rem; border-radius: 999px; color: var(--texte-2); white-space: nowrap; font-size: .92rem;
-}
-nav.onglets a.actif { background: var(--vert-pale); color: var(--vert-fonce); font-weight: 600; }
-nav.onglets a:hover { text-decoration: none; background: var(--surface-2); }
-@media (max-width: 640px) { header.barre .dedans { flex-direction: column; align-items: flex-start; gap: .35rem; } }
 
 main { max-width: 1120px; margin: 0 auto; padding: 1.25rem 16px 4rem; }
 
@@ -300,8 +289,6 @@ button.occupe::before {
 .boutons.pied form { display: inline; }
 button.go:disabled { opacity: .5; cursor: not-allowed; }
 
-body.accueil header.barre { border-bottom-color: transparent; background: transparent; position: static; }
-body.accueil header.barre .dedans { justify-content: center; align-items: center; padding-top: 1.4rem; }
 
 /* Champ avec un début d'adresse fixe (https://, linkedin.com/in/) */
 .avec-prefixe { display: flex; align-items: stretch; border: 1px solid var(--bord); border-radius: 8px; background: var(--surface); min-width: 0; }
@@ -600,56 +587,69 @@ button.interrupteur:focus-visible { outline: 2px solid var(--vert); outline-offs
 .lien-confidentialite { display: inline-flex; align-items: center; gap: .35rem; }
 .lien-confidentialite .icone { width: .95rem; height: .95rem; }
 
-/* Barre : les trois espaces de travail à gauche, les réglages à droite. */
-a.lien-reglages { margin-left: auto; display: inline-flex; align-items: center; gap: .35rem; padding: .35rem .7rem;
-  border-radius: 999px; color: var(--texte-2); white-space: nowrap; font-size: .92rem; }
-a.lien-reglages .icone { width: 1rem; height: 1rem; }
-a.lien-reglages:hover { text-decoration: none; background: var(--surface-2); }
-a.lien-reglages.actif { background: var(--vert-pale); color: var(--vert-fonce); font-weight: 600; }
-@media (max-width: 640px) {
-  header.barre .dedans { flex-direction: row; flex-wrap: wrap; align-items: center; }
-  header.barre .marque { flex: 1 0 auto; }
-  nav.onglets { order: 3; flex-basis: 100%; }
-  a.lien-reglages span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-}
-p.fil { margin: 0 0 .5rem; }
-
-/* Réglages : menu vertical à gauche (Nexus ResponsiveNavLink), la page ouverte à droite, en une colonne. */
-.reglages-cadre { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 2rem; align-items: start; }
-.reglages-nav { position: sticky; top: calc(var(--hauteur-barre) + 1rem); }
-.reglages-nav ul { list-style: none; margin: 0; padding: 0 0 .6rem; }
-.reglages-nav ul + ul { border-top: 1px solid var(--bord); padding-top: .6rem; }
-.reglages-nav a {
+/* Menu latéral (Nexus ResponsiveNavLink) : à gauche sur toute la hauteur, la marque et les notifications en
+   tête, puis les espaces de travail ; le lien « Réglages » en bas ; le lien ouvert porte la bordure verte.
+   Sous 760 px, une barre en haut, en ligne. */
+body:has(> .menu-lateral) { display: grid; grid-template-columns: 15rem minmax(0, 1fr); align-items: start; }
+body:has(> .menu-lateral) > main { width: 100%; padding-top: 1.75rem; }
+.menu-lateral { position: sticky; top: 0; height: 100vh; height: 100dvh; overflow-y: auto; display: flex; flex-direction: column;
+  gap: 1rem; padding: 1rem .75rem 1.5rem 0; background: var(--surface); border-right: 1px solid var(--bord); }
+.tete-menu { display: flex; flex-direction: column; gap: .5rem; }
+.tete-menu .marque { padding: .2rem .75rem .2rem 1.05rem; font-size: 1.05rem; }
+.menu-lateral ul { list-style: none; margin: 0; padding: 0; }
+.menu-principal { flex: 1 1 auto; display: flex; flex-direction: column; }
+.menu-lateral ul.pied-menu { margin-top: auto; padding-top: .6rem; border-top: 1px solid var(--bord); }
+.actions-menu { display: contents; }
+.menu-lateral a.lien-reglages-etroit { display: none; }
+.menu-lateral a, .bouton-notifications {
   display: flex; align-items: center; gap: .6rem; padding: .45rem .75rem .45rem .65rem; margin: 1px 0;
   border-left: 3px solid transparent; border-radius: 0 8px 8px 0;
   color: var(--texte-2); font-weight: 500; font-size: .92rem; line-height: 1.3;
   transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
 }
-.reglages-nav a .icone { width: 1.05rem; height: 1.05rem; flex: none; }
-.reglages-nav a:hover { text-decoration: none; background: var(--surface-2); color: var(--texte); border-left-color: var(--texte-3); }
-.reglages-nav a.actif { background: var(--vert-pale); color: var(--vert-fonce); border-left-color: var(--vert); font-weight: 600; }
-.reglages-nav a:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .reglages-nav a { transition: none; } }
-/* Sous-liens (étapes du profil) : sous leur page parente, en retrait ; la page parente reste en texte fort. */
-.reglages-nav a.parent { color: var(--texte); font-weight: 600; }
-.reglages-nav ul.sous-liens { padding: 0 0 .2rem; border-top: 0; }
-.reglages-nav ul.sous-liens a { padding-left: 2.3rem; font-size: .88rem; }
-.reglages-nav .a-remplir { width: .45rem; height: .45rem; border-radius: 50%; background: var(--attention); flex: none; margin-left: auto; }
+.menu-lateral a .icone, .bouton-notifications .icone { width: 1.05rem; height: 1.05rem; flex: none; }
+.menu-lateral a:hover, .bouton-notifications:hover { text-decoration: none; background: var(--surface-2); color: var(--texte);
+  border-left-color: var(--texte-3); }
+.menu-lateral a.actif { background: var(--vert-pale); color: var(--vert-fonce); border-left-color: var(--vert); font-weight: 600; }
+.menu-lateral a:focus-visible, .bouton-notifications:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .menu-lateral a, .bouton-notifications { transition: none; } }
+.menu-lateral .tete-menu a.marque { display: block; border-left: 0; color: var(--marine); font-weight: 700; }
+.menu-lateral .tete-menu a.marque:hover { background: none; }
+/* Un point « à compléter » à droite d'un lien (profil incomplet) : dans le menu, collé au bord droit. */
+.a-remplir { display: inline-block; width: .45rem; height: .45rem; border-radius: 50%; background: var(--attention); flex: none;
+  vertical-align: middle; margin-left: .35rem; }
+.menu-lateral .a-remplir { margin-left: auto; }
+/* Le bouton des notifications : une ligne du menu ; le compte des nouvelles à droite, coloré comme la plus grave. */
+.bouton-notifications { width: 100%; background: none; border-top: 0; border-right: 0; border-bottom: 0; text-align: left;
+  cursor: pointer; }
+.compte-notifs { margin-left: auto; min-width: 1.35rem; height: 1.35rem; padding: 0 .4rem; border-radius: 999px; display: inline-flex;
+  align-items: center; justify-content: center; font-size: .75rem; font-weight: 700; font-variant-numeric: tabular-nums;
+  background: var(--vert); color: #fff; }
+.compte-notifs.attention { background: var(--attention-pale); color: var(--attention); }
+.compte-notifs.alerte { background: var(--alerte); color: #fff; }
 .reglages-contenu { min-width: 0; max-width: 52rem; }
 .reglages-contenu .tache { max-width: none; margin: 0; }
 .reglages-contenu .cartes.deux { grid-template-columns: minmax(0, 1fr); }     /* une seule colonne */
 @media (max-width: 760px) {
-  .reglages-cadre { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
-  .reglages-nav { position: static; display: flex; overflow-x: auto; gap: .25rem; padding-bottom: .25rem;
-    border-bottom: 1px solid var(--bord); }
-  .reglages-nav ul { display: flex; gap: .25rem; padding: 0; }
-  .reglages-nav ul + ul { border-top: 0; padding-top: 0; }
-  .reglages-nav a { white-space: nowrap; border-left: 0; border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0; }
-  .reglages-nav a.actif, .reglages-nav a:hover { border-left-color: transparent; }
-  .reglages-nav a.actif { border-bottom-color: var(--vert); }
-  .reglages-nav li:has(> .sous-liens) { display: flex; gap: .25rem; }
-  .reglages-nav ul.sous-liens a { padding-left: .75rem; }
+  body:has(> .menu-lateral) { display: block; }
+  body:has(> .menu-lateral) > main { padding-top: 1.25rem; }
+  .menu-lateral { position: sticky; z-index: 5; height: auto; overflow: visible; flex-direction: column; gap: .35rem;
+    padding: .5rem 16px 0; border-right: 0; border-bottom: 1px solid var(--bord); }
+  .tete-menu { flex-direction: row; align-items: center; justify-content: space-between; }
+  .tete-menu .marque { padding-left: 0; }
+  .bouton-notifications { width: auto; border-left: 0; border-radius: 8px; }
+  .bouton-notifications .libelle { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .actions-menu { display: flex; align-items: center; gap: .25rem; }
+  .menu-lateral a.lien-reglages-etroit { display: flex; border-bottom: 0; border-radius: 8px; padding: .45rem .65rem; }
+  .menu-lateral a.lien-reglages-etroit.actif { background: var(--vert-pale); }
+  .menu-lateral ul.pied-menu { display: none; }
+  .menu-lateral nav { flex-direction: row; overflow-x: auto; gap: .25rem; scrollbar-width: none; }
+  .menu-lateral ul { display: flex; gap: .25rem; }
+  .menu-lateral a { white-space: nowrap; border-left: 0; border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0; }
+  .menu-lateral a.actif, .menu-lateral a:hover { border-left-color: transparent; }
+  .menu-lateral a.actif { border-bottom-color: var(--vert); }
 }
+p.fil { margin: 0 0 .5rem; }
 
 /* Lignes de réglage : titre et explication à gauche, état ou action à droite, un trait entre deux. */
 ul.reglages-liste { list-style: none; margin: 1rem 0 0; padding: 0; background: var(--surface);
@@ -661,6 +661,15 @@ ul.reglages-liste > li + li { border-top: 1px solid var(--bord); }
 .reglage-ligne .description { font-size: .85rem; color: var(--texte-3); }
 .reglage-ligne > .bouton { flex: none; }
 .reglage-ligne > form { flex: none; margin: 0; }          /* un interrupteur à droite */
+/* Ligne qui ouvre une page (page Réglages) : toute la ligne est le lien, icône à gauche, chevron à droite. */
+a.reglage-ligne { transition: background-color 150ms ease; }
+a.reglage-ligne:hover { text-decoration: none; background: var(--surface-2); }
+a.reglage-ligne:focus-visible { outline: 2px solid var(--vert); outline-offset: -2px; }
+a.reglage-ligne > .icone { width: 1.15rem; height: 1.15rem; flex: none; color: var(--texte-2); }
+a.reglage-ligne > .icone:last-child { color: var(--texte-3); }
+@media (prefers-reduced-motion: reduce) { a.reglage-ligne { transition: none; } }
+.groupe-reglages .section-base { margin-top: 1.75rem; }
+.groupe-reglages .reglages-liste { margin-top: 0; }
 /* Postes proposés par l'IA (Nexus : lignes de réglage) : un bouton à icône par poste, à droite. */
 .reglage-ligne > button { flex: none; }
 .reglage-ligne > button, button.proposer-postes { display: inline-flex; align-items: center; gap: .35rem; }
@@ -670,6 +679,7 @@ ul.reglages-liste > li + li { border-top: 1px solid var(--bord); }
 .import-parcours .boutons { margin: 0; justify-content: flex-end; }
 @media (max-width: 560px) {
   .reglage-ligne { flex-wrap: wrap; }
+  a.reglage-ligne { flex-wrap: nowrap; }            /* une ligne-lien reste sur une ligne : icône, texte, chevron */
   .import-parcours { grid-template-columns: minmax(0, 1fr); }
   .import-parcours .boutons { justify-content: flex-start; }
 }
@@ -760,7 +770,15 @@ dialog.volet.ferme { animation: volet-sortie .18s cubic-bezier(.4, 0, 1, 1) forw
 dialog.volet::backdrop { background: rgba(10, 14, 16, .45); backdrop-filter: blur(1px); }
 @keyframes volet-entree { from { transform: translateX(-100%); } }
 @keyframes volet-sortie { to { transform: translateX(-100%); } }
-@media (prefers-reduced-motion: reduce) { dialog.volet[open], dialog.volet.ferme { animation: none; } }
+/* À droite (notifications) : même volet, qui entre par le bord droit. */
+dialog.volet.droite { inset: 0 0 0 auto; border-right: 0; border-left: 1px solid var(--bord); }
+dialog.volet.droite[open] { animation-name: volet-entree-droite; }
+dialog.volet.droite.ferme { animation-name: volet-sortie-droite; }
+@keyframes volet-entree-droite { from { transform: translateX(100%); } }
+@keyframes volet-sortie-droite { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) {
+  dialog.volet[open], dialog.volet.ferme, dialog.volet.droite[open], dialog.volet.droite.ferme { animation: none; }
+}
 .tete-volet { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1rem 1.5rem;
   border-bottom: 1px solid var(--bord); }
 .tete-volet h2 { margin: 0 0 .25rem; font-size: 1.1rem; }
@@ -981,3 +999,21 @@ button.go.envoyer .icone { width: .95rem; height: .95rem; }
 @media (prefers-reduced-motion: reduce) {
   .carte-tri, .salle-tri .progression i, .boutons-tri button { transition: none; }
 }
+
+/* Notifications (dans un volet, Nexus SlideOver) : les passages, le plus récent d'abord, séparés par un trait ;
+   le point coloré du bandeau (Nexus Banner) dit comment chacun s'est terminé ; une nouvelle sur fond neutre. */
+ul.notifications { list-style: none; margin: -.5rem -1.5rem 0; padding: 0; }
+.notification { display: flex; gap: .75rem; padding: .9rem 1.5rem; border-bottom: 1px solid var(--bord); }
+.notification.nouvelle { background: var(--surface-2); }
+.notification > .point { width: .55rem; height: .55rem; margin-top: .45rem; border-radius: 50%; flex: none; background: var(--vert); }
+.notification.attention > .point { background: var(--attention); }
+.notification.alerte > .point { background: var(--alerte); }
+.notification > .spinner { width: .9rem; height: .9rem; margin-top: .3rem; }
+.notification .texte { flex: 1 1 auto; min-width: 0; }
+.notification p { margin: 0 0 .2rem; font-size: .88rem; color: var(--texte-2); }
+.notification p.titre { font-size: .95rem; font-weight: 600; color: var(--texte); }
+.notification.alerte p.titre { color: var(--alerte); }
+.notification p.meta { margin-bottom: .4rem; font-size: .82rem; color: var(--texte-3); }
+.notification .appuis { margin-top: .3rem; }
+.notification .tableau { margin-top: .5rem; }
+.notification .erreur-etape { color: var(--alerte); }

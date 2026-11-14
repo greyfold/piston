@@ -68,12 +68,12 @@ alertes_email:
 
 courrier:
   # Réponses des employeurs, par le serveur MCP Apple Mail (lecture seule).
-  # serveur_mcp vide = la version installée la plus récente du plugin apple-mail.
+  # serveur_mcp : chemin du script de démarrage du serveur MCP ; vide = erreur claire, aucun repli.
   comptes: [iCloud, Google]
   serveur_mcp: ""
 
 automatisation:
-  # Sessions Claude dans ton Chrome habituel (extension Claude in Chrome ; `claude` connecté).
+  # Sessions Claude dans le Chrome de la machine virtuelle (`claude` y est connecté).
   jobroom_par_claude: true      # preuve Job-Room lancée dès qu'une candidature est notée envoyée
   formulaire_par_claude: true   # bouton « Remplir avec Claude » sur les cartes Go
 

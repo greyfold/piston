@@ -117,3 +117,21 @@ def test_etat_de_la_connexion():
     assert not ETAT(statut({"loggedIn": False}))["connecte"]
     api = ETAT(statut({"loggedIn": True, "authMethod": "api_key"}))
     assert not api["connecte"] and "autrement" in api["message"]
+
+
+def test_hors_de_la_vm_le_mac_ne_lance_jamais_claude(monkeypatch):
+    monkeypatch.undo()                                  # la vraie executable(), sans le faux chemin
+    monkeypatch.delenv("JOBSEARCH_VM", raising=False)
+    from jobsearch.moteur import LancementImpossible
+    with pytest.raises(LancementImpossible, match="machine virtuelle"):
+        moteur.executable()
+    assert not ETAT()["installe"] and "machine virtuelle" in ETAT()["message"]
+
+
+def test_dans_la_vm_claude_se_cherche_comme_avant(monkeypatch, tmp_path):
+    monkeypatch.undo()
+    faux_claude = tmp_path / "claude"
+    faux_claude.write_text("#!/bin/sh\n")
+    monkeypatch.setenv("JOBSEARCH_VM", "1")
+    monkeypatch.setattr(moteur, "reglage", lambda cle, defaut=None: str(faux_claude) if cle == "claude" else defaut)
+    assert moteur.executable() == str(faux_claude)

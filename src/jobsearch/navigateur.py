@@ -364,7 +364,7 @@ def _journal(texte):
 
 def preremplir_employeur(url, valeurs, docs, journal=_journal, a_l_envoi=None):
     """Ouvre le formulaire de l'employeur et le pré-remplit jusqu'à fermeture de la fenêtre.
-    `a_l_envoi(url)` est appelé une fois quand une page confirme l'envoi de la candidature."""
+    `a_l_envoi(url)` est appelé une fois quand une page semble confirmer l'envoi ; il ne note rien : la personne confirme."""
     from playwright.sync_api import sync_playwright
     verrou = _verrou()
     try:
@@ -386,8 +386,8 @@ def preremplir_employeur(url, valeurs, docs, journal=_journal, a_l_envoi=None):
                     except Exception as e:
                         message_envoi = "Mise à jour du tableau de bord impossible : %s" % e
                 if envoyee:
-                    _bandeau(page, "Candidature envoyée ✓", [message_envoi or "Notée dans le tableau de bord.",
-                             "Prochaine étape : la preuve Job-Room (bouton « Pré-remplir » dans le tableau de bord).",
+                    _bandeau(page, "La candidature semble envoyée", [message_envoi or "Confirme dans l'application : « Marquer envoyée ».",
+                             "Ensuite : la preuve Job-Room (bouton « Pré-remplir » dans le tableau de bord).",
                              "Tu peux fermer cette fenêtre."])
                     time.sleep(2)
                     continue

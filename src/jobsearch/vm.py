@@ -87,6 +87,11 @@ POLITIQUE_CHROME = {
     "BrowserSignin": 0, "SyncDisabled": True, "MetricsReportingEnabled": False, "SearchSuggestEnabled": False,
     "PromotionalTabsEnabled": False, "BackgroundModeEnabled": False, "RestoreOnStartup": 5,
     "DefaultNotificationsSetting": 2, "DefaultGeolocationSetting": 2,
+    # Aucune page locale : ni les fichiers de la VM (dont /donnees : CV, coordonnées, jeton), ni
+    # leur source. Les documents joints passent par le champ de fichier (DevTools), pas par une
+    # adresse file://, et le PDF s'imprime depuis un contenu posé dans la page : ni l'un ni
+    # l'autre n'est touché. Reposée à chaque démarrage (LANCER), donc aussi sur une VM déjà créée.
+    "URLBlocklist": ["file://*", "view-source:*"],
 }
 
 LANCER = """set -e
@@ -148,11 +153,11 @@ def port_ecran():
 
 
 def limactl():
-    """Le Lima embarqué dans l'application (JOBSEARCH_LIMACTL) ; à défaut (développement),
-    celui du PATH."""
-    import os
-    exe = os.environ.get("JOBSEARCH_LIMACTL") or shutil.which("limactl") or "/opt/homebrew/bin/limactl"
-    if not Path(exe).exists():
+    """Le Lima embarqué dans l'application (JOBSEARCH_LIMACTL, posé par l'application : rien
+    d'autre n'est cherché). Hors application seulement (développement dans le dépôt, `uv run
+    jobsearch web`), celui du PATH."""
+    exe = os.environ.get("JOBSEARCH_LIMACTL") or shutil.which("limactl") or ""
+    if not exe or not Path(exe).exists():
         raise VMImpossible("Lima introuvable : l'application est incomplète (ou, en développement, brew install lima)")
     return exe
 

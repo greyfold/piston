@@ -1,8 +1,8 @@
 """Les connecteurs MCP : catalogue, activation, test.
 
 Chaque connecteur a un rôle (courrier, source, navigateur) et un lieu :
-- « mac » : il ne vit que sur le Mac (Apple Mail pilote l'application Mail,
-  Claude in Chrome le Chrome de l'utilisateur) ;
+- « mac » : il ne vit que sur le Mac (Apple Mail pilote l'application Mail ; le navigateur
+  est le Chrome de la machine virtuelle, piloté par chrome-devtools-mcp, jamais celui du Mac) ;
 - « compte » : un connecteur du compte Claude de l'utilisateur (claude.ai), joint
   par une session Claude Code ; il suit la connexion jusque dans la machine
   virtuelle.
@@ -38,14 +38,14 @@ CATALOGUE = {
         "activer": "Sur claude.ai › Réglages › Connecteurs : activer Indeed.",
     },
     "chrome": {
-        "nom": "Claude in Chrome", "role": "navigateur", "lieu": "mac",
+        "nom": "Chrome", "role": "navigateur", "lieu": "vm",
         "usage": "Formulaires des employeurs préremplis sans envoi, preuves Job-Room.",
-        "activer": "Installer l'extension Claude in Chrome ; tu te connectes toi-même aux sites.",
+        "activer": "Rien à installer sur ce Mac : Chrome tourne dans la machine virtuelle, avec son serveur MCP. Tu te connectes toi-même aux sites dans sa fenêtre.",
     },
 }
 
 ROLES = {"courrier": "Courrier", "source": "Source d'annonces", "navigateur": "Navigateur"}
-LIEUX = {"mac": "sur ce Mac", "compte": "compte Claude"}
+LIEUX = {"mac": "sur ce Mac", "vm": "machine virtuelle", "compte": "compte Claude"}
 
 
 def _defauts():
@@ -104,7 +104,9 @@ def tester(nom):
             return False, str(e)
         return True, "serveur MCP Apple Mail présent ; Mail doit être ouvert au moment du passage"
     if nom == "chrome":
-        return None, "à vérifier dans Chrome : l'extension Claude in Chrome doit être installée et connectée"
+        # Pas de test ici : Chrome ne tourne que dans la machine virtuelle (serveur MCP
+        # chrome-devtools-mcp, voir vm.py), pas d'extension dans un Chrome du Mac.
+        return None, "à vérifier dans la machine virtuelle : Chrome et son serveur MCP doivent y tourner"
     from .travailleur import client as travailleur
     if travailleur.distant():
         try:

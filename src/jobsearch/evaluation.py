@@ -10,7 +10,10 @@ réalisations, CV d'origine). Il passe en contexte de la tâche, identique pour 
 les annonces d'un passage : Claude Code le garde en cache. Les exigences et les extraits restent dans la langue
 de l'annonce : ce sont les mots-clés du CV et de la lettre.
 
-La note est une aide à la décision : elle ne change jamais un statut.
+La note est une aide à la décision : elle ne change pas un statut. Une seule exception, la
+pré-sélection : une annonce « nouvelle » dont le métier n'a rien à voir avec les postes visés
+(`perimetre` = hors, jugé par l'IA sur le texte) passe en C, passe 2, en « limite » : elle reste
+visible dans « Écartées limites » et se remet en B d'un clic. Le doute profite à l'annonce.
 """
 
 import hashlib
@@ -23,7 +26,9 @@ from . import profil as profil_mod
 from .db import maintenant
 
 MODELE = moteur.MODELE
-VERSION = "2"            # à incrémenter quand la consigne change : les notes seront recalculées
+VERSION = "3"            # à incrémenter quand la consigne change : les notes seront recalculées
+PASSE_IA = 2             # la passe du pré-tri tenue par l'IA (0 et 1 : règles de prefilter.py)
+PERIMETRES = ("dans", "limite", "hors")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS evaluations (
@@ -65,6 +70,10 @@ class Salaire(BaseModel):
 
 
 class Evaluation(BaseModel):
+    perimetre: str = Field(description="dans, limite ou hors : le métier de l'annonce est-il un des postes visés ? "
+                                       "hors = une autre profession, sans rapport ; limite = poste voisin ; dans = oui")
+    perimetre_motif: str = Field(description="une phrase en français : quel métier l'annonce décrit, et pourquoi il est "
+                                             "dans, à la limite ou hors des postes visés")
     note_globale: int = Field(description="0 à 100 : profil × annonce × critères")
     adequation_profil: int = Field(description="0 à 100 : part des exigences majeures réellement couvertes par le profil")
     classe_suggeree: str = Field(description="A, B ou C")
@@ -99,9 +108,11 @@ def consigne():
     niveau, region = str(profil_mod.lire(p, "recherche.niveau") or "").lower(), profil_mod.region(p)
     criteres = profil_mod.criteres_evaluation()
     interet = profil_mod.interet_evaluation(p)
+    postes = profil_mod.intitules(profil_mod.postes(p))
     return CONSIGNE % {
         "nom": profil_mod.nom_complet(), "prenom": prenom,
         "poste": "un poste" + (" " + niveau if niveau else "") + (" en " + region if region else ""),
+        "postes": "Postes visés : %s." % ", ".join(postes) if postes else "Postes visés : ceux que le profil décrit.",
         "interet": " (%s)" % interet if interet else "",
         "criteres": "chacun des %s critères (%s)" % (
             profil_mod.nombre_fr(len(criteres)), ", ".join(" ".join(x for x in c if x) for c in criteres))
@@ -110,9 +121,10 @@ def consigne():
     }
 
 
-CONSIGNE = """Tu évalues des offres d'emploi pour %(nom)s, qui cherche %(poste)s. Tu reçois son profil (critères, compétences, preuves, CV maître, parcours) puis une annonce. Tu ne décides rien : tu aides %(prenom)s à trancher vite.
+CONSIGNE = """Tu évalues des offres d'emploi pour %(nom)s, qui cherche %(poste)s. %(postes)s Tu reçois son profil (critères, compétences, preuves, CV maître, parcours) puis une annonce. Tu ne décides rien : tu aides %(prenom)s à trancher vite.
 
 Règles :
+- perimetre : d'abord, le métier que l'annonce décrit est-il un des postes visés ? « hors » seulement si c'est une autre profession, sans rapport avec ces postes ni avec le parcours (soins, cuisine, bâtiment, production industrielle, vente… quand aucun poste visé n'en relève), même si l'intitulé emprunte un mot comme « chef », « responsable » ou « manager ». « limite » pour un poste voisin ou une variante plausible. « dans » sinon. Le doute profite à l'annonce : jamais « hors » sur un doute. Dis en une phrase (perimetre_motif) quel métier c'est.
 - Rien d'inventé. Une compétence ou un fait n'est couvert que s'il figure dans le profil ; cite la preuve (P-xx, poste, certification). Sinon c'est un écart, dis-le.
 - Les exigences et les extraits restent dans la langue de l'annonce, mot pour mot : ils serviront de mots-clés au CV et à la lettre. Tes explications sont en français.
 - note_globale (0-100) combine trois choses : l'adéquation du profil, le respect des critères non négociables de %(prenom)s, et l'intérêt du poste au regard de ses critères%(interet)s. Un critère non négociable clairement violé plafonne la note à 40. 80 et plus : à ne pas rater. 60-79 : à regarder. Moins de 60 : probablement non.
@@ -233,9 +245,27 @@ def enregistrer(reg, f, ev, usage, texte_profil):
         "resultat=excluded.resultat, cout_jetons=excluded.cout_jetons",
         (f["empreinte"], maintenant(), MODELE, VERSION, empreinte_entree(f, texte_profil), ev.note_globale,
          ev.adequation_profil, len(ev.alertes), ev.model_dump_json(), json.dumps(jetons)))
-    reg.noter(f["empreinte"], "évaluation · %d/100 · profil %d %% · %d alerte(s)"
-              % (ev.note_globale, ev.adequation_profil, len(ev.alertes)))
+    reg.noter(f["empreinte"], "évaluation · %d/100 · profil %d %% · %d alerte(s) · périmètre %s"
+              % (ev.note_globale, ev.adequation_profil, len(ev.alertes), ev.perimetre or "?"))
+    ecartee = preselectionner(reg, f, ev)
     reg.commit()
+    return ecartee
+
+
+def motif_hors_perimetre(ev):
+    return "Métier hors des postes visés, selon l'IA : %s" % (ev.perimetre_motif or "autre métier").strip()[:160]
+
+
+def preselectionner(reg, f, ev):
+    """La pré-sélection par l'IA : une annonce « nouvelle » hors du périmètre passe en C (passe 2,
+    limite). Une annonce que la personne a déjà classée (A, B, retenue…) n'est jamais touchée.
+    Renvoie vrai si l'annonce a été écartée."""
+    if ev.perimetre != "hors" or f.get("statut") != "nouvelle":
+        return False
+    motif = motif_hors_perimetre(ev)
+    reg.maj(f["empreinte"], statut="C", passe_ecart=PASSE_IA, motif=motif, limite=True)
+    reg.noter(f["empreinte"], "pré-sélection IA · C · passe %d · %s" % (PASSE_IA, motif))
+    return True
 
 
 def evaluer_lot(reg, fiches, c=None, texte_profil=None, budget=None):
@@ -243,7 +273,7 @@ def evaluer_lot(reg, fiches, c=None, texte_profil=None, budget=None):
     texte_profil = texte_profil if texte_profil is not None else profil()
     c = c or moteur.ouvrir()
     decisions = _decisions_recentes(reg)
-    bilan = {"evaluees": 0, "echecs": 0, "alertes": 0, "erreurs": []}
+    bilan = {"evaluees": 0, "echecs": 0, "alertes": 0, "ecartees": 0, "erreurs": []}
     for f in fiches:
         if budget:
             budget()
@@ -255,7 +285,8 @@ def evaluer_lot(reg, fiches, c=None, texte_profil=None, budget=None):
             if e.bloquant:              # Claude Code déconnecté, limite d'usage : inutile de continuer
                 break
             continue
-        enregistrer(reg, f, ev, usage, texte_profil)
+        if enregistrer(reg, f, ev, usage, texte_profil):
+            bilan["ecartees"] += 1
         bilan["evaluees"] += 1
         bilan["alertes"] += len(ev.alertes)
     return bilan

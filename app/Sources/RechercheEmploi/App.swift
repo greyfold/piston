@@ -4,28 +4,30 @@ import AppKit
 import SwiftUI
 
 final class Delegue: NSObject, NSApplicationDelegate {
-    var etat: Etat?
+    /// L'état de l'application, unique : créé et démarré au lancement, même sans fenêtre
+    /// (ouverture à la connexion) ; tableau de bord et échéances n'attendent pas la fenêtre.
+    @MainActor static let etat = Etat()
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        MainActor.assumeIsolated { Delegue.etat.demarrer() }
+    }
     // La fenêtre se ferme, l'application reste dans la barre des menus.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationWillTerminate(_ notification: Notification) {
-        MainActor.assumeIsolated { etat?.quitter() }
+        MainActor.assumeIsolated { Delegue.etat.quitter() }
     }
 }
 
 @main
 struct RechercheEmploiApp: App {
     @NSApplicationDelegateAdaptor(Delegue.self) var delegue
-    @StateObject private var etat = Etat()
+    @StateObject private var etat = Delegue.etat
 
     var body: some Scene {
-        WindowGroup("Recherche d'emploi", id: "tableau") {
+        // Une seule fenêtre (donc une seule vue web et une seule dictée), rouverte par le menu.
+        Window("Recherche d'emploi", id: "tableau") {
             Tableau()
                 .environmentObject(etat)
                 .frame(minWidth: 900, minHeight: 640)
-                .onAppear {
-                    delegue.etat = etat
-                    etat.demarrer()
-                }
         }
         .defaultSize(width: 1180, height: 820)
         .commands {
@@ -124,7 +126,7 @@ struct Tableau: View {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle").font(.largeTitle)
                     Text(e).multilineTextAlignment(.center)
-                    Button("Réessayer") { Task { await etat.assurerTableau() } }
+                    Button("Réessayer") { Task { await etat.reessayer() } }
                 }.padding(40)
             } else {
                 ProgressView("Démarrage du tableau de bord…").padding(40)

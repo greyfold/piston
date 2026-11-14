@@ -124,15 +124,14 @@ def cmd_travailleur(a):
 
 
 def cmd_connexion(a):
-    """Connexion de Claude Code au compte Claude, là où il tourne : dans la machine virtuelle
-    (mode distant) ou sur ce Mac. Interactif : l'adresse s'affiche, le code se colle."""
+    """Connexion de Claude Code au compte Claude, dans la machine virtuelle (le Mac ne lance jamais
+    `claude`). Interactif : l'adresse s'affiche, le code se colle."""
     from .travailleur import client as travailleur
     if travailleur.distant():
         from . import vm
         return vm.connexion()
-    import subprocess
-    from .moteur import environnement, executable
-    return subprocess.call([executable(), "auth", "login", "--claudeai"], env=environnement())
+    print("Claude Code ne tourne que dans la machine virtuelle : régler travailleur.mode: distant, puis relancer.")
+    return 1
 
 
 def cmd_vm(a):
@@ -299,6 +298,16 @@ def cmd_courrier(a):
         return 1
 
 
+def _envoi_signale(emp, url):
+    from . import preremplissage
+    reg = Registre()
+    try:
+        f = reg.get(reg.resoudre(emp) or emp)
+        return preremplissage.envoi_signale(f, url) if f else ""
+    finally:
+        reg.fermer()
+
+
 def cmd_preremplir(a):
     from . import navigateur, preremplissage
     reg = Registre()
@@ -310,8 +319,9 @@ def cmd_preremplir(a):
         else:
             url, valeurs, docs = preremplissage.employeur(reg, a.annonce)
             reg.fermer()
-            navigateur.preremplir_employeur(url, valeurs, docs,
-                                            a_l_envoi=lambda u: preremplissage.noter_envoi(a.annonce, u))
+            # La page qui semble confirmer l'envoi ne vaut pas envoi : rien n'est noté, la personne
+            # clique elle-même « Marquer envoyée » (comme pour une session de la VM, agent_claude).
+            navigateur.preremplir_employeur(url, valeurs, docs, a_l_envoi=lambda u: _envoi_signale(a.annonce, u))
     except (preremplissage.PreremplissageImpossible, navigateur.NavigateurOccupe) as e:
         print("Pré-remplissage impossible : %s" % e)
         return 1
@@ -420,10 +430,10 @@ def main(argv=None):
     s.set_defaults(f=cmd_web)
     sp.add_parser("jeton", help="affiche le jeton d'accès du tableau de bord").set_defaults(f=cmd_jeton)
     s = sp.add_parser("travailleur", help="lance le travailleur (dans la machine virtuelle)")
-    s.add_argument("--hote", default="0.0.0.0")
+    s.add_argument("--hote", default="127.0.0.1")   # la VM le passe explicitement (vm.py)
     s.add_argument("--port", type=int, default=8776)
     s.set_defaults(f=cmd_travailleur)
-    sp.add_parser("connexion", help="connecte Claude Code au compte Claude (VM ou ce Mac)").set_defaults(f=cmd_connexion)
+    sp.add_parser("connexion", help="connecte Claude Code au compte Claude (dans la VM)").set_defaults(f=cmd_connexion)
     s = sp.add_parser("vm", help="machine virtuelle : creer, demarrer, arreter, etat, connexion, supprimer")
     s.add_argument("action", choices=["creer", "demarrer", "arreter", "etat", "connexion", "supprimer"])
     s.set_defaults(f=cmd_vm)

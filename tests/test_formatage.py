@@ -54,6 +54,21 @@ def test_html_echappe_et_liens():
     assert '<a href="https://exemple.ch/offre/42"' in h
 
 
+def test_url_piegee_n_injecte_aucun_attribut():
+    for piege in ('https://a.b/"onmouseover=alert(1)//x', "https://a.b/'onmouseover=alert(1)//x",
+                  "https://a.b/`onmouseover=alert(1)//x"):
+        h = str(annonce_html("Voir " + piege))
+        assert h.count("<a ") == 1
+        assert " onmouseover=" not in h.split("<a ", 1)[1].split(">", 1)[0]
+        assert 'href="https://a.b/"' in h or "href=\"https://a.b/" in h
+
+
+def test_url_normale_avec_esperluette_et_point_d_interrogation():
+    h = str(annonce_html("Postuler : https://exemple.ch/offre?id=42&lang=fr."))
+    assert '<a href="https://exemple.ch/offre?id=42&amp;lang=fr" target="_blank"' in h
+    assert "&amp;amp;" not in h and h.endswith("</a>.</p>")
+
+
 def test_etiquette_en_gras_et_titre_repete_retire():
     h = str(annonce_html("Product Owner\nTrade Execution: Partner directly with the Portfolio Manager on views.",
                          titre="Product Owner"))

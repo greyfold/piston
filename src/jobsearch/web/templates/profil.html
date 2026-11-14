@@ -4,6 +4,11 @@
 {% block contenu %}
 <h1>Ma recherche</h1>
 <p class="muet">Ce que la plateforme sait de toi pour chercher, trier et écrire tes dossiers. Gardé sur ton ordinateur seulement.</p>
+{# Les étapes en onglets de page (elles ne sont plus dans le menu latéral) ; un point pour celles à remplir. #}
+{% set ids_manquants = profil_manquants | map('first') | list %}
+<nav class="onglets-annonce" aria-label="Étapes de ta recherche">
+  {% for x in etapes %}<a href="/profil/{{ x.id }}" class="{{ 'actif' if x.id == ident }}"{% if x.id == ident %} aria-current="step"{% endif %}>{{ x.titre }}{% if x.id in ids_manquants %}<span class="a-remplir" title="À remplir"><span class="cache">, à remplir</span></span>{% endif %}</a>{% endfor %}
+</nav>
 
 {% if a_reprendre %}
 <form method="post" action="/profil/{{ ident }}/reprendre" class="bandeau info"><span class="point"></span>

@@ -19,7 +19,6 @@ dans le tableau de bord l'emporte toujours sur un mail.
 
 import asyncio
 import datetime as dt
-import glob
 import hashlib
 import json
 import os
@@ -140,6 +139,10 @@ FORMES_JURIDIQUES = r"\b(sa|ag|sarl|sàrl|gmbh|s a|ltd|inc|group|groupe|holding|
 
 class CourrierImpossible(Exception):
     pass
+
+
+class CourrierNonConfigure(CourrierImpossible):
+    """Le serveur MCP d'Apple Mail n'est pas réglé : ce n'est pas une panne, l'étape est ignorée."""
 
 
 SCHEMA = """
@@ -302,15 +305,15 @@ def extrait(contenu, n=2):
 
 
 def commande_serveur():
-    r = (reglages().get("courrier") or {})
-    if r.get("serveur_mcp"):
-        return os.path.expanduser(r["serveur_mcp"])
-    versions = sorted(glob.glob(os.path.expanduser(
-        "~/.claude/plugins/cache/apple-mail-mcp/apple-mail/*/start_mcp.sh")),
-        key=lambda p: [int(x) if x.isdigit() else x for x in re.split(r"[./]", p)])
-    if not versions:
-        raise CourrierImpossible("serveur MCP Apple Mail introuvable (plugin apple-mail)")
-    return versions[-1]
+    """Le script du serveur MCP d'Apple Mail, tel que le réglage courrier.serveur_mcp le donne.
+    Aucune recherche dans un dossier extérieur à l'application (cache de plugins de Claude Code) :
+    sans réglage, erreur claire."""
+    chemin = os.path.expanduser(str((reglages().get("courrier") or {}).get("serveur_mcp") or "").strip())
+    if not chemin:
+        raise CourrierNonConfigure("serveur MCP Apple Mail non réglé (courrier.serveur_mcp : chemin de son script de démarrage)")
+    if not os.path.isfile(chemin):
+        raise CourrierImpossible("serveur MCP Apple Mail introuvable : %s" % chemin)
+    return chemin
 
 
 async def _chercher(args):
@@ -350,6 +353,8 @@ def lire_boite(mots_objet, depuis, comptes, limite=80, delai_s=600, erreurs=None
             messages += _une_recherche({"account": compte, "mailbox": "INBOX", "subject_keywords": mots_objet,
                                         "date_from": depuis, "include_content": True, "max_content_length": longueur,
                                         "output_format": "json", "limit": limite, "sort": "date_desc"}, delai_s)
+        except CourrierNonConfigure:
+            raise                                    # serveur non réglé : valable pour tous les comptes
         except CourrierImpossible as e:
             pannes.append("%s : %s" % (compte, e))
     if pannes and erreurs is not None:
@@ -494,13 +499,15 @@ def relever(reg, lire=None, lire_gmail_=None):
     comptes = r.get("comptes") or []                 # choisis dans le profil ; aucun par défaut
     debut = depuis(reg)
     mots = mots_recherche(reg)
-    messages, pannes, lus = [], [], []
+    messages, pannes, lus, ignores = [], [], [], []
     if connecteurs.actif("apple-mail") and not comptes:
         pannes.append("Apple Mail : aucun compte choisi dans le profil")
     elif connecteurs.actif("apple-mail"):
         try:
             messages += (lire or lire_boite)(mots, debut, comptes)
             lus.append("Apple Mail")
+        except CourrierNonConfigure as e:
+            ignores.append(str(e))                   # pas une panne : Apple Mail n'est pas installé côté réglages
         except CourrierImpossible as e:
             pannes.append(str(e))
     if connecteurs.actif("gmail"):
@@ -512,12 +519,14 @@ def relever(reg, lire=None, lire_gmail_=None):
     if pannes and not lus:
         raise CourrierImpossible(" ; ".join(pannes))
     if not lus:
-        return {"ignore": "aucun connecteur de courrier actif (page Connecteurs)"}
+        return {"ignore": "; ".join(ignores) or "aucun connecteur de courrier actif (page Connecteurs)"}
     bilan = traiter(reg, messages)
     bilan["depuis"] = debut
     bilan["boites"] = lus
     if pannes:
         bilan["pannes"] = pannes
+    if ignores:
+        bilan["ignore"] = "; ".join(ignores)
     reg.poser_meta("courrier_lu_le", maintenant())
     reg.commit()
     return bilan

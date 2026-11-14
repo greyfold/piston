@@ -7,6 +7,8 @@ de file d'attente à rapprocher au passage suivant.
 
 import datetime as dt
 import json
+import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import quote
 
@@ -16,6 +18,9 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
+from starlette.concurrency import run_in_threadpool
+
+import jobsearch
 
 from .. import moteur as moteur_mod
 from .. import actions, ajout, ce_qui_compte, cles, courrier, dossier, doublons, entretiens, evaluation, followups, parcours
@@ -25,10 +30,20 @@ from .. import repertoire as repertoire_mod
 from ..formatage import annonce_html
 from ..config import DATA, criteres, reglages
 from ..db import ENVOYEES, PIPELINE, STATUTS, Registre
-from .auth import COOKIE, autorise, depuis_le_mac, jeton, meme_origine
+from .auth import COOKIE, autorise, depuis_le_mac, jeton, jeton_valide, meme_origine
 
 ICI = Path(__file__).parent
-app = FastAPI(title="Recherche d'emploi", docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@asynccontextmanager
+async def demarrage(app):
+    """Le jeton d'accès existe avant que le serveur n'écoute : l'application Mac le lit dans le
+    dossier de données dès que le port répond (auth.py)."""
+    jeton()
+    yield
+
+
+app = FastAPI(title="Recherche d'emploi", docs_url=None, redoc_url=None, openapi_url=None, lifespan=demarrage)
 app.mount("/static", StaticFiles(directory=ICI / "static"), name="static")
 tpl = Jinja2Templates(directory=ICI / "templates")
 
@@ -78,8 +93,47 @@ def priorite(f, note=None):
     return (1 if note is not None else 2, 0, -(note or 0), pub)
 
 
+class _SansHtmlBrut(md.extensions.Extension):
+    """Le Markdown vient de l'IA, qui lit des annonces : le HTML brut qu'il contient est affiché
+    comme du texte (échappé), jamais interprété, et un lien ne mène qu'à http(s) ou mailto."""
+
+    def extendMarkdown(self, m):
+        m.preprocessors.deregister("html_block")
+        m.inlinePatterns.deregister("html")
+        m.treeprocessors.register(_LiensSurs(m), "liens_surs", 0)
+
+
+class _LiensSurs(md.treeprocessors.Treeprocessor):
+    SURS = ("http://", "https://", "mailto:", "/", "#")
+
+    def run(self, racine):
+        for el in racine.iter():
+            if el.tag == "img":
+                self._image(el)
+                continue
+            v = el.get("href")
+            if v is not None and not "".join(v.split()).lower().startswith(self.SURS):
+                del el.attrib["href"]
+
+    @staticmethod
+    def _image(el):
+        """Une image ne se charge sans clic que si elle est locale (un seul « / » au début) : une
+        image distante, dont l'adresse peut porter des données, devient un lien ou son texte."""
+        src = "".join((el.get("src") or "").split())
+        alt = el.get("alt") or ""
+        if src.startswith("/") and not src.startswith(("//", "/\\")):
+            return
+        for attr in list(el.attrib):
+            del el.attrib[attr]
+        if src.lower().startswith(("http://", "https://")):
+            el.tag, el.text = "a", alt or src
+            el.set("href", src)
+        else:
+            el.tag, el.text = "span", alt
+
+
 def texte_html(t):
-    return Markup(md.markdown(t or "", extensions=["sane_lists", "tables"]))
+    return Markup(md.markdown(t or "", extensions=["sane_lists", "tables", _SansHtmlBrut()]))
 
 
 tpl.env.filters.update(date_fr=date_fr, jour_fr=jour_fr, il_y_a=il_y_a, texte_html=texte_html, annonce_html=annonce_html,
@@ -109,11 +163,23 @@ def _reg():
     return Registre()
 
 
+def retour_sur(retour, defaut="/"):
+    """Une adresse de retour de ce site seulement : un chemin qui commence par une seule barre, sans
+    antislash (que le navigateur lit comme une barre : « /\\ailleurs » = « //ailleurs ») ni caractère
+    de contrôle. Sinon `defaut`."""
+    r = retour or ""
+    if not r.startswith("/") or r.startswith("//") or "\\" in r or any(ord(c) < 32 or ord(c) == 127 for c in r):
+        return defaut
+    return r
+
+
 @app.middleware("http")
 async def garde(request: Request, call_next):
     if request.url.path.startswith("/static") or request.url.path == "/connexion":
         return await call_next(request)
     if not autorise(request):
+        if request.url.path.startswith("/api/") or "x-jobsearch-jeton" in request.headers:
+            return JSONResponse({"erreur": "Jeton absent ou refusé."}, status_code=401)    # l'enveloppe Mac attend 401
         return RedirectResponse("/connexion", status_code=303)
     if request.method == "POST" and not meme_origine(request):
         return HTMLResponse("Origine refusée.", status_code=403)
@@ -128,9 +194,8 @@ def page(request, nom, **ctx):
     ctx["raisons"] = criteres().get("raisons") or {}
     ctx["aujourdhui"] = dt.date.today().isoformat()
     ctx["profil_manquants"] = profil_mod.manquants()
-    # Les étapes du profil, en sous-liens de « Ma recherche » dans le menu des réglages.
-    ctx["etapes_profil"] = profil_mod.etapes() if ctx["nav"].startswith("/profil") else []
     ctx["accueil"] = request.url.path.startswith("/bienvenue") and profil_mod.en_accueil()   # sans menu
+    ctx["notifs"] = {"liste": [], "nouvelles": 0} if ctx["accueil"] else _notifications(request)
     p = profil_mod.charger()
     ctx["premiers_pas_affiches"] = p.get(profil_mod.PREMIERS_PAS) == "affichee"
     ctx["fonctions"] = profil_mod.fonctions(p, ia_connectee() if profil_mod.progressif(p) else True)
@@ -167,6 +232,8 @@ def etat_passage(reg):
         niveau, texte = "alerte", "Aucun passage de la plateforme pour l'instant."
     elif age > seuil:
         niveau, texte = "alerte", "Dernier passage terminé il y a %d h : la chaîne a raté au moins un matin." % age
+    elif r["statut"] == "interrompu":
+        niveau, texte = "attention", "Le dernier passage a été interrompu (%s) avant la fin." % (r["fin"] or r["debut"])
     elif r["statut"] == "partiel":
         niveau, texte = "attention", "Dernier passage partiel (%s) : une étape a échoué." % r["fin"]
     elif r["statut"] == "demarre":
@@ -174,6 +241,82 @@ def etat_passage(reg):
     else:
         texte = "Dernier passage complet : %s." % r["fin"]
     return {"niveau": niveau, "texte": texte, "run": dict(r) if r else None}
+
+
+# --- Notifications : les passages, dans le volet du menu latéral --------------
+
+# Le dernier passage que la personne a vu dans les notifications (posé par base.html à l'ouverture du volet).
+COOKIE_NOTIFS = "notifs_vues"
+DECLENCHEURS = {"application": "lancé par l'application", "manuel": "lancé à la main",
+                "accueil": "première recherche"}
+_GRAVITE = {"ok": 0, "en-cours": 1, "attention": 2, "alerte": 3}
+
+
+def moment_fr(v):
+    """« aujourd'hui à 06:30 », « hier à 06:30 », « lundi 9 nov. à 06:30 »."""
+    if not v:
+        return ""
+    n = (dt.date.today() - dt.date.fromisoformat(str(v)[:10])).days
+    jour = "aujourd'hui" if n == 0 else "hier" if n == 1 else "%s %s" % (
+        JOURS[dt.date.fromisoformat(str(v)[:10]).weekday()], date_fr(v, True))
+    return "%s à %s" % (jour, str(v)[11:16]) if len(str(v)) >= 16 else jour
+
+
+tpl.env.filters["moment_fr"] = moment_fr
+
+
+def notifications(reg, vu=None):
+    """Les passages en notifications, le plus récent d'abord ; chacun dit comment il s'est terminé et ce
+    qu'il a trouvé. `vu` : id du dernier passage vu ; ce qui est plus récent est « nouveau » (sans cookie,
+    seul le dernier). Un matin raté s'ajoute en tête, tant qu'aucun passage n'a repris."""
+    seuil = float((reglages().get("surveillance") or {}).get("alerte_apres_heures", 26))
+    runs = [dict(r) for r in reg.cx.execute("SELECT * FROM runs ORDER BY id DESC LIMIT 20")]
+    if not runs:
+        return {"liste": [], "nouvelles": 0, "niveau": "ok", "dernier": 0}
+    dernier = runs[0]["id"]
+    vu = dernier - 1 if vu is None else vu
+    heures = lambda v: (dt.datetime.now() - dt.datetime.fromisoformat(v)).total_seconds() / 3600 if v else None
+    liste = []
+    etat = etat_passage(reg)
+    if etat["niveau"] == "alerte":
+        liste.append({"id": None, "niveau": "alerte", "titre": "Pas de passage depuis plus d'un jour",
+                      "lignes": [etat["texte"], "Ouvre l'application le matin, ou lance un passage depuis la "
+                                                "barre des menus."], "quand": "", "detail": "", "etapes": [],
+                      "nouvelle": True})
+    for r in runs:
+        if r["statut"] == "complet":
+            niveau, titre = "ok", "Passage terminé"
+        elif r["statut"] == "partiel":
+            niveau, titre = "attention", "Passage terminé, une étape a échoué"
+        elif r["statut"] == "demarre" and r["id"] == dernier and (heures(r["debut"]) or 0) <= seuil:
+            niveau, titre = "en-cours", "Passage en cours"
+        else:
+            niveau, titre = "alerte", "Passage interrompu"
+        etapes = [dict(e, compteurs=json.loads(e["compteurs"] or "{}")) for e in reg.cx.execute(
+            "SELECT etape, statut, compteurs, erreur FROM run_etapes WHERE run_id=? ORDER BY id", (r["id"],))]
+        lignes = [x.lstrip("⚠ ").strip() for x in (r["resume"] or "").splitlines() if x.strip()]
+        detail = DECLENCHEURS.get(r["declencheur"] or "", r["declencheur"] or "")
+        liste.append({"id": r["id"], "niveau": niveau, "titre": titre, "lignes": lignes, "etapes": etapes,
+                      "quand": r["fin"] or r["debut"], "detail": detail, "nouvelle": r["id"] > vu})
+    nouvelles = [n for n in liste if n["nouvelle"]]
+    niveau = max((n["niveau"] for n in nouvelles), key=_GRAVITE.get, default="ok")
+    return {"liste": liste, "nouvelles": len(nouvelles), "niveau": niveau, "dernier": dernier}
+
+
+def _notifications(request):
+    """Pour le menu latéral de chaque page ; une base illisible ne doit pas empêcher la page de s'ouvrir."""
+    try:
+        vu = int(request.cookies[COOKIE_NOTIFS]) if COOKIE_NOTIFS in request.cookies else None
+    except ValueError:
+        vu = None
+    try:
+        reg = _reg()
+        try:
+            return notifications(reg, vu)
+        finally:
+            reg.fermer()
+    except Exception:
+        return {"liste": [], "nouvelles": 0, "niveau": "ok", "dernier": 0}
 
 
 # --- Pages --------------------------------------------------------------------
@@ -221,7 +364,7 @@ def accueil(request: Request, ensuite: str = ""):
                 premiers = []
         # L'IA joignable mais plus connectée (hors checklist, qui le dit déjà) : un bandeau à l'ouverture, pas le tutoriel.
         ia_deconnectee = bool(claude.get("installe")) and not claude.get("connecte") and not premiers
-        reponse = page(request, "accueil.html", etat=etat_passage(reg), a_trancher=a_trancher, evals=evals,
+        reponse = page(request, "accueil.html", a_trancher=a_trancher, evals=evals,
                     premiers_pas=premiers, ia_deconnectee=ia_deconnectee,
                     taches=taches, tache_jobroom=tache_jobroom, etats_taches=agent_claude.ETATS,
                     dossiers=dossiers, courrier_a_trancher=courrier.pour_le_tableau(reg, reg.liste(["candidature", "entretien", "offre"])),
@@ -421,6 +564,10 @@ def dossier_apercu(emp: str, nom: str):
 @app.post("/dossier/{emp}/mots-cles")
 async def dossier_mots_cles(request: Request, emp: str):
     form = await request.form()
+    return await run_in_threadpool(_dossier_mots_cles, request, emp, form)
+
+
+def _dossier_mots_cles(request, emp: str, form):
     termes = form.getlist("termes")
     reg = _reg()
     try:
@@ -439,10 +586,10 @@ async def dossier_mots_cles(request: Request, emp: str):
 
 
 @app.post("/annonce/{emp}/preremplir")
-def annonce_preremplir(emp: str, cible: str = Form("employeur"), retour: str = Form("/")):
+def annonce_preremplir(request: Request, emp: str, cible: str = Form("employeur"), retour: str = Form("/")):
     from .. import preremplissage
-    if not retour.startswith("/") or retour.startswith("//"):
-        retour = "/"
+    retour = retour_sur(retour)
+    en_json = "application/json" in request.headers.get("accept", "")
     reg = _reg()
     try:
         if cible == "jobroom":
@@ -465,10 +612,10 @@ def annonce_preremplir(emp: str, cible: str = Form("employeur"), retour: str = F
 
 
 @app.post("/annonce/{emp}/claude")
-def annonce_claude(emp: str, type_: str = Form("formulaire", alias="type"), retour: str = Form("/")):
+def annonce_claude(request: Request, emp: str, type_: str = Form("formulaire", alias="type"), retour: str = Form("/")):
     from .. import agent_claude
-    if not retour.startswith("/") or retour.startswith("//"):
-        retour = "/"
+    retour = retour_sur(retour)
+    en_json = "application/json" in request.headers.get("accept", "")
     reg = _reg()
     try:
         agent_claude.lancer(reg, type_, emp if type_ == "formulaire" else None)
@@ -799,7 +946,9 @@ def api_etat():
     c = etat_claude()
     return {"passage": {"niveau": p["niveau"], "texte": p["texte"]}, "a_trancher": a_trancher,
             "claude": {"connecte": bool(c.get("connecte")), "message": c.get("message", "")},
-            "mode": "distant" if distant else "local", "vm": etat_vm, "donnees": str(DATA)}
+            "mode": "distant" if distant else "local", "vm": etat_vm, "donnees": str(DATA),
+            # pour que l'application Mac reconnaisse un serveur périmé (autre processus, autre copie du code)
+            "pid": os.getpid(), "racine": str(Path(jobsearch.__file__).resolve().parent)}
 
 
 @app.get("/connecteurs", response_class=HTMLResponse)
@@ -814,8 +963,12 @@ def connecteurs_page(request: Request):
 
 @app.post("/connecteurs/apple-mail/comptes")
 async def connecteurs_comptes_mail(request: Request):
-    """Les comptes de Mail où chercher les réponses des employeurs."""
     form = await request.form()
+    return await run_in_threadpool(_connecteurs_comptes_mail, request, form)
+
+
+def _connecteurs_comptes_mail(request, form):
+    """Les comptes de Mail où chercher les réponses des employeurs."""
     comptes = profil_mod.poser_comptes_courrier(form.get("comptes", ""))
     msg = "Apple Mail : %s." % ("comptes enregistrés" if comptes else "aucun compte choisi")
     return RedirectResponse("/connecteurs?msg=%s&ok=1#apple-mail" % quote(msg), status_code=303)
@@ -880,18 +1033,13 @@ def connecteurs_action(nom: str, action: str):
 def sante(request: Request):
     reg = _reg()
     try:
-        runs = [dict(r) for r in reg.cx.execute("SELECT * FROM runs ORDER BY id DESC LIMIT 30")]
-        for r in runs:
-            r["etapes"] = [dict(e, compteurs=json.loads(e["compteurs"] or "{}")) for e in reg.cx.execute(
-                "SELECT etape, statut, debut, fin, compteurs, erreur FROM run_etapes WHERE run_id=? ORDER BY id",
-                (r["id"],))]
         veilles = [r[0] for r in reg.cx.execute("SELECT date FROM veilles ORDER BY date DESC LIMIT 45")]
         jours = []
         for i in range(30):
             d = (dt.date.today() - dt.timedelta(days=i)).isoformat()
             jours.append({"date": d, "fait": d in veilles})
         sauvegardes = sorted((DATA / "sauvegardes").glob("jobsearch-*.db"))
-        return page(request, "sante.html", etat=etat_passage(reg), runs=runs, jours=jours,
+        return page(request, "sante.html", jours=jours,
                     derniere_sauvegarde=sauvegardes[-1].name if sauvegardes else None,
                     nb_sauvegardes=len(sauvegardes),
                     depuis_le_mac=depuis_le_mac(request), cles=[cles.etat(n) for n in cles.SERVICES],
@@ -924,14 +1072,15 @@ def confidentialite_page(request: Request):
                 profil_present=bool(texte), moteur=etat_claude())
 
 
-# Pages de réglage : rangées sous « Réglages » dans la barre (elles gardent leur adresse).
+# Pages de réglage : listées par la page Réglages, hors du menu latéral (elles gardent leur adresse) ;
+# chacune a un retour vers /reglages, et le lien « Réglages » du menu reste actif.
 REGLAGES = ("/reglages", "/profil", "/fonctions", "/sources", "/ia", "/connecteurs", "/confidentialite", "/sante")
 
 
-@app.get("/reglages")
-def reglages_page():
-    """Le bouton Réglages ouvre la première page du menu (pas de vue d'ensemble)."""
-    return RedirectResponse("/profil", status_code=303)
+@app.get("/reglages", response_class=HTMLResponse)
+def reglages_page(request: Request):
+    """La page Réglages : les sections, chacune ouvrant sa page."""
+    return page(request, "reglages.html")
 
 
 @app.get("/reglages/parcours", response_class=HTMLResponse)
@@ -965,9 +1114,14 @@ async def reglages_parcours_importer(request: Request):
     fichier, remplacer = form.get("fichier"), form.get("mode") == "remplacer"
     if fichier is None or not getattr(fichier, "filename", ""):
         return _retour_parcours("Choisis un fichier exporté (parcours-….json).", False)
+    contenu = await fichier.read(parcours.EXPORT_MAX + 1)
+    return await run_in_threadpool(_reglages_parcours_importer, contenu, remplacer)
+
+
+def _reglages_parcours_importer(contenu, remplacer):
     reg = parcours.ouvrir()
     try:
-        export = parcours.lire_export(await fichier.read(parcours.EXPORT_MAX + 1))
+        export = parcours.lire_export(contenu)
         b = parcours.importer_export(reg, export, remplacer=remplacer)
     except parcours.ParcoursInvalide as e:
         return _retour_parcours("Rien n'a été importé : %s." % e, False)
@@ -1185,8 +1339,12 @@ def bienvenue_recherche(request: Request):
 
 @app.post("/bienvenue/recherche", response_class=HTMLResponse)
 async def bienvenue_recherche_enregistrer(request: Request):
-    from .. import pays
     form = await request.form()
+    return await run_in_threadpool(_bienvenue_recherche_enregistrer, request, form)
+
+
+def _bienvenue_recherche_enregistrer(request, form):
+    from .. import pays
     try:
         profil_mod.enregistrer_recherche(form.get("objectif"), form.get("poste"), form.getlist("cantons"))
     except profil_mod.ProfilInvalide as e:
@@ -1209,9 +1367,13 @@ def bienvenue_sources(request: Request):
 
 @app.post("/bienvenue/sources", response_class=HTMLResponse)
 async def bienvenue_sources_enregistrer(request: Request):
+    form = await request.form()
+    return await run_in_threadpool(_bienvenue_sources_enregistrer, request, form)
+
+
+def _bienvenue_sources_enregistrer(request, form):
     from .. import premiere
     from ..sources.catalogue import SOCLE
-    form = await request.form()
     try:
         profil_mod.enregistrer_sources(form.getlist("sources"))
     except profil_mod.ProfilInvalide:
@@ -1255,9 +1417,11 @@ def bienvenue_offres_relancer():
 @app.post("/bienvenue/terminer")
 async def bienvenue_terminer(request: Request):
     form = await request.form()
-    suite = form.get("suite") or "/"
-    if not suite.startswith("/") or suite.startswith("//"):
-        suite = "/"
+    return await run_in_threadpool(_bienvenue_terminer, request, form)
+
+
+def _bienvenue_terminer(request, form):
+    suite = retour_sur(form.get("suite"))
     profil_mod.terminer_accueil()
     return RedirectResponse(suite, status_code=303)
 
@@ -1309,6 +1473,10 @@ def interface():
 @app.post("/fonctions/{option}")
 async def fonctions_option(request: Request, option: str):
     form = await request.form()
+    return await run_in_threadpool(_fonctions_option, request, option, form)
+
+
+def _fonctions_option(request, option: str, form):
     try:
         profil_mod.poser_option(option, form.get("actif") == "1")
     except profil_mod.ProfilInvalide:
@@ -1376,14 +1544,14 @@ async def parcours_importer(request: Request):
     fichier, colle = form.get("fichier"), (form.get("texte") or "").strip()
     try:
         if fichier is not None and getattr(fichier, "filename", ""):
-            texte, nom = parcours.texte_du_fichier(fichier.filename, await fichier.read()), fichier.filename
+            contenu = await fichier.read()
+            texte, nom = await run_in_threadpool(parcours.texte_du_fichier, fichier.filename, contenu), fichier.filename
         elif colle:
-            texte, nom = parcours.texte_du_fichier("", colle), "CV collé"
+            texte, nom = await run_in_threadpool(parcours.texte_du_fichier, "", colle), "CV collé"
         else:
             raise parcours.ParcoursInvalide("choisis ton CV ou colle son texte")
     except parcours.ParcoursInvalide as e:
         return _refus_ia(e)
-    from starlette.concurrency import run_in_threadpool
 
     def importer():
         reg = parcours.ouvrir()
@@ -1430,6 +1598,10 @@ def parcours_passer():
 @app.post("/parcours/ajouter")
 async def parcours_ajouter(request: Request):
     f = await request.form()
+    return await run_in_threadpool(_parcours_ajouter, request, f)
+
+
+def _parcours_ajouter(request, f):
     parent = int(f["parent"]) if (f.get("parent") or "").isdigit() else None
     champs = {k: f.get(k, "") for k in parcours.CHAMPS if k != "titre"}
     return _sur_parcours(lambda reg: parcours.ajouter(reg, f.get("genre", ""), f.get("titre", ""), parent=parent,
@@ -1440,6 +1612,10 @@ async def parcours_ajouter(request: Request):
 @app.post("/parcours/{ident}/modifier")
 async def parcours_modifier(request: Request, ident: int):
     f = await request.form()
+    return await run_in_threadpool(_parcours_modifier, request, ident, f)
+
+
+def _parcours_modifier(request, ident: int, f):
     return _sur_parcours(lambda reg: parcours.modifier(reg, ident, **{k: f[k] for k in parcours.CHAMPS if k in f}),
                          "Enregistré.")
 
@@ -1534,6 +1710,10 @@ def page_criteres(request: Request, msg=None, ok=None):
 @app.post("/criteres/repondre")
 async def criteres_repondre(request: Request):
     form = await request.form()
+    return await run_in_threadpool(_criteres_repondre, request, form)
+
+
+def _criteres_repondre(request, form):
     cle = form.get("cle", "")
     champs = {k[len("champ."):]: v for k, v in form.items() if k.startswith("champ.")}
     reg = parcours.ouvrir()
@@ -1581,9 +1761,13 @@ def criteres_recommencer():
 
 @app.post("/premiers-pas/{tache}", response_class=HTMLResponse)
 async def premiers_pas_enregistrer(request: Request, tache: str):
+    form = await request.form()
+    return await run_in_threadpool(_premiers_pas_enregistrer, request, tache, form)
+
+
+def _premiers_pas_enregistrer(request, tache: str, form):
     if tache not in profil_mod.TACHES:
         return RedirectResponse("/", status_code=303)
-    form = await request.form()
     try:
         for e in profil_mod.TACHES[tache]["etapes"]:
             profil_mod.enregistrer(e, form)
@@ -1644,6 +1828,10 @@ def profil_reprendre(ident: str):
 @app.post("/profil/{ident}", response_class=HTMLResponse)
 async def profil_enregistrer(request: Request, ident: str):
     form = await request.form()
+    return await run_in_threadpool(_profil_enregistrer, request, ident, form)
+
+
+def _profil_enregistrer(request, ident: str, form):
     avant = profil_mod.criteres_structures() if ident == "criteres" else None
     try:
         profil_mod.enregistrer(ident, form)
@@ -1679,10 +1867,12 @@ def _pretri_selon_criteres(avant):
 @app.post("/action")
 async def action(request: Request):
     form = await request.form()
+    return await run_in_threadpool(_action, request, form)
+
+
+def _action(request, form):
     emp, type_ = form.get("empreinte", ""), form.get("type", "")
-    retour = form.get("retour") or "/"
-    if not retour.startswith("/") or retour.startswith("//"):
-        retour = "/"
+    retour = retour_sur(form.get("retour"))
     donnees = {k: form.get(k) for k in ("note", "date", "canal", "motif", "prochaine") if form.get(k)}
     donnees["raisons"] = form.getlist("raisons")
     en_json = "application/json" in request.headers.get("accept", "")
@@ -1723,15 +1913,23 @@ async def action(request: Request):
 # --- Connexion depuis le téléphone ---------------------------------------------
 
 
+def page_connexion(request, erreur):
+    """Hors authentification : ni menu, ni notifications, ni bandeau, aucune donnée de la base ou du
+    profil ; seulement la marque (gabarit de l'accueil) et le formulaire. Ne passe pas par `page()`."""
+    return tpl.TemplateResponse(request, "connexion.html", {
+        "erreur": erreur, "accueil": True, "nav": "/connexion", "msg": None, "ok": False, "dans_reglages": False,
+        "profil_manquants": [], "a_configurer": [], "notifs": {"liste": [], "nouvelles": 0, "dernier": 0}})
+
+
 @app.get("/connexion", response_class=HTMLResponse)
 def connexion(request: Request):
-    return page(request, "connexion.html", erreur=False)
+    return page_connexion(request, erreur=False)
 
 
 @app.post("/connexion")
 def connexion_post(request: Request, jeton_saisi: str = Form("")):
-    if jeton_saisi.strip() != jeton():
-        return page(request, "connexion.html", erreur=True)
+    if not jeton_valide(jeton_saisi):
+        return page_connexion(request, erreur=True)
     r = RedirectResponse("/", status_code=303)
     r.set_cookie(COOKIE, jeton(), max_age=90 * 86400, httponly=True, samesite="strict")
     return r

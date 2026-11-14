@@ -61,12 +61,56 @@ def jamais_le_vrai_moteur(monkeypatch):
         "installe": True, "connecte": True, "abonnement": "pro", "message": "Connecté au compte Claude (abonnement pro)"})
 
 
+COMMANDES_INTERDITES = ("claude", "limactl", "security", "open", "osascript")
+
+
+@pytest.fixture(autouse=True)
+def jamais_de_commande_systeme(monkeypatch):
+    """Aucun test ne lance `claude`, `limactl`, `security` (trousseau), `open`, `osascript` ni Chrome :
+    le démarrage d'un processus (`subprocess.Popen`, donc aussi `subprocess.run`) vers l'une de ces
+    commandes lève une erreur explicite. Un test qui les simule remplace `subprocess.run` / `Popen`
+    lui-même : son faux passe avant cette garde."""
+    import os
+    import shlex
+    import subprocess
+    origine = subprocess.Popen.__init__
+
+    def garde(self, args, *a, **kw):
+        cmd = args if isinstance(args, (list, tuple)) else (shlex.split(str(args)) if kw.get("shell") else [args])
+        nom = os.path.basename(str(cmd[0])).lower() if cmd else ""
+        if nom in COMMANDES_INTERDITES or "chrome" in nom:
+            raise AssertionError("un test a voulu lancer une vraie commande système (%s) : "
+                                 "simuler subprocess dans le test" % nom)
+        return origine(self, args, *a, **kw)
+    monkeypatch.setattr(subprocess.Popen, "__init__", garde)
+
+
 @pytest.fixture(autouse=True)
 def jamais_le_vrai_dossier_des_donnees(monkeypatch, tmp_path):
     """Ce qui lit config.DATA au moment de l'appel (cache des pages, jeton du travailleur)
     écrit dans un dossier de test, jamais dans data/."""
     monkeypatch.setattr("jobsearch.config.DATA", tmp_path / "donnees")
     monkeypatch.setattr("jobsearch.travailleur.jeton.DATA", tmp_path / "donnees")
+
+
+@pytest.fixture(autouse=True)
+def tableau_de_bord_avec_jeton(monkeypatch, tmp_path):
+    """Le tableau de bord exige le jeton de toute requête (web/auth.py) : chaque TestClient porte le
+    cookie du jeton de test, comme la vue web de l'application. Le jeton est dans un fichier de test fixe
+    (un test qui change de dossier de données garde le même). Le client de test (« testclient » /
+    « testserver ») compte comme le Mac pour `depuis_le_mac`, qui ne donne aucun accès sans le jeton.
+    Un test qui veut un client sans jeton vide `client.cookies`."""
+    from starlette.testclient import TestClient
+    from jobsearch.web import auth
+    monkeypatch.setattr(auth, "chemin_jeton", lambda: tmp_path / "jeton-tableau-de-bord")
+    monkeypatch.setattr(auth, "LOCAL", auth.LOCAL | {"testclient"})
+    monkeypatch.setattr(auth, "HOTES_LOCAUX", auth.HOTES_LOCAUX | {"testserver"})
+    init = TestClient.__init__
+
+    def avec_jeton(self, *a, **kw):
+        init(self, *a, **kw)
+        self.cookies.set(auth.COOKIE, auth.jeton())
+    monkeypatch.setattr(TestClient, "__init__", avec_jeton)
 
 
 @pytest.fixture(autouse=True)

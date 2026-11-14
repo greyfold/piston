@@ -1,0 +1,49 @@
+{# Notifications (volet à droite, Nexus SlideOver) : les passages, le plus récent d'abord. Le point coloré du
+   bandeau (Nexus Banner) dit comment chacun s'est terminé ; un passage en cours tourne. Ce qui est arrivé depuis
+   la dernière ouverture est sur fond neutre ; l'ouvrir le marque comme vu (cookie, script de base.html).
+   L'adresse #notifications l'ouvre (lien de la notification macOS de fin de passage). #}
+{% from "_macros.html" import icone, etat_vide %}
+<dialog class="volet droite" id="notifications" aria-labelledby="notifications-titre" data-dernier="{{ notifs.dernier or 0 }}">
+  <div class="tete-volet">
+    <div>
+      <h2 id="notifications-titre">Notifications</h2>
+      <p class="muet petit">Chaque passage lit tes sources, trie les annonces et prépare ta journée.</p>
+    </div>
+    <button type="button" class="fermer-volet" data-fermer-volet><span class="cache">Fermer les notifications</span>{{ icone("fermer") }}</button>
+  </div>
+  <div class="corps-volet">
+    {% if notifs.liste %}
+    <ul class="notifications">
+      {% for n in notifs.liste %}
+      <li class="notification {{ n.niveau }}{{ ' nouvelle' if n.nouvelle }}">
+        {% if n.niveau == "en-cours" %}<span class="spinner" aria-hidden="true"></span>{% else %}<span class="point" aria-hidden="true"></span>{% endif %}
+        <div class="texte">
+          <p class="titre">{{ n.titre }}{% if n.nouvelle %}<span class="cache"> (nouveau)</span>{% endif %}</p>
+          {% if n.quand %}<p class="meta">{{ n.quand | moment_fr }}{% if n.detail %} · {{ n.detail }}{% endif %}</p>{% endif %}
+          {% for l in n.lignes %}<p>{{ l }}</p>{% endfor %}
+          {% if n.etapes %}
+          <details class="appuis">
+            <summary><span>Détail des étapes</span>{{ icone("chevron", "icone chevron") }}</summary>
+            <div class="tableau"><table>
+              <thead><tr><th>Étape</th><th>Statut</th><th>Compteurs</th></tr></thead>
+              <tbody>
+              {% for e in n.etapes %}
+                <tr><td>{{ e.etape }}</td><td><span class="puce {{ 'retard' if e.statut != 'ok' }}">{{ e.statut }}</span></td>
+                    <td class="petit">{% for k, v in e.compteurs.items() %}{{ k }} : {{ v }}{{ " · " if not loop.last }}{% endfor %}{% if e.erreur %}<div class="erreur-etape">{{ e.erreur }}</div>{% endif %}</td></tr>
+              {% endfor %}
+              </tbody>
+            </table></div>
+          </details>
+          {% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    {% call etat_vide("cloche", "Aucune notification", compact=true, id="notifications-vide",
+         description="L'application lance un passage chaque matin ; tu verras ici comment il s'est passé et ce qu'il a trouvé.") %}
+      <a class="bouton" href="/sources">Voir mes sources</a>
+    {% endcall %}
+    {% endif %}
+  </div>
+</dialog>

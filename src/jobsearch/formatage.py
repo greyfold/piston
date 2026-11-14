@@ -21,7 +21,8 @@ _GRAS_SEUL = re.compile(r"^\s*\*\*(.+?)\*\*\s*:?\s*$")
 _ETIQUETTE = re.compile(r"^([^:.;!?]{2,45}?)\s?:\s+(\S.*)$")
 # Rubrique en capitales au fil d'un résumé : « ROLE : », « PROFIL REQUIS : ».
 _RUBRIQUE = re.compile(r"(?:(?<=^)|(?<=[.;]\s))([A-ZÀÂÉÈÊÎÔÛÇ][A-ZÀÂÉÈÊÎÔÛÇ'’ /&-]{2,40})\s?:\s")
-_URL = re.compile(r"https?://[^\s<>()]+[^\s<>().,;:!?'\"]")
+# Ni guillemet ni accent grave dans l'URL : ils sortiraient de l'attribut `href` du lien.
+_URL = re.compile(r"https?://[^\s<>()\"'`]+[^\s<>().,;:!?\"'`]")
 
 
 def _intertitre(ligne, suivante):
@@ -120,6 +121,8 @@ def blocs(texte):
 def _en_ligne(t):
     t = html.escape(t, quote=False)
     t = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", t)
+    # `t` est déjà échappé (« & » → « &amp; ») : le motif ne contient plus de guillemet, donc
+    # l'URL peut entrer telle quelle dans `href="…"`, sans second échappement de « & ».
     t = _URL.sub(lambda m: '<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>'
                  % (m.group(0), m.group(0) if len(m.group(0)) < 60 else m.group(0)[:57] + "…"), t)
     return t

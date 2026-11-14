@@ -22,8 +22,29 @@ struct PageWeb: NSViewRepresentable {
         vue.navigationDelegate = context.coordinator
         vue.uiDelegate = context.coordinator
         vue.allowsBackForwardNavigationGestures = true
-        vue.load(URLRequest(url: url))
+        // Le tableau de bord exige son jeton : posé en cookie avant le premier chargement.
+        let requete = URLRequest(url: url)
+        if let jeton = etat.jeton, let hote = url.host {
+            PageWeb.poserJeton(jeton, hote: hote, dans: config.websiteDataStore.httpCookieStore) {
+                vue.load(requete)
+            }
+        } else {
+            vue.load(requete)
+        }
         return vue
+    }
+
+    /// Le cookie `jobsearch_jeton` pour le seul hôte du tableau de bord (localhost), chemin /, puis
+    /// `ensuite`. Jamais pour 127.0.0.1 : un cookie ignore le port, et l'écran de la machine virtuelle
+    /// est servi sur 127.0.0.1 ; il ne doit pas recevoir le jeton.
+    static func poserJeton(_ jeton: String, hote: String, dans magasin: WKHTTPCookieStore,
+                           ensuite: @escaping @MainActor () -> Void) {
+        let proprietes: [HTTPCookiePropertyKey: Any] = [
+            .name: "jobsearch_jeton", .value: jeton, .domain: hote, .path: "/",
+            .sameSitePolicy: HTTPCookieStringPolicy.sameSiteStrict, HTTPCookiePropertyKey("HttpOnly"): "TRUE",
+        ]
+        guard let cookie = HTTPCookie(properties: proprietes) else { return ensuite() }
+        magasin.setCookie(cookie) { ensuite() }
     }
 
     func updateNSView(_ vue: WKWebView, context: Context) {
@@ -59,29 +80,46 @@ struct PageWeb: NSViewRepresentable {
             MainActor.assumeIsolated { if etat.connexionDemandee { ouvrirConnexion(vue) } }
         }
 
+        /// Le tableau de bord lui-même : l'hôte et le port de l'adresse de base, en http(s). Aucune
+        /// autre adresse locale (127.0.0.1, autre port : un service de la machine virtuelle) ne se
+        /// charge dans la page principale.
         private func interne(_ url: URL?) -> Bool {
             guard let url else { return true }
-            return url.host == base.host && url.port == base.port
+            return ["http", "https"].contains(url.scheme?.lowercased() ?? "")
+                && url.host?.lowercased() == base.host?.lowercased() && url.port == base.port
         }
+
+        /// L'hôte du cookie sur un autre port : le cookie suivrait (il ignore le port).
+        private func hoteDuJetonAilleurs(_ url: URL) -> Bool {
+            url.host?.lowercased() == base.host?.lowercased() && url.port != base.port
+        }
+
+        /// Ce qui part vers le navigateur ou la messagerie de l'utilisateur ; tout autre schéma est refusé.
+        private func externe(_ url: URL) -> Bool { ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "") }
 
         // Liens vers les annonces, les employeurs… : dans le navigateur de l'utilisateur.
         func webView(_ vue: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
-            // Un cadre de la page (l'écran de la machine virtuelle, servi sur 127.0.0.1) reste dans la page.
+            guard let url = action.request.url else { return decisionHandler(.cancel) }
+            let schema = url.scheme?.lowercased() ?? ""
+            // Un cadre de la page (l'écran de la machine virtuelle, servi sur 127.0.0.1, sans le cookie)
+            // reste dans la page ; jamais l'hôte du cookie sur un autre port.
             let cadre = action.targetFrame.map { !$0.isMainFrame } ?? false
-            if let url = action.request.url, !cadre, !interne(url), ["http", "https", "mailto"].contains(url.scheme ?? "") {
-                NSWorkspace.shared.open(url)
-                decisionHandler(.cancel)
-                return
+            if cadre {
+                let permis = ["http", "https", "about", "data", "blob"].contains(schema) && !hoteDuJetonAilleurs(url)
+                return decisionHandler(permis ? .allow : .cancel)
             }
-            decisionHandler(.allow)
+            if interne(url) || url.absoluteString == "about:blank" { return decisionHandler(.allow) }
+            if externe(url) { NSWorkspace.shared.open(url) }
+            // file:, javascript:, schémas d'autres applications… : ni dans la vue, ni ailleurs.
+            decisionHandler(.cancel)
         }
 
         // target="_blank" : même règle.
         func webView(_ vue: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                      for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
             if let url = action.request.url {
-                if interne(url) { vue.load(URLRequest(url: url)) } else { NSWorkspace.shared.open(url) }
+                if interne(url) { vue.load(URLRequest(url: url)) } else if externe(url) { NSWorkspace.shared.open(url) }
             }
             return nil
         }

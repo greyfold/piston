@@ -111,7 +111,7 @@ def test_page_connecteurs(monkeypatch, reg):
     monkeypatch.setattr(appmod, "_reg", lambda: type(reg)(reg.chemin))
     web = TestClient(appmod.app)
     page = web.get("/connecteurs").text
-    assert "Gmail" in page and "Apple Mail" in page and "Claude in Chrome" in page and "c'est le cas" in page
+    assert "Gmail" in page and "Apple Mail" in page and "Chrome" in page and "machine virtuelle" in page and "c'est le cas" in page
     assert 'href="/ia"' in page and "Connecté au compte Claude" not in page     # l'IA a sa page
     r = web.post("/connecteurs/gmail/activer", follow_redirects=False)
     assert r.status_code == 303 and connecteurs.actif("gmail")

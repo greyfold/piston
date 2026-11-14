@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS annonces (
   extra TEXT DEFAULT '{}', cree_le TEXT, maj_le TEXT
 );
 CREATE INDEX IF NOT EXISTS annonces_statut ON annonces(statut);
+CREATE INDEX IF NOT EXISTS annonces_cree_le ON annonces(cree_le);
 CREATE TABLE IF NOT EXISTS ids_source (
   cle TEXT PRIMARY KEY, empreinte TEXT NOT NULL REFERENCES annonces(empreinte)
 );
@@ -73,6 +74,7 @@ CREATE TABLE IF NOT EXISTS run_etapes (
   run_id INTEGER NOT NULL REFERENCES runs(id), etape TEXT NOT NULL,
   debut TEXT NOT NULL, fin TEXT, statut TEXT NOT NULL, compteurs TEXT, erreur TEXT
 );
+CREATE INDEX IF NOT EXISTS run_etapes_run ON run_etapes(run_id);
 CREATE TABLE IF NOT EXISTS sources (
   id TEXT PRIMARY KEY, nom TEXT, nature TEXT, acces TEXT, etat TEXT,
   dernier_test_le TEXT, dernier_test_ok INTEGER, derniere_reussite_le TEXT, remarques TEXT
@@ -165,8 +167,9 @@ class Registre:
 
     def resoudre(self, prefixe):
         """Empreinte complète depuis un préfixe unique, sinon None."""
-        rows = self.cx.execute("SELECT empreinte FROM annonces WHERE empreinte LIKE ?",
-                               (prefixe + "%",)).fetchall()
+        motif = prefixe.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        rows = self.cx.execute("SELECT empreinte FROM annonces WHERE empreinte LIKE ? ESCAPE '\\'",
+                               (motif + "%",)).fetchall()
         return rows[0][0] if len(rows) == 1 else None
 
     def par_id_source(self, cle):

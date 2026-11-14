@@ -1,5 +1,6 @@
 """Socle (jobs.ch) et sources ajoutées par l'utilisateur : logiciels reconnus, page lue par l'IA, alertes."""
 
+import datetime as dt
 import json
 
 import httpx
@@ -105,7 +106,9 @@ def test_jobs_ch_meme_route_que_jobup():
         return httpx.Response(200, json={"documents": [{"job_id": "j1", "title": "Product Owner", "company_name": "Ex SA",
                                                         "publication_date": "2026-11-06T08:00:00+01:00"}], "num_pages": 1})
     src = Jobup(Client(pause=0, transport=httpx.MockTransport(repondre)), site="jobs.ch")
-    a = src.chercher("product owner", "Vaud", 7)[0]
+    # Le jour est fixé : la fenêtre se compte depuis « aujourd'hui », et sans cela le test cessait
+    # de passer sept jours après la date de publication de l'offre d'exemple (constaté le 14.11).
+    a = src.chercher("product owner", "Vaud", 7, aujourdhui=dt.date(2026, 11, 6))[0]
     assert src.nom == "jobs-ch" and a.source == "jobs-ch" and vues[0].startswith("https://www.jobs.ch/api/v1/public/search")
     assert a.url == "https://www.jobs.ch/fr/emplois/detail/j1/"
 

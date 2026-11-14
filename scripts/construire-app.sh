@@ -9,8 +9,14 @@
 # ~/Library/Application Support/Recherche emploi ; le passage du matin, l'alerte et la
 # surveillance sont lancés par l'application elle-même (`jobsearch echeances`).
 # Claude Code, Google Chrome et l'écran tournent dans la machine virtuelle (Lima, embarqué ici,
-# version figée et vérifiée) : rien à installer sur le Mac.
-set -e
+# version et somme de contrôle figées dans ce script) : rien à installer sur le Mac.
+#
+# L'application est construite dans un dossier temporaire de dist/ (même volume) ; l'ancienne n'est
+# quittée puis remplacée par un `mv` qu'une fois tout réussi, signature comprise. Un échec en cours
+# de route laisse donc l'application installée intacte.
+set -euo pipefail
+# Lima (limactl, agent de la VM) et son agent invité sont ici pris pour Apple silicon.
+[[ "$(uname -m)" == arm64 ]] || { print -u2 "Ce script construit pour un Mac Apple silicon (arm64) ; cette machine est $(uname -m)."; exit 1; }
 RACINE="${0:A:h:h}"
 OUVRIR=
 for a in "$@"; do
@@ -20,20 +26,31 @@ for a in "$@"; do
   esac
 done
 APP="$RACINE/dist/Recherche emploi.app"
-RES="$APP/Contents/Resources"
+mkdir -p "$RACINE/dist"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+# Dossier de construction à côté de la destination (même volume : le `mv` final est un renommage).
+# Le nom du bundle y est le même qu'à la fin : rien (.pth relatif, signature) ne dépend du dossier.
+STAGE="$(mktemp -d "$RACINE/dist/.construction.XXXXXX")"
+trap 'rm -rf "$TMP" "$STAGE"' EXIT
+NOUVELLE="$STAGE/Recherche emploi.app"
+RES="$NOUVELLE/Contents/Resources"
 
 LIMA_VERSION=2.3.0
+# Somme SHA-256 de lima-$LIMA_VERSION-Darwin-arm64.tar.gz, figée ici (relevée sur l'archive déjà
+# téléchargée et vérifiée contre SHA256SUMS de la publication ; à recalculer à chaque changement
+# de version).
+LIMA_SHA256=b7af444bd8f91d3c307477e562f2cf3bd7595d62b9429185e4fa841563578cfc
 # Version de Python exigée par le projet (requires-python = ">=3.14").
 VERSION_PY="$(sed -nE 's/^requires-python *= *">= *([0-9]+\.[0-9]+).*/\1/p' "$RACINE/pyproject.toml")"
+[[ -n "$VERSION_PY" ]] || { print -u2 "pyproject.toml : requires-python introuvable, version de Python inconnue."; exit 1; }
+VERSION="$(sed -nE 's/^version *= *"([^"]+)".*/\1/p' "$RACINE/pyproject.toml")"
+[[ -n "$VERSION" ]] || { print -u2 "pyproject.toml : version du projet introuvable."; exit 1; }
 
 swift build -c release --package-path "$RACINE/app"
 BIN="$(swift build -c release --package-path "$RACINE/app" --show-bin-path)/RechercheEmploi"
 
-rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$RES"
-cp "$BIN" "$APP/Contents/MacOS/RechercheEmploi"
+mkdir -p "$NOUVELLE/Contents/MacOS" "$RES"
+cp "$BIN" "$NOUVELLE/Contents/MacOS/RechercheEmploi"
 
 # 1. Python autonome (relocalisable : ses bibliothèques sont cherchées à côté de l'exécutable).
 uv python install "$VERSION_PY" --managed-python >/dev/null
@@ -49,23 +66,23 @@ mkdir -p "$RES/racine"
 cp "$RACINE/pyproject.toml" "$RACINE/uv.lock" "$RES/racine/"
 rsync -a --exclude __pycache__ --exclude '*.pyc' "$RACINE/src" "$RACINE/config" "$RES/racine/"
 
-# 3. Les dépendances, aux versions du verrou ; le code est trouvé par un .pth relatif
+# 3. Les dépendances, aux versions et aux sommes du verrou (--require-hashes) ; le code est trouvé par un .pth relatif
 #    (site-packages → ../../../../racine/src), donc l'application peut être déplacée.
-uv export --project "$RACINE" --frozen --no-dev --no-emit-project --no-hashes -q -o "$TMP/dependances.txt"
-uv pip install --python "$PY" --no-config -q -r "$TMP/dependances.txt"
+uv export --project "$RACINE" --frozen --no-dev --no-emit-project -q -o "$TMP/dependances.txt"
+uv pip install --python "$PY" --no-config --require-hashes -q -r "$TMP/dependances.txt"
 print -r -- "../../../../racine/src" > "$SITE/jobsearch.pth"
-"$PY" -c 'import jobsearch.cli, jobsearch.web.app' 2>/dev/null || { print -u2 "Le code embarqué ne se charge pas."; exit 1; }
+"$PY" -c 'import jobsearch.cli, jobsearch.web.app' || { print -u2 "Le code embarqué ne se charge pas."; exit 1; }
 "$PY" -m compileall -q "$RES/racine/src" "$SITE" >/dev/null || true
 
-# 4. Lima (machine virtuelle), depuis ses publications officielles, somme de contrôle vérifiée.
+# 4. Lima (machine virtuelle), depuis ses publications officielles, somme de contrôle figée vérifiée.
 CACHE="$RACINE/.cache/lima-$LIMA_VERSION"
 ARCHIVE="lima-$LIMA_VERSION-Darwin-arm64.tar.gz"
 if [[ ! -f "$CACHE/$ARCHIVE" ]]; then
   mkdir -p "$CACHE"
-  curl -fsSL -o "$CACHE/$ARCHIVE" "https://github.com/lima-vm/lima/releases/download/v$LIMA_VERSION/$ARCHIVE"
-  curl -fsSL -o "$CACHE/SHA256SUMS" "https://github.com/lima-vm/lima/releases/download/v$LIMA_VERSION/SHA256SUMS"
+  curl -fsSL -o "$CACHE/$ARCHIVE.part" "https://github.com/lima-vm/lima/releases/download/v$LIMA_VERSION/$ARCHIVE"
+  mv "$CACHE/$ARCHIVE.part" "$CACHE/$ARCHIVE"
 fi
-(cd "$CACHE" && grep " $ARCHIVE\$" SHA256SUMS | shasum -a 256 -c - >/dev/null) || { print -u2 "Lima : somme de contrôle fausse."; exit 1; }
+print -r -- "$LIMA_SHA256  $CACHE/$ARCHIVE" | shasum -a 256 -c - >/dev/null || { print -u2 "Lima : somme de contrôle fausse ($CACHE/$ARCHIVE ; supprime-le pour le retélécharger)."; exit 1; }
 mkdir -p "$RES/lima"
 # Seulement limactl (pilote Virtualization.framework compris) et l'agent de la VM Linux arm64.
 tar -xzf "$CACHE/$ARCHIVE" -C "$RES/lima" ./bin/limactl ./share/lima/lima-guestagent.Linux-aarch64.gz
@@ -80,8 +97,7 @@ codesign --force --sign - --entitlements "$TMP/vz.entitlements" "$RES/lima/bin/l
 swift "$RACINE/app/icone.swift" "$TMP/Icone.iconset"
 iconutil -c icns "$TMP/Icone.iconset" -o "$RES/Icone.icns"
 
-VERSION="$(sed -nE 's/^version *= *"([^"]+)".*/\1/p' "$RACINE/pyproject.toml")"
-cat > "$APP/Contents/Info.plist" <<PLIST
+cat > "$NOUVELLE/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -101,11 +117,23 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 </dict></plist>
 PLIST
-plutil -lint "$APP/Contents/Info.plist" >/dev/null
-codesign --force --sign - "$APP"          # sans --deep : limactl garde ses droits
+plutil -lint "$NOUVELLE/Contents/Info.plist" >/dev/null
+codesign --force --sign - "$NOUVELLE"     # sans --deep : limactl garde ses droits
+codesign --verify --strict "$NOUVELLE"
+
+# Tout a réussi : on quitte l'application en cours (elle ne doit pas tourner pendant le
+# remplacement), puis l'ancienne cède la place par un renommage. Elle reste dans $STAGE, que le
+# trap n'efface qu'à la sortie : si la nouvelle ne se met pas en place, l'ancienne est remise.
+osascript -e 'quit app "Recherche emploi"' 2>/dev/null || true
+for _ in {1..50}; do pgrep -x RechercheEmploi >/dev/null || break; sleep 0.2; done
+if [[ -e "$APP" ]]; then mv "$APP" "$STAGE/ancienne.app"; fi
+if ! mv "$NOUVELLE" "$APP"; then
+  if [[ -e "$STAGE/ancienne.app" && ! -e "$APP" ]]; then mv "$STAGE/ancienne.app" "$APP"; fi
+  print -u2 "La nouvelle application n'a pas pu être mise en place ; l'ancienne est restée à sa place."
+  exit 1
+fi
 print "Application construite : $APP ($(du -sh "$APP" | cut -f1))"
 if [[ -n "$OUVRIR" ]]; then
-  osascript -e 'quit app "Recherche emploi"' 2>/dev/null || true
   open "$APP"
 fi
 exit 0
