@@ -124,6 +124,27 @@
       <div class="aide" id="cantons-aide">La plateforme ne cherche que là. Rien n'est envoyé aux employeurs.</div>
     </fieldset>
 
+    {# Les objectifs de postulations sont facultatifs : la question dit s'il y en a, puis combien. #}
+    <fieldset class="cartes-choix">
+      <legend>As-tu un nombre de postulations à atteindre ?</legend>
+      <p class="aide-accueil" id="rythme-aide">L'ORP en demande souvent un nombre par mois. Tu pourras le changer à tout moment.</p>
+      <label class="carte-choix">
+        <input type="radio" name="rythme" value="non"{% if rythme != 'oui' %} checked{% endif %} aria-describedby="rythme-aide">
+        <span><span class="titre-choix">Non, pas d'objectif</span><span class="description-choix">Rien n'est compté ni rappelé.</span></span>
+      </label>
+      <label class="carte-choix">
+        <input type="radio" name="rythme" value="oui"{% if rythme == 'oui' %} checked{% endif %} aria-describedby="rythme-aide">
+        <span><span class="titre-choix">Oui, je vise un nombre</span><span class="description-choix">Suivi sur le tableau de bord, avec un rappel le vendredi si la semaine n'y est pas.</span></span>
+      </label>
+      <div class="grille-champs" id="rythme-nombres">
+        <div class="champ"><label for="rythme-semaine">Par semaine</label>
+          <input type="text" id="rythme-semaine" name="objectifs.semaine_min" value="{{ semaine }}" inputmode="numeric" aria-describedby="rythme-nombres-aide"></div>
+        <div class="champ"><label for="rythme-mois">Par mois</label>
+          <input type="text" id="rythme-mois" name="objectifs.mois_min" value="{{ mois }}" inputmode="numeric" aria-describedby="rythme-nombres-aide"></div>
+        <div class="champ large"><div class="aide" id="rythme-nombres-aide">Remplis l'un, l'autre ou les deux.</div></div>
+      </div>
+    </fieldset>
+
     {# Aperçu en direct : la recherche devient la sienne avant d'exister. #}
     <div class="apercu-accueil" aria-live="polite">
       <p class="surtitre">Aperçu</p>
@@ -153,7 +174,11 @@
       var p = poste.value.trim();
       document.getElementById("apercu-titre").textContent = "« " + (p || "Ton poste") + " »" + (cantons.length ? " · " + cantons.join(", ") : "");
       document.getElementById("apercu-texte").textContent = "Chaque matin sur les sites d'emploi." + (objectif ? " " + objectif.dataset.effet : "");
-      bouton.disabled = !p || !cantons.length || !objectif;
+      var vise = form.querySelector("input[name=rythme]:checked").value === "oui";
+      var nombres = Array.prototype.some.call(document.querySelectorAll("#rythme-nombres input"),
+        function (c) { return parseInt(c.value, 10) > 0; });
+      document.getElementById("rythme-nombres").hidden = !vise;
+      bouton.disabled = !p || !cantons.length || !objectif || (vise && !nombres);
     }
     form.addEventListener("input", maj);
     form.addEventListener("change", maj);

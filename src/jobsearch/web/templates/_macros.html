@@ -71,6 +71,39 @@
 {% endif %}
 {%- endmacro %}
 
+{# L'adéquation par catégorie (compétences, expérience, formation, langues) d'une annonce évaluée :
+   une note et sa jauge par catégorie, en chiffres clés. Rien pour une évaluation d'avant cette analyse. #}
+{% macro categories(e) -%}
+{% set cats = categories_adequation(e.resultat) if e else [] %}
+{% if cats %}
+<div class="chiffres" role="list" aria-label="Adéquation par catégorie">
+  {% for c in cats if c.demande %}
+  <div class="chiffre {{ 'atteint' if c.niveau == 'haute' else 'chaud' if c.niveau == 'basse' }}" role="listitem">
+    <b>{{ c.note }}<small>/100</small></b>
+    <span>{{ c.libelle }}</span>
+    <div class="jauge" aria-hidden="true"><i style="width: {{ c.note }}%"></i></div>
+  </div>
+  {% endfor %}
+</div>
+{% set sans = cats | rejectattr("demande") | map(attribute="libelle") | map("lower") | list %}
+{% if sans %}<p class="petit muet">Rien d'exigé dans l'annonce pour : {{ sans | join(", ") }}.</p>{% endif %}
+{% endif %}
+{%- endmacro %}
+
+{# Le détail d'une catégorie : sa synthèse, puis les atouts du profil (ok) et les écarts (ko). #}
+{% macro detail_categories(e) -%}
+{% for c in categories_adequation(e.resultat) if c.demande %}
+<h4 class="section-base">{{ c.libelle }} · {{ c.note }}/100</h4>
+<p class="petit">{{ c.synthese }}</p>
+{% if c.atouts or c.ecarts %}
+<ul class="verifs">
+  {% for a in c.atouts %}<li class="ok"><span class="marque-verif">{{ icone("coche") }}</span><span><span class="cache">Atout : </span>{{ a }}</span></li>{% endfor %}
+  {% for x in c.ecarts %}<li class="ko"><span class="marque-verif">{{ icone("fermer") }}</span><span><span class="cache">Écart : </span>{{ x }}</span></li>{% endfor %}
+</ul>
+{% endif %}
+{% endfor %}
+{%- endmacro %}
+
 {% macro preremplir(f, cible, libelle, retour, classe="") -%}
 <form method="post" action="/annonce/{{ f.empreinte }}/preremplir" style="display:inline">
   <input type="hidden" name="cible" value="{{ cible }}"><input type="hidden" name="retour" value="{{ retour }}">
@@ -165,6 +198,7 @@
   "dossier": '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
   "objectifs": '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
   "fin": '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  "formation": '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
   "certifications": '<path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/>',
   "langues": '<path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>',
   "courrier": '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
@@ -323,28 +357,32 @@
    sans JS, la ligne vide suffit). `colonnes` : [(sous-nom, libellé, exemple)], chaque champ s'envoie sous
    `nom.sous-nom` ; `lignes` : les valeurs, une liste par ligne. À utiliser au lieu d'une zone de texte
    « une par ligne » quand chaque ligne a plusieurs parties. #}
-{% macro champ_lignes(nom, libelle, colonnes, lignes, id, aide="", requis=false, ajout="Ajouter une ligne", apres="") -%}
-{# Colonnes : (sous-clé, libellé, exemple[, choix]) ; avec des choix, la case est une liste déroulante (l'exemple
-   en est l'option vide, une valeur hors liste reste choisie) ; une sous-clé « date » ouvre le clavier numérique
-   et, en dernier, prend une colonne étroite. #}
+{% macro champ_lignes(nom, libelle, colonnes, lignes, id, aide="", requis=false, ajout="Ajouter une ligne", apres="", par_defaut=false) -%}
+{# Colonnes : (sous-clé, libellé, exemple[, choix[, "recherche"]]) ; avec des choix, la case est une liste
+   déroulante (l'exemple en est l'option vide, une valeur hors liste reste choisie) ; avec "recherche", champs.js
+   en fait une liste avec recherche, où une valeur déjà choisie dans une autre ligne n'est plus proposée ; une
+   sous-clé « date » ouvre le clavier numérique et, en dernier, prend une colonne étroite. Une seule colonne
+   (liste simple, une valeur par champ) : pas d'en-tête, et une sous-clé vide envoie le champ sous `nom`. `par_defaut` : la valeur vient de config/. #}
 <div class="champ large" data-champ-lignes>
-  <fieldset class="champ-lignes{{ ' trois-colonnes' if colonnes | length == 3 }}{{ ' date-fin' if colonnes[-1][0] == 'date' }}"{% if aide %} aria-describedby="{{ id }}-aide"{% endif %}>
-    <legend>{{ libelle }}{% if requis %} <span class="requis">*</span>{% endif %}</legend>
+  <fieldset class="champ-lignes{{ ' une-colonne' if colonnes | length == 1 }}{{ ' trois-colonnes' if colonnes | length == 3 }}{{ ' date-fin' if colonnes[-1][0] == 'date' }}"{% if aide %} aria-describedby="{{ id }}-aide"{% endif %}>
+    <legend>{{ libelle }}{% if requis %} <span class="requis">*</span>{% endif %}
+      {% if par_defaut %}<span class="puce" title="Valeur des fichiers de config/ : enregistrée dans le profil seulement si tu la changes">par défaut</span>{% endif %}</legend>
     <div class="lignes" data-lignes>
-      <div class="ligne-entete" aria-hidden="true">{% for col in colonnes %}<span>{{ col[1] }}</span>{% endfor %}</div>
+      {% if colonnes | length > 1 %}<div class="ligne-entete" aria-hidden="true">{% for col in colonnes %}<span>{{ col[1] }}</span>{% endfor %}</div>{% endif %}
       {% for valeurs in lignes + [[""] * (colonnes | length)] %}
       {% set vide = loop.last %}{# l'exemple sur la ligne vide seulement ; « Ajouter » la recopie #}
       <div class="ligne-champs" data-ligne>
         {% for col in colonnes %}
         {% set sous, lib, exemple, v = col[0], col[1], col[2], valeurs[loop.index0] %}
+        {% set nom_champ = nom ~ ("." ~ sous if sous else "") %}
         {% if col | length > 3 %}
-        <select name="{{ nom }}.{{ sous }}" aria-label="{{ lib }}">
+        <select name="{{ nom_champ }}" aria-label="{{ lib }}"{% if col | length > 4 %} data-liste-recherche{% endif %}>
           <option value=""{% if not v %} selected{% endif %}>{{ exemple }}</option>
           {% for o in col[3] %}<option{% if o == v %} selected{% endif %}>{{ o }}</option>{% endfor %}
           {% if v and v not in col[3] %}<option selected>{{ v }}</option>{% endif %}
         </select>
         {% else %}
-        <input type="text" name="{{ nom }}.{{ sous }}" value="{{ v }}" aria-label="{{ lib }}"
+        <input type="text" name="{{ nom_champ }}" value="{{ v }}" aria-label="{{ lib }}"
           {% if vide %}placeholder="{{ exemple }}" {% endif %}{% if sous == "date" %}inputmode="numeric" {% endif %}spellcheck="false">
         {% endif %}
         {% endfor %}

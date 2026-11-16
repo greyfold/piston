@@ -82,7 +82,20 @@ def test_accueil_recherche_ia_offres_puis_checklist(neuve, monkeypatch, reg):
     page = web.get("/bienvenue/recherche").text
     assert 'class="menu-lateral"' not in page and 'aria-current="step"' in page and "Ta recherche" in page
     assert page.index("Ta recherche") < page.index("Tes sources") < page.index("Ton IA") < page.index("Premières offres")
-    assert "Passer pour l'instant" in page and page.count('class="carte-choix"') == 3
+    assert "Passer pour l'instant" in page and page.count('class="carte-choix"') == 5
+    # Objectifs de postulations : facultatifs, « non » par défaut ; « oui » demande au moins un nombre.
+    assert 'name="rythme" value="non" checked' in page and 'name="objectifs.mois_min"' in page
+    base = {"objectif": "partiel", "poste": "Product designer", "cantons": ["GE"]}
+    r = web.post("/bienvenue/recherche", data={**base, "rythme": "oui"})
+    assert "par semaine ou par mois" in r.text and 'value="oui" checked' in r.text and not profil.existe()
+    r = web.post("/bienvenue/recherche", data={**base, "rythme": "oui", "objectifs.mois_min": "dix"})
+    assert "À compléter" in r.text and not profil.existe()
+    web.post("/bienvenue/recherche", data={**base, "rythme": "oui", "objectifs.mois_min": "10"}, follow_redirects=False)
+    assert profil.objectifs_rythme() == {"semaine": 0, "mois": 10} and profil.option("objectifs")
+    page = web.get("/bienvenue/recherche").text
+    assert 'name="rythme" value="oui" checked' in page and 'name="objectifs.mois_min" value="10"' in page
+    web.post("/bienvenue/recherche", data={**base, "rythme": "non", "objectifs.mois_min": "10"}, follow_redirects=False)
+    assert profil.objectifs_rythme() == {"semaine": 0, "mois": 0} and not profil.option("objectifs")
 
     r = web.post("/bienvenue/recherche", data={"objectif": "partiel", "poste": "", "cantons": ["GE"]})
     assert "À compléter" in r.text and not lances

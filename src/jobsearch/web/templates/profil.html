@@ -25,8 +25,7 @@
   </div>
 
   <div class="boutons pied">
-    {% if precedente %}<a class="bouton" href="/profil/{{ precedente }}">Précédent</a>{% endif %}
-    <button class="go">{{ "Enregistrer" if ident == etapes[-1].id else "Enregistrer et continuer" }}</button>
+    <button class="go">Enregistrer</button>
   </div>
 </form>
 {% endblock %}

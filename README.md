@@ -70,6 +70,11 @@ noVNC. Le **travailleur** (`travailleur/`) y répond sur 127.0.0.1:8776 (jeton) 
   ou hors des postes visés ; « hors » écarte l'annonce en « limite », visible et réversible dans
   « Écartées limites ». Le doute profite à l'annonce. Si l'IA n'a pas répondu pendant le passage, le
   bilan le dit et `echeances.py` rattrape les annonces sans note dès qu'elle répond.
+- **Adéquation par catégorie** (`adequation.py`) : dans la même tâche que la note, l'IA analyse
+  l'adéquation au poste en compétences, expérience, formation et langues : une note sur 100 par
+  catégorie, les atouts du profil et les écarts, chaque exigence rangée dans sa catégorie. Une
+  catégorie où l'annonce n'exige rien n'a pas de note. La page de l'annonce le montre ; le dossier
+  de candidature le reçoit avec l'évaluation.
 - **Examen d'une source** (page Sources, ou `jobsearch source examiner <id>`) : l'IA lit sur le web
   les conditions générales et le robots.txt de la source, et cherche une API publique, un serveur MCP
   ou des alertes e-mail. Elle conseille un accès, que Python vérifie (`sources/examen.py`) : sans
@@ -126,6 +131,7 @@ d'exemple (`tests/fixtures/config`, valeurs fictives), jamais sur `config/` ni s
 | `src/jobsearch/echeances.py` | Ce qui est dû maintenant : passage, alerte, surveillance. |
 | `src/jobsearch/moteur/` | Le moteur IA (Claude Code). |
 | `src/jobsearch/sources/` | Les sources ; `catalogue.py` construit la liste du passage. |
+| `src/jobsearch/evaluation.py`, `adequation.py` | La note d'adéquation et son analyse par catégorie. |
 | `src/jobsearch/profil.py` | Le profil, qui prime sur `config/`. |
 | `src/jobsearch/parcours.py` | La base d'expérience et ses entretiens. |
 | `src/jobsearch/vm.py`, `travailleur/` | La machine virtuelle (Lima embarqué), son écran et son travailleur. |

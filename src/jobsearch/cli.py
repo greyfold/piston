@@ -223,6 +223,9 @@ def cmd_annonce(a):
     e = evaluation.lire(reg, r["empreinte"])
     if e:
         print("Évaluée : %d/100 · profil %d %% · %d alerte(s)" % (e["note_globale"], e["adequation_profil"], e["nb_alertes"]))
+        from . import adequation
+        if adequation.resume(e["resultat"]):
+            print("Par catégorie : %s" % adequation.resume(e["resultat"]))
     for err in bilan["erreurs"]:
         print("Évaluation impossible : %s" % err)
 

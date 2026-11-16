@@ -630,7 +630,7 @@ def _prenom():
 def importer_cv(reg, texte, nom="CV", c=None):
     """Range le CV dans la base. Renvoie {"ajoutes": n, "ecartes": [titres], "doublons": n, "profil": {genre: n}}.
 
-    Les certifications et les langues du CV remplissent aussi leur onglet du profil (Réglages), où elles font
+    Les formations, les certifications et les langues du CV remplissent aussi leur onglet du profil (Réglages), où elles font
     foi pour les dossiers : seules celles qui n'y sont pas encore s'ajoutent. Le niveau que le CV permet de
     viser devient le niveau visé de la recherche s'il n'y en a pas encore ("niveau" du bilan)."""
     _schema(reg)
@@ -661,7 +661,7 @@ def importer_cv(reg, texte, nom="CV", c=None):
             continue
         if el.genre == "formation":
             formations.add(el.ref)
-        if el.genre in ("certification", "langue"):
+        if el.genre in ("formation", "certification", "langue"):
             pour_profil.append(el.model_dump())
         cle = (_plat(el.genre), _plat(el.titre), _plat(el.organisation), parent)
         if cle in existants:                            # CV importé deux fois : on rattache, on ne double pas

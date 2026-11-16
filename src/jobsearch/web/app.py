@@ -23,7 +23,7 @@ from starlette.concurrency import run_in_threadpool
 import jobsearch
 
 from .. import moteur as moteur_mod
-from .. import actions, ajout, ce_qui_compte, cles, courrier, dossier, doublons, entretiens, evaluation, followups, parcours
+from .. import actions, adequation, ajout, ce_qui_compte, cles, courrier, dossier, doublons, entretiens, evaluation, followups, parcours
 from .. import postes_proposes
 from .. import profil as profil_mod
 from .. import repertoire as repertoire_mod
@@ -138,7 +138,8 @@ def texte_html(t):
 
 tpl.env.filters.update(date_fr=date_fr, jour_fr=jour_fr, il_y_a=il_y_a, texte_html=texte_html, annonce_html=annonce_html,
                        jours_restants=jours_restants)
-tpl.env.globals.update(TYPES=actions.TYPES, STATUTS=STATUTS, libelle_dossier=dossier.libelle)
+tpl.env.globals.update(TYPES=actions.TYPES, STATUTS=STATUTS, libelle_dossier=dossier.libelle,
+                       categories_adequation=adequation.lire, libelles_categories=adequation.LIBELLES)
 # La feuille de style porte sa date dans son adresse : un navigateur (ou la vue web de
 # l'application Mac) ne garde jamais une ancienne version en cache.
 tpl.env.globals["version_css"] = lambda: int(max((ICI / "static" / f).stat().st_mtime for f in ("style.css", "champs.js", "compositeur.js", "entretien.js", "tri.js")))
@@ -1188,9 +1189,12 @@ def _champs(etapes, p, saisi=None):
                     valeur = [x for x in valeur if any(v.strip() for v in x)]
                 else:
                     valeur = [profil_mod.colonnes_de_ligne(c, l) for l in profil_mod.effectif(c["cle"], p) or []]
+                valeur = [[profil_mod.choix_de_colonne(col, v) for col, v in zip(c["colonnes"], x)] for x in valeur]
             elif c["type"] == "cantons":                 # les codes cochés
                 valeur = ([x.upper() for x in profil_mod.valeurs_formulaire(saisi, c["cle"])] if saisi is not None
                           else list(profil_mod.effectif(c["cle"], p) or []))
+            elif c["type"] == "liste" and saisi is not None:          # un champ par valeur, rendus tels quels
+                valeur = "\n".join(profil_mod.valeurs_formulaire(saisi, c["cle"]))
             elif c["type"] == "liste_choix" and saisi is not None:    # cochées et ajoutées, gardées telles quelles
                 valeur = "\n".join(profil_mod.valeurs_formulaire(saisi, c["cle"])
                                    + profil_mod.ajouts_formulaire(saisi, c["cle"], c["virgules"]))
@@ -1237,7 +1241,7 @@ def _ctx_champs():
             "liste_cantons": sorted(pays_mod.CANTONS.items(), key=lambda x: x[1])}
 
 
-_GENRE_ONGLET = {"certifications": "certification", "langues": "langue"}
+_GENRE_ONGLET = {"formation": "formation", "certifications": "certification", "langues": "langue"}
 
 
 def _elements_cv(genre):
@@ -1271,7 +1275,7 @@ def _page_profil(request, ident, saisi=None, **ctx):
         ctx["a_reprendre"] = "%d %s" % (n, profil_mod.NOMS_LISTES_CV[genre][n > 1]) if n else ""
     ctx.setdefault("criteres_def", profil_mod.CRITERES)
     return page(request, "profil.html", etapes=profil_mod.etapes(), etape=e, ident=ident, champs=champs,
-                precedente=ids[i - 1] if i else None, regles=profil_mod.regles_au_choix(),
+                regles=profil_mod.regles_au_choix(),
                 manquants=profil_mod.manquants(p), **ctx)
 
 
@@ -1331,7 +1335,9 @@ def bienvenue_recherche(request: Request):
         return RedirectResponse("/", status_code=303)
     from .. import pays
     p = profil_mod.charger()
+    o = profil_mod.objectifs_rythme()
     return _page_accueil(request, "recherche", objectifs=profil_mod.OBJECTIFS, objectif=profil_mod.objectif(p),
+                         rythme="oui" if any(o.values()) else "non", semaine=o["semaine"] or "", mois=o["mois"] or "",
                          poste=next((x["intitule"] for x in profil_mod.postes_saisis(p)), ""),
                          cantons_choisis=profil_mod.lire(p, "recherche.cantons") or [],
                          cantons=pays.CANTONS, romands=pays.CANTONS_ROMANDS)
@@ -1345,10 +1351,17 @@ async def bienvenue_recherche_enregistrer(request: Request):
 
 def _bienvenue_recherche_enregistrer(request, form):
     from .. import pays
+    # « As-tu un nombre de postulations à atteindre ? » : non, aucun objectif ; oui, au moins un nombre.
+    semaine, mois = (str(form.get(c) or "").strip() for c in profil_mod.OBJECTIFS_RYTHME)
+    choix = form.get("rythme")
+    rythme = None if choix is None else (semaine, mois) if choix == "oui" else ("", "")
     try:
-        profil_mod.enregistrer_recherche(form.get("objectif"), form.get("poste"), form.getlist("cantons"))
+        if choix == "oui" and not (semaine.strip("0") or mois.strip("0")):
+            raise profil_mod.ProfilInvalide("un nombre de postulations par semaine ou par mois")
+        profil_mod.enregistrer_recherche(form.get("objectif"), form.get("poste"), form.getlist("cantons"), rythme)
     except profil_mod.ProfilInvalide as e:
         return _page_accueil(request, "recherche", objectifs=profil_mod.OBJECTIFS, objectif=form.get("objectif") or "fixe",
+                             rythme=choix or "non", semaine=semaine, mois=mois,
                              poste=form.get("poste") or "", cantons_choisis=form.getlist("cantons"),
                              cantons=pays.CANTONS, romands=pays.CANTONS_ROMANDS,
                              msg="À compléter : %s." % str(e).removeprefix("à choisir : "), ok=False)
@@ -1578,15 +1591,18 @@ def parcours_repondre(reponse: str = Form("")):
 
 
 def _sur_parcours(action, msg=None, ancre="#base"):
-    """Une action sur le parcours, puis retour à la page : #base rouvre le volet de la base
-    (là où l'on corrigeait), #entretien revient à l'entretien."""
+    """Une action sur le parcours, puis retour à la page : #base revient à la base (sur la page, ou dans son
+    volet pendant l'entretien), #element-N à l'élément qu'on vient de corriger ou d'ajouter, #entretien à
+    l'entretien. `ancre` peut être une fonction du résultat de l'action (l'identifiant d'un ajout)."""
     reg = parcours.ouvrir()
     try:
-        action(reg)
+        resultat = action(reg)
     except parcours.ParcoursInvalide as e:
         return RedirectResponse("/parcours?msg=%s" % quote("À corriger : %s." % e), status_code=303)
     finally:
         reg.cx.close()
+    if callable(ancre):
+        ancre = ancre(resultat)
     return RedirectResponse("/parcours" + ("?msg=%s&ok=1" % quote(msg) if msg else "") + ancre, status_code=303)
 
 
@@ -1606,7 +1622,7 @@ def _parcours_ajouter(request, f):
     champs = {k: f.get(k, "") for k in parcours.CHAMPS if k != "titre"}
     return _sur_parcours(lambda reg: parcours.ajouter(reg, f.get("genre", ""), f.get("titre", ""), parent=parent,
                                                        origine="saisie", citation=f.get("titre", ""), **champs),
-                         "Ajouté.")
+                         "Ajouté.", ancre=lambda i: "#element-%d" % i)
 
 
 @app.post("/parcours/{ident}/modifier")
@@ -1617,7 +1633,7 @@ async def parcours_modifier(request: Request, ident: int):
 
 def _parcours_modifier(request, ident: int, f):
     return _sur_parcours(lambda reg: parcours.modifier(reg, ident, **{k: f[k] for k in parcours.CHAMPS if k in f}),
-                         "Enregistré.")
+                         "Enregistré.", ancre="#element-%d" % ident)
 
 
 @app.post("/parcours/{ident}/retirer")
@@ -1815,7 +1831,7 @@ def profil_terminer(request: Request):
 
 @app.post("/profil/{ident}/reprendre")
 def profil_reprendre(ident: str):
-    """Certifications ou langues : ajoute celles du parcours qui manquent (CV importé avant l'onglet)."""
+    """Formation, certifications ou langues : ajoute celles du parcours qui manquent (CV importé avant l'onglet)."""
     genre = _GENRE_ONGLET.get(ident)
     if genre is None:
         return RedirectResponse("/profil", status_code=303)
@@ -1843,9 +1859,7 @@ def _profil_enregistrer(request, ident: str, form):
     msg = "Enregistré."
     if ident == "criteres" and _pretri_selon_criteres(avant):
         msg = "Enregistré ; le tri du matin suit tes critères."
-    ids = [x["id"] for x in profil_mod.etapes()]
-    suivante = ids[min(ids.index(ident) + 1, len(ids) - 1)]      # la dernière étape reste ouverte
-    return RedirectResponse("/profil/%s?msg=%s&ok=1" % (suivante, quote(msg)), status_code=303)
+    return RedirectResponse("/profil/%s?msg=%s&ok=1" % (ident, quote(msg)), status_code=303)   # l'onglet reste ouvert
 
 
 def _pretri_selon_criteres(avant):

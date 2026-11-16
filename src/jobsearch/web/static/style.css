@@ -304,7 +304,7 @@ button.go:disabled { opacity: .5; cursor: not-allowed; }
 .champ input[type=text], .champ input[type=date], .champ select { height: 42px; box-sizing: border-box; padding: 0 .85rem; }
 .champ input[type=date] { cursor: pointer; }
 .champ input[type=text]:hover, .champ input[type=date]:hover, .champ select:hover, .champ .avec-prefixe:hover { border-color: var(--texte-3); }
-.champ select {
+.champ select, .champ .liste-recherche input[type=text] {
   -webkit-appearance: none; appearance: none; cursor: pointer; padding-right: 2.4rem;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2385939a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right .8rem center; background-size: 1rem;
@@ -450,6 +450,7 @@ a.bouton:hover { text-decoration: none; border-color: var(--texte-3); }
 .lignes { display: flex; flex-direction: column; gap: .5rem; margin-top: .4rem; }
 .ligne-entete, .ligne-champs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 42px; gap: .5rem; align-items: center; }
 .ligne-entete { font-size: .82rem; color: var(--texte-2); }
+.une-colonne .ligne-champs { grid-template-columns: minmax(0, 1fr) 42px; }       /* liste simple : une valeur par champ */
 .trois-colonnes .ligne-entete, .trois-colonnes .ligne-champs {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) 42px; }
 .trois-colonnes.date-fin .ligne-entete, .trois-colonnes.date-fin .ligne-champs {
@@ -458,12 +459,23 @@ a.bouton:hover { text-decoration: none; border-color: var(--texte-3); }
   border-color: transparent; background: transparent; color: var(--texte-3); }
 .retirer-ligne:hover { border-color: transparent; background: var(--surface-2); color: var(--texte); }
 .retirer-ligne:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
+/* Liste déroulante avec recherche (Nexus SelectField, avec une saisie qui filtre) : le <select> du serveur reste
+   le champ envoyé, caché derrière une saisie ; le panneau liste les options qui correspondent (champs.js). */
+.liste-recherche { position: relative; min-width: 0; }
+.champ .liste-recherche input[type=text] { width: 100%; cursor: text; text-overflow: ellipsis; }
+.panneau-liste { position: absolute; z-index: 50; top: calc(100% + .25rem); left: 0; right: 0; max-height: 15rem; overflow-y: auto;
+  box-sizing: border-box; margin: 0; padding: .25rem; list-style: none; border-radius: 8px; background: var(--surface);
+  border: 1px solid var(--bord); box-shadow: 0 10px 30px rgba(0, 0, 0, .25); }
+.panneau-liste li { padding: .45rem .6rem; border-radius: 6px; font-size: .9rem; cursor: pointer; }
+.panneau-liste li.actif { background: var(--surface-2); }
+.panneau-liste li[aria-selected=true] { background: var(--vert-pale); color: var(--vert-fonce); }
+.panneau-liste li.vide { color: var(--texte-2); cursor: default; }
 .ajouter-ligne { align-self: flex-start; display: inline-flex; align-items: center; gap: .35rem; margin-top: .5rem; }
 @media (max-width: 640px) {
   .ligne-entete { display: none; }
   .ligne-champs, .trois-colonnes .ligne-champs, .trois-colonnes.date-fin .ligne-champs {
     grid-template-columns: minmax(0, 1fr) 42px; padding-bottom: .5rem; border-bottom: 1px solid var(--bord); }
-  .ligne-champs input, .ligne-champs select { grid-column: 1; }
+  .ligne-champs > input, .ligne-champs > select, .ligne-champs > .liste-recherche { grid-column: 1; }
   .ligne-champs .retirer-ligne { grid-column: 2; grid-row: 1; }
 }
 .champ-intro { grid-column: 1 / -1; margin: 0; font-size: .85rem; color: var(--texte-2); }
@@ -701,9 +713,13 @@ a.reglage-ligne > .icone:last-child { color: var(--texte-3); }
 .coller summary, .ajout-base summary { cursor: pointer; color: var(--texte-2); font-size: .92rem; }
 .coller textarea { width: 100%; margin-top: .6rem; }
 
-/* Ton parcours : l'entretien seul, au centre ; la base dans un volet à gauche, à la demande. */
+/* Ton parcours : l'entretien seul, au centre ; la base dans un volet à gauche pendant l'entretien, sur la page ensuite. */
 .parcours-page.centree { max-width: 48rem; margin: 0 auto; }
 .parcours-colonne { max-width: 48rem; }
+/* La base sur la page, une fois l'entretien terminé : sous la carte, même colonne. */
+.base-page { margin-top: 2rem; }
+.base-page .tete-entretien { align-items: baseline; }
+.base-page .noeud { scroll-margin: 5rem 0; }
 .tete-entretien { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .tete-entretien h2 { margin: 0 0 .35rem; }
 .bouton-volet { flex: none; display: inline-flex; align-items: center; gap: .45rem; padding: .45rem .85rem; border-radius: 999px;

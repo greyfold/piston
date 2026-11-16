@@ -190,8 +190,24 @@ def test_pages_et_routes(base, monkeypatch):
     assert r["ok"] and r["ajoutes"] == []
     assert "Et ensuite ?" in web.get("/parcours").text
     ident = next(e["id"] for e in parcours.elements(base) if e["genre"] == "langue")
-    web.post("/parcours/%d/modifier" % ident, data={"titre": "Anglais", "detail": "C1"})
+    r = web.post("/parcours/%d/modifier" % ident, data={"titre": "Anglais", "detail": "C1"}, follow_redirects=False)
     assert parcours.element(base, ident)["detail"] == "C1"
+    assert r.headers["location"].endswith("#element-%d" % ident)               # retour sur l'élément corrigé
+    # Pendant l'entretien, la base est dans son volet ; une fois l'entretien terminé, elle est sur la page,
+    # avec de quoi corriger chaque élément et en ajouter. Une seule fois dans les deux cas.
+    page = web.get("/parcours").text
+    assert 'id="volet-base"' in page and 'class="base-page"' not in page
+    assert page.count('action="/parcours/ajouter"') == 1 and page.count('id="element-%d"' % ident) == 1
+    for c in parcours.cadres(base):
+        base.cx.execute("UPDATE parcours SET approfondi=1 WHERE id=?", (c["id"],))
+    base.commit()
+    page = web.get("/parcours").text
+    assert "Entretien terminé" in page and 'class="base-page"' in page and 'id="volet-base"' not in page
+    assert page.count('action="/parcours/ajouter"') == 1 and 'action="/parcours/%d/modifier"' % ident in page
+    r = web.post("/parcours/ajouter", data={"genre": "competence", "titre": "Facilitation"}, follow_redirects=False)
+    ajoute = next(e["id"] for e in parcours.elements(base) if e["titre"] == "Facilitation")
+    assert r.headers["location"].endswith("#element-%d" % ajoute)
+    assert 'id="element-%d"' % ajoute in web.get("/parcours").text
     web.post("/parcours/%d/retirer" % ident)
     assert parcours.element(base, ident) is None
     web.post("/parcours/vider", data={})                                       # sans confirmation : rien
@@ -375,8 +391,9 @@ def test_import_remplit_certifications_et_langues_du_profil(base):
     ]
     profil.enregistrer("langues", {"dossier.langues": "anglais | C1, corrigé à la main"})
     bilan = parcours.importer_cv(base, cv, c=moteur.FauxMoteur([imp]))
-    assert bilan["profil"] == {"certification": 1, "langue": 1}
+    assert bilan["profil"] == {"formation": 1, "certification": 1, "langue": 1}
     p = profil.charger()
+    assert profil.lire(p, "dossier.formations") == ["Master en design d'interaction | HEAD Genève"]   # 2016 : le début, pas l'obtention
     assert profil.lire(p, "dossier.certifications") == ["Scrum Master certifié | Scrum Alliance | 05.2021"]
     assert profil.lire(p, "dossier.langues") == ["anglais | C1, corrigé à la main", "Allemand | notions"]
     # Le même CV une deuxième fois : rien de plus.

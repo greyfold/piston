@@ -95,7 +95,8 @@ HARVARD_LETTRE = """Règles des guides de Harvard pour la lettre : adressée à 
 
 PIECES = {
     "analyse": """Écris Analyse.md. Commence exactement par « ## Angle proposé » (%(angles)s, et pourquoi en trois phrases). Puis : « ## Exigences » (explicites, implicites, signaux culturels), « ## Correspondance » (chaque exigence majeure → preuve P-xx, élément E-n du parcours ou poste), « ## Écarts assumés » (et comment la lettre les traite), « ## Mots-clés de l'annonce » (15 à 25 termes, dans la langue de l'annonce, marqués présent / à aligner / écart), « ## Questions en attente » (hypothèses prises faute d'information ; vide si aucune). Tu peux citer P-xx et E-n ici : c'est une note de travail.""",
-    "cv": """Écris CV.md, le CV adapté. Première ligne : « # %(nom)s », deuxième : « ## <titre exact de l'annonce> ». Puis les sections usuelles dans la langue de l'annonce, dans cet ordre : profil, expérience, compétences, formation, certifications, langues ; une seule colonne, dates au format MM.AAAA. Puces choisies et réordonnées depuis le CV maître (ou les réalisations de la base Parcours) pour l'angle retenu ; mots-clés de l'annonce repris seulement s'ils sont vrais. Aucune référence P-xx ni E-n, aucun lien, aucun tiret cadratin. Le CV tient sur %(pages_cv)s pages A4 au plus, soit %(mots_cv)s mots environ : les postes anciens ou éloignés de l'annonce gardent leur ligne d'en-tête et perdent leurs puces, les compétences sont resserrées sur l'annonce. Section certifications : %(certifications)s
+    "cv": """Écris CV.md, le CV adapté. Première ligne : « # %(nom)s », deuxième : « ## <titre exact de l'annonce> ». Puis les sections usuelles dans la langue de l'annonce, dans cet ordre : profil, expérience, compétences, formation, certifications, langues ; une seule colonne, dates au format MM.AAAA. Puces choisies et réordonnées depuis le CV maître (ou les réalisations de la base Parcours) pour l'angle retenu ; mots-clés de l'annonce repris seulement s'ils sont vrais. Aucune référence P-xx ni E-n, aucun lien, aucun tiret cadratin. Le CV tient sur %(pages_cv)s pages A4 au plus, soit %(mots_cv)s mots environ : les postes anciens ou éloignés de l'annonce gardent leur ligne d'en-tête et perdent leurs puces, les compétences sont resserrées sur l'annonce. Section formation : %(formations)s
+Section certifications : %(certifications)s
 Section langues : %(langues)s
 
 """ + HARVARD.replace("%", "%%"),
@@ -117,9 +118,20 @@ def _valeurs():
         "angles": "un des %s angles" % profil.nombre_fr(len(angles)) if angles else "un des angles de la méthode",
         "differenciateur": "différenciateur " + diff if diff else "différenciateur",
         "pages_cv": PAGES_CV, "mots_cv": MOTS_PAR_PAGE * PAGES_CV,
+        "formations": _formations(profil.lire(p, "dossier.formations") or []),
         "certifications": _certifications(profil.lire(p, "dossier.certifications") or []),
         "langues": _langues(profil.lire(p, "dossier.langues") or []),
     }
+
+
+def _formations(liste):
+    if not liste:
+        return "celle du CV maître, chaque diplôme une seule fois."
+    return ("les diplômes de la liste ci-dessous, qui fait foi (diplôme | établissement | année d'obtention) et "
+            "remplace la formation du CV maître : chacun une seule fois ; ordre chronologique inversé ; un diplôme "
+            "sans année est en cours, dis-le sans inventer de date ; titre traduit dans la langue de l'annonce "
+            "seulement s'il n'a pas de nom officiel dans cette langue.\n"
+            + "".join("- %s\n" % x for x in liste))
 
 
 def _certifications(liste):
@@ -393,7 +405,8 @@ def _finaliser(reg, f, dossier, pieces, fixe, c=None):
         pages = nombre_pages(pdf)
         reg.noter(emp, "CV raccourci · %s → %s pages" % (avant, pages or "?"))
     couverture = mesurer(dossier, f.get("entreprise"))
-    certifications = "\n".join((profil.lire(profil.charger(), "dossier.certifications") or [])
+    certifications = "\n".join((profil.lire(profil.charger(), "dossier.formations") or [])
+                               + (profil.lire(profil.charger(), "dossier.certifications") or [])
                                + (profil.lire(profil.charger(), "dossier.langues") or []))
     resultats = controler(f, dossier, pieces, couverture, fixe + "\n" + certifications, pages)
     etat = "pret" if all(r["ok"] for r in resultats) else "a_revoir"

@@ -365,7 +365,7 @@ def test_etapes_enregistrees_dans_l_ordre(web, profil_de_test):
     form["identite.telephone"] = "+41 79 111 11 11"
     form["identite.site"] = "www.exemple.ch"
     r = web.post("/profil/identite", data=form, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"].startswith("/profil/recherche?msg=")
+    assert r.status_code == 303 and r.headers["location"].startswith("/profil/identite?msg=")   # l'onglet reste ouvert
     p = _lire(profil_de_test)
     assert p["identite"]["telephone"] == "+41 79 111 11 11" and p["identite"]["site"] == "https://www.exemple.ch"
     assert stat.S_IMODE(profil_de_test.stat().st_mode) == 0o600
@@ -388,7 +388,7 @@ def test_page_pre_tri_et_cases_postees(web, profil_de_test):
     actives = [i for i in profil.effectif("exclusions.regles") if i != "taux"]
     r = web.post("/profil/pretri", data={"exclusions.regles": actives, "exclusions.mots_titre": ""},
                  follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"].startswith("/profil/criteres?")
+    assert r.status_code == 303 and r.headers["location"].startswith("/profil/pretri?")
     assert _lire(profil_de_test)["exclusions"] == {"desactivees": ["taux"]}
     assert 'value="taux" checked' not in web.get("/profil/pretri").text
 
@@ -423,6 +423,26 @@ def test_certifications_sans_doublon_et_reprises_dans_le_cv():
     assert "remplace celle du CV maître" in cv and "chacune une seule fois" in cv
 
 
+def test_formation_en_colonnes_et_reprise_dans_le_cv(web, profil_de_test):
+    """Une ligne par diplôme (titre, établissement, année) ; le même titre dans deux écoles reste deux lignes,
+    le même diplôme de la même école une seule ; la liste fait foi dans la consigne du CV."""
+    assert [e["id"] for e in profil.etapes()].index("formation") + 1 == [e["id"] for e in profil.etapes()].index("certifications")
+    assert "celle du CV maître" in dossier.pieces_a_ecrire()["cv"].split("Section formation : ")[1].split("\n")[0]
+    form = {"dossier.formations.titre": ["Master en gestion", "Master en gestion", "master en gestion", "Brevet fédéral"],
+            "dossier.formations.etablissement": ["École A", "École B", "école a", "Institut C"],
+            "dossier.formations.date": ["2018", "6/2021", "2019", ""]}
+    assert web.post("/profil/formation", data=form, follow_redirects=False).status_code == 303
+    assert profil.lire(profil.charger(), "dossier.formations") == [
+        "Master en gestion | École A | 2018", "Master en gestion | École B | 06.2021", "Brevet fédéral | Institut C"]
+    page = web.get("/profil/formation").text
+    assert 'name="dossier.formations.etablissement" value="École B"' in page and "Ajouter un diplôme" in page
+    assert 'name="dossier.formations.date" value="2018"' in page and "trois-colonnes date-fin" in page
+    cv = dossier.pieces_a_ecrire()["cv"]
+    assert "- Master en gestion | École B | 06.2021\n" in cv and "remplace la formation du CV maître" in cv
+    form["dossier.formations.date"] = ["l'an passé", "", "", ""]
+    assert "pas une date MM.AAAA" in web.post("/profil/formation", data=form).text
+
+
 def test_certifications_et_langues_en_colonnes(web, profil_de_test):
     """Une ligne par certification (titre, organisme, date) et par langue (langue, niveau) ; enregistrées
     « a | b | c » comme avant, la date remise en MM.AAAA."""
@@ -455,6 +475,12 @@ def test_certifications_et_langues_en_colonnes(web, profil_de_test):
     assert '<select name="dossier.langues.niveau"' in page and "<option selected>Courant (C1)</option>" in page
     assert "<option selected>notions</option>" in page            # saisie d'avant la liste : gardée, pas convertie
     assert "Ajouter une langue" in page and "pas besoin d&#39;un certificat" in page
+    # La langue se choisit dans une liste avec recherche (champs.js) ; « anglais » du CV y devient « Anglais ».
+    assert '<select name="dossier.langues.langue" aria-label="Langue" data-liste-recherche>' in page
+    assert "<option selected>Italien</option>" in page and "<option>Romanche</option>" in page
+    assert profil.choix_de_colonne(("langue", "Langue", "", profil.LANGUES_PARLEES), "anglais") == "Anglais"
+    assert profil.choix_de_colonne(("langue", "Langue", "", profil.LANGUES_PARLEES), "Frioulan") == "Frioulan"
+    assert profil.LANGUES_PARLEES == sorted(profil.LANGUES_PARLEES, key=lambda x: __import__("jobsearch.prefilter").prefilter.plier(x))
     cv = dossier.pieces_a_ecrire()["cv"]
     assert "- Allemand | notions\n" in cv and "auto-évaluation" in cv and "jamais « certifié »" in cv
 
@@ -543,3 +569,17 @@ def test_cles_obsoletes_retirees(profil_de_test):
     profil.ecrire(lu)                                              # au prochain enregistrement : hors du fichier
     assert "objectifs" not in _lire(profil_de_test)["interface"] and "regles" not in _lire(profil_de_test)["dossier"]
     assert dossier.PAGES_CV == 2 and "Une consigne" not in dossier.consigne()
+
+
+def test_liste_simple_un_champ_par_valeur(profil_de_test):
+    """« Entreprises visées » : un champ par entreprise ; vides et doublons retirés à l'enregistrement."""
+    form = _form("recherche")
+    form["recherche.entreprises"] = ["Atelier Nord", "  ", "Maison Sud", "Atelier Nord", ""]
+    profil.enregistrer("recherche", form)
+    assert config.criteres()["sourcing"]["entreprises"] == ["Atelier Nord", "Maison Sud"]
+
+
+def test_liste_simple_rendue_en_champs(profil_de_test, web):
+    page = web.get("/profil/recherche").text
+    assert page.count('name="recherche.entreprises"') == len(config.criteres()["sourcing"]["entreprises"]) + 1
+    assert "<textarea" not in page and "Ajouter une entreprise" in page

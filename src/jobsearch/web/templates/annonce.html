@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import bouton_action, meta, decision, notes, alertes, delais, annuler_go %}
+{% from "_macros.html" import bouton_action, meta, decision, notes, categories, detail_categories, alertes, delais, annuler_go %}
 {% block titre %}{{ f.entreprise }} · {{ f.titre }}{% endblock %}
 {% block contenu %}
 {% set retour = "/annonce/" ~ f.empreinte %}
@@ -50,6 +50,10 @@
         {{ notes(ev) }}
         <p style="margin:.5rem 0">{{ ev.resultat.resume }}</p>
         <p class="petit muet" style="margin:0 0 .5rem">Angle : {{ ev.resultat.angle }} · évaluée le {{ ev.cree_le[:10] | date_fr(True) }}{% if f.texte_origine != "plateforme" %} · sur un résumé, pas l'original{% endif %}</p>
+        {{ categories(ev) }}
+        {% if categories_adequation(ev.resultat) %}
+        <details><summary class="petit">Atouts et écarts par catégorie</summary>{{ detail_categories(ev) }}</details>
+        {% endif %}
         {{ alertes(ev) }}
         {% set sal = ev.resultat.salaire %}
         {% if sal %}
@@ -66,7 +70,7 @@
             {% for c in ev.resultat.criteres %}<tr><td class="petit">{{ c.critere }}</td><td><span class="puce {{ 'retard' if c.etat == 'ko' else 'B' if c.etat == 'ok' else '' }}">{{ c.etat }}</span></td><td class="petit">{{ c.note }}</td></tr>{% endfor %}
           </tbody></table></div>
           <div class="tableau" style="margin-top:.5rem"><table><tbody>
-            {% for x in ev.resultat.exigences %}<tr><td class="petit"{% if f.langue %} lang="{{ f.langue }}"{% endif %}>{{ x.exigence }}</td><td><span class="puce {{ 'B' if x.couverture == 'oui' else 'retard' if x.couverture == 'non' else '' }}">{{ x.couverture }}</span></td><td class="petit">{{ x.appui }}</td></tr>{% endfor %}
+            {% for x in ev.resultat.exigences %}<tr><td class="petit"{% if f.langue %} lang="{{ f.langue }}"{% endif %}>{{ x.exigence }}</td><td class="petit muet">{{ libelles_categories.get(x.categorie, "") }}</td><td><span class="puce {{ 'B' if x.couverture == 'oui' else 'retard' if x.couverture == 'non' else '' }}">{{ x.couverture }}</span></td><td class="petit">{{ x.appui }}</td></tr>{% endfor %}
           </tbody></table></div>
         </details>
       {% else %}<p class="petit muet" style="margin:.4rem 0 0">Pas encore évaluée.</p>{% endif %}

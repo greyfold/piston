@@ -432,6 +432,26 @@ def test_cartes_montrent_note_et_alertes(web, reg):
     assert "130–150 k CHF" in page
     detail = web.get("/annonce/" + e).text
     assert "Critères et exigences" in detail and "130’000 – 150’000 CHF" in detail
+    assert 'aria-label="Adéquation par catégorie"' in detail and "85<small>/100</small>" in detail
+    assert 'style="width: 85%"' in detail and "Pas de MLOps" in detail and "Atouts et écarts par catégorie" in detail
+    assert "Rien d'exigé dans l'annonce pour : formation." in unescape(detail)
+
+
+def test_annonce_evaluee_avant_l_analyse_par_categorie(web, reg):
+    """Une note d'avant l'analyse par catégorie s'affiche comme avant, sans bloc vide."""
+    import json
+    from jobsearch import evaluation
+    from test_evaluation import FauxMoteur, _ev
+    e = annonce(reg, statut="A", texte=FR)
+    evaluation.evaluer_lot(reg, [reg.get(e)], c=FauxMoteur([_ev()]), texte_profil="P")
+    ancien = evaluation.lire(reg, e)["resultat"]
+    del ancien["categories"]
+    del ancien["exigences"][0]["categorie"]
+    reg.cx.execute("UPDATE evaluations SET resultat=?", (json.dumps(ancien),))
+    reg.commit()
+    detail = web.get("/annonce/" + e).text
+    assert "82<small>/100</small>" in detail and "Own the AI product roadmap" in detail
+    assert "Adéquation par catégorie" not in detail and "Atouts et écarts" not in detail
 
 
 def test_go_lance_le_dossier(web, reg, monkeypatch):

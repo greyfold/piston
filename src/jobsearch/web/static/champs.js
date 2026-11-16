@@ -341,6 +341,135 @@
     });
   }
 
+  /* --------------------------------------------- Liste déroulante avec recherche */
+
+  var numeroListe = 0;
+  function plier(t) { return String(t).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim(); }
+  function libelleChoisi(select) { return select.value ? select.options[select.selectedIndex].textContent : ""; }
+
+  // Le <select> du serveur reste le champ envoyé : il passe, caché, derrière une saisie qui filtre ses options.
+  function listeRecherche(select) {
+    var boite = el("div", "liste-recherche"), saisie = el("input"), panneau = el("ul", "panneau-liste");
+    saisie.type = "text"; saisie.autocomplete = "off"; saisie.spellcheck = false;
+    saisie.placeholder = select.options[0].textContent;
+    saisie.setAttribute("role", "combobox"); saisie.setAttribute("aria-autocomplete", "list");
+    saisie.setAttribute("aria-expanded", "false"); saisie.setAttribute("aria-label", select.getAttribute("aria-label") || "");
+    saisie.value = libelleChoisi(select);
+    panneau.setAttribute("role", "listbox"); panneau.hidden = true;
+    select.parentNode.insertBefore(boite, select);
+    boite.appendChild(saisie); boite.appendChild(panneau); boite.appendChild(select);
+    select.hidden = true;
+  }
+
+  // Les valeurs déjà choisies dans les autres lignes : elles ne sont plus proposées ici.
+  function prisesAilleurs(boite) {
+    var liste = boite.closest("[data-lignes]"), prises = {};
+    if (liste) liste.querySelectorAll(".liste-recherche select").forEach(function (s) {
+      if (s.value && !boite.contains(s)) prises[plier(s.value)] = true;
+    });
+    return prises;
+  }
+
+  function activer(boite, item) {
+    var saisie = boite.querySelector("input"), ancien = boite.querySelector("li.actif");
+    if (ancien) ancien.classList.remove("actif");
+    if (!item) { saisie.removeAttribute("aria-activedescendant"); return; }
+    item.classList.add("actif");
+    saisie.setAttribute("aria-activedescendant", item.id);
+    item.scrollIntoView({block: "nearest"});
+  }
+
+  // Ouvre le panneau sur les options qui contiennent le filtre, celles qui commencent par lui d'abord.
+  function ouvrirListe(boite, filtre) {
+    var saisie = boite.querySelector("input"), panneau = boite.querySelector("ul"), select = boite.querySelector("select");
+    var prises = prisesAilleurs(boite), cle = plier(filtre || ""), debut = [], suite = [];
+    Array.prototype.forEach.call(select.options, function (o) {
+      if (!o.value || prises[plier(o.value)]) return;
+      var position = plier(o.textContent).indexOf(cle);
+      if (position === 0) debut.push(o); else if (position > 0) suite.push(o);
+    });
+    panneau.id = "liste-recherche-" + (++numeroListe);          // une ligne ajoutée est une copie : identifiant refait
+    panneau.textContent = "";
+    debut.concat(suite).forEach(function (o, i) {
+      var item = el("li");
+      item.id = panneau.id + "-" + i; item.textContent = o.textContent;
+      item.setAttribute("role", "option"); item.setAttribute("data-valeur", o.value);
+      item.setAttribute("aria-selected", o.value === select.value ? "true" : "false");
+      panneau.appendChild(item);
+    });
+    if (!panneau.firstChild) {
+      var vide = el("li", "vide");
+      vide.textContent = "Aucun résultat"; vide.setAttribute("role", "presentation");
+      panneau.appendChild(vide);
+    }
+    panneau.hidden = false;
+    saisie.setAttribute("aria-expanded", "true"); saisie.setAttribute("aria-controls", panneau.id);
+    activer(boite, (!cle && panneau.querySelector("[aria-selected=true]")) || panneau.querySelector("[role=option]"));
+  }
+
+  function fermerListe(boite) {
+    var saisie = boite.querySelector("input"), panneau = boite.querySelector("ul");
+    panneau.hidden = true; panneau.textContent = "";
+    saisie.setAttribute("aria-expanded", "false"); saisie.removeAttribute("aria-activedescendant");
+  }
+
+  function choisirDansListe(boite, valeur) {
+    var saisie = boite.querySelector("input"), select = boite.querySelector("select");
+    select.value = valeur;
+    saisie.value = libelleChoisi(select);
+    fermerListe(boite);
+    select.dispatchEvent(new Event("change", {bubbles: true}));
+  }
+
+  // En quittant la saisie : vidée, plus rien n'est choisi ; un nom écrit en entier est choisi ; sinon le choix d'avant revient.
+  function quitterListe(boite) {
+    var saisie = boite.querySelector("input"), select = boite.querySelector("select");
+    var cle = plier(saisie.value), prises = prisesAilleurs(boite);
+    var exacte = cle && Array.prototype.filter.call(select.options, function (o) {
+      return o.value && !prises[plier(o.value)] && plier(o.textContent) === cle;
+    })[0];
+    if (!cle) choisirDansListe(boite, "");
+    else if (exacte) choisirDansListe(boite, exacte.value);
+    else { saisie.value = libelleChoisi(select); fermerListe(boite); }
+  }
+
+  function boiteDe(cible) { return cible.closest ? cible.closest(".liste-recherche") : null; }
+  function saisieDe(e) { return e.target.matches && e.target.matches(".liste-recherche input") ? boiteDe(e.target) : null; }
+
+  // À l'écoute du document : une ligne ajoutée (copie de la dernière) marche sans rien rebrancher.
+  document.addEventListener("input", function (e) { var b = saisieDe(e); if (b) ouvrirListe(b, e.target.value); });
+  document.addEventListener("focusout", function (e) { var b = saisieDe(e); if (b) quitterListe(b); });
+  document.addEventListener("mousedown", function (e) {
+    var boite = boiteDe(e.target);
+    if (!boite) return;
+    var item = e.target.closest("li");
+    if (item) {                                       // le clic ne prend pas le focus à la saisie
+      e.preventDefault();
+      if (item.hasAttribute("data-valeur")) choisirDansListe(boite, item.getAttribute("data-valeur"));
+    } else if (e.target.matches("input")) {
+      if (boite.querySelector("ul").hidden) { ouvrirListe(boite, ""); e.target.select(); e.preventDefault(); e.target.focus(); }
+      else fermerListe(boite);
+    }
+  });
+  document.addEventListener("keydown", function (e) {
+    var boite = saisieDe(e);
+    if (!boite) return;
+    var panneau = boite.querySelector("ul"), items = panneau.querySelectorAll("[role=option]");
+    var rang = Array.prototype.indexOf.call(items, panneau.querySelector("li.actif"));
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (panneau.hidden) { ouvrirListe(boite, ""); return; }
+      if (items.length) activer(boite, items[(rang + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length]);
+    } else if (e.key === "Enter" && !panneau.hidden) {
+      e.preventDefault();                             // Entrée choisit, sans envoyer le formulaire
+      if (rang >= 0) choisirDansListe(boite, items[rang].getAttribute("data-valeur"));
+    } else if (e.key === "Escape" && !panneau.hidden) {
+      e.preventDefault();
+      e.target.value = libelleChoisi(boite.querySelector("select"));
+      fermerListe(boite);
+    }
+  });
+
   /* ------------------------------------------------ Postes proposés par l'IA */
 
   // « Ajouter » : le poste proposé passe dans les lignes du champ « Postes recherchés », juste au-dessus.
@@ -398,5 +527,6 @@
 
   document.querySelectorAll("[data-telephone]").forEach(telephone);
   document.querySelectorAll("[data-date]").forEach(date);
+  document.querySelectorAll("select[data-liste-recherche]").forEach(listeRecherche);
   document.querySelectorAll("[data-champ-lignes]").forEach(lignes);
 })();

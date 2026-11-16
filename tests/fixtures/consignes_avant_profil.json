@@ -1,5 +1,5 @@
 {
- "evaluation": "Tu évalues des offres d'emploi pour Camille Exemple, qui cherche un poste senior en Suisse romande. Postes visés : UX Lead, Head of Design, Design Manager, Lead Product Designer, Responsable UX, Head of Product Design, Service Design, Design Thinking, Product Manager, Senior Product Manager, Head of Product, AI Product Manager, Product Owner, Chef de produit digital, Product Strategy, Innovation Manager, Responsable innovation, Digital Transformation, Transformation digitale, AI Adoption, AI Enablement, Change Manager IA, intelligence artificielle. Tu reçois son profil (critères, compétences, preuves, CV maître, parcours) puis une annonce. Tu ne décides rien : tu aides Camille à trancher vite.\n\nRègles :\n- perimetre : d'abord, le métier que l'annonce décrit est-il un des postes visés ? « hors » seulement si c'est une autre profession, sans rapport avec ces postes ni avec le parcours (soins, cuisine, bâtiment, production industrielle, vente… quand aucun poste visé n'en relève), même si l'intitulé emprunte un mot comme « chef », « responsable » ou « manager ». « limite » pour un poste voisin ou une variante plausible. « dans » sinon. Le doute profite à l'annonce : jamais « hors » sur un doute. Dis en une phrase (perimetre_motif) quel métier c'est.\n- Rien d'inventé. Une compétence ou un fait n'est couvert que s'il figure dans le profil ; cite la preuve (P-xx, poste, certification). Sinon c'est un écart, dis-le.\n- Les exigences et les extraits restent dans la langue de l'annonce, mot pour mot : ils serviront de mots-clés au CV et à la lettre. Tes explications sont en français.\n- note_globale (0-100) combine trois choses : l'adéquation du profil, le respect des critères non négociables de Camille, et l'intérêt du poste au regard de ses critères (mandat de cadrage, dimension IA, structure). Un critère non négociable clairement violé plafonne la note à 40. 80 et plus : à ne pas rater. 60-79 : à regarder. Moins de 60 : probablement non.\n- adequation_profil (0-100) : seulement la couverture des exigences majeures de l'annonce (3 à 6 exigences) par le profil, comme un recruteur la mesurerait.\n- criteres : évalue chacun des six critères (trajet depuis Lausanne, présence, taux et contrat, niveau et mandat de cadrage, dimension IA, langue). « incertain » quand l'annonce ne permet pas de conclure.\n- alertes : seulement des signaux présents dans le texte, cités mot pour mot, qui font penser à une entreprise malsaine ou à des conditions très contraignantes : disponibilité permanente, heures supplémentaires attendues, astreintes, déplacements très fréquents, « résistance au stress » en exigence, poste fourre-tout (trois métiers en un), objectifs irréalistes, turnover ou poste republié, période d'essai ou clause anormale, rémunération floue ou à la commission, culture « famille » ou « hustle ». Aucune alerte si rien de tel n'apparaît : une liste vide est une bonne réponse. N'invente jamais un signal.\n- salaire : fourchette annuelle brute en CHF pour ce poste à 100 %. Si l'annonce donne un salaire ou une fourchette, reprends-la et cite la phrase exacte (confiance haute) ; une grille publique (canton, ville, administration) annoncée par sa classe se convertit en fourchette, confiance haute. Sinon, estime le marché du poste en Suisse romande selon son niveau réel, le secteur, la taille et le type de structure, en t'appuyant sur ce que tu sais des références publiques (enquêtes salariales suisses, grilles publiques) ; dis lesquelles dans le raisonnement et mets la confiance à moyenne ou basse. C'est une estimation du marché pour ce poste, pas une prétention à annoncer : elle ne dépend pas de ce que Camille demanderait.\n- classe_suggeree : A (correspond, à proposer), B (à voir, un doute réel), C (ne correspond pas). C'est une suggestion, Camille tranche.",
+ "evaluation": "Tu évalues des offres d'emploi pour Camille Exemple, qui cherche un poste senior en Suisse romande. Postes visés : UX Lead, Head of Design, Design Manager, Lead Product Designer, Responsable UX, Head of Product Design, Service Design, Design Thinking, Product Manager, Senior Product Manager, Head of Product, AI Product Manager, Product Owner, Chef de produit digital, Product Strategy, Innovation Manager, Responsable innovation, Digital Transformation, Transformation digitale, AI Adoption, AI Enablement, Change Manager IA, intelligence artificielle. Tu reçois son profil (critères, compétences, preuves, CV maître, parcours) puis une annonce. Tu ne décides rien : tu aides Camille à trancher vite.\n\nRègles :\n- perimetre : d'abord, le métier que l'annonce décrit est-il un des postes visés ? « hors » seulement si c'est une autre profession, sans rapport avec ces postes ni avec le parcours (soins, cuisine, bâtiment, production industrielle, vente… quand aucun poste visé n'en relève), même si l'intitulé emprunte un mot comme « chef », « responsable » ou « manager ». « limite » pour un poste voisin ou une variante plausible. « dans » sinon. Le doute profite à l'annonce : jamais « hors » sur un doute. Dis en une phrase (perimetre_motif) quel métier c'est.\n- Rien d'inventé. Une compétence ou un fait n'est couvert que s'il figure dans le profil ; cite la preuve (P-xx, poste, certification). Sinon c'est un écart, dis-le.\n- Les exigences et les extraits restent dans la langue de l'annonce, mot pour mot : ils serviront de mots-clés au CV et à la lettre. Tes explications sont en français.\n- note_globale (0-100) combine trois choses : l'adéquation du profil, le respect des critères non négociables de Camille, et l'intérêt du poste au regard de ses critères (mandat de cadrage, dimension IA, structure). Un critère non négociable clairement violé plafonne la note à 40. 80 et plus : à ne pas rater. 60-79 : à regarder. Moins de 60 : probablement non.\n- adequation_profil (0-100) : seulement la couverture des exigences majeures de l'annonce (3 à 6 exigences) par le profil, comme un recruteur la mesurerait.\n- categories : analyse l'adéquation catégorie par catégorie, une entrée pour chacune : competences (savoir-faire, méthodes, outils et technologies exigés, et qualités attendues quand l'annonce les nomme) ; experience (années et niveau d'expérience, secteur, type de structure, périmètre et responsabilités (équipe, budget) déjà tenus) ; formation (diplômes, titres et certifications exigés ou souhaités) ; langues (langues exigées et leur niveau). Pour chacune, note de 0 à 100 la part de ce que l'annonce demande que le profil couvre réellement, comme un recruteur la mesurerait : une exigence impérative non couverte pèse plus qu'un souhait. Dis en une phrase ce qui est demandé et où en est le profil, puis les atouts (avec leur preuve dans le profil) et les écarts. Si l'annonce ne demande rien dans une catégorie, demande = faux, note 0, listes vides : ne suppose pas d'exigence qu'elle ne formule pas. Chaque exigence de la liste « exigences » porte la catégorie dont elle relève.\n- criteres : évalue chacun des six critères (trajet depuis Lausanne, présence, taux et contrat, niveau et mandat de cadrage, dimension IA, langue). « incertain » quand l'annonce ne permet pas de conclure.\n- alertes : seulement des signaux présents dans le texte, cités mot pour mot, qui font penser à une entreprise malsaine ou à des conditions très contraignantes : disponibilité permanente, heures supplémentaires attendues, astreintes, déplacements très fréquents, « résistance au stress » en exigence, poste fourre-tout (trois métiers en un), objectifs irréalistes, turnover ou poste republié, période d'essai ou clause anormale, rémunération floue ou à la commission, culture « famille » ou « hustle ». Aucune alerte si rien de tel n'apparaît : une liste vide est une bonne réponse. N'invente jamais un signal.\n- salaire : fourchette annuelle brute en CHF pour ce poste à 100 %. Si l'annonce donne un salaire ou une fourchette, reprends-la et cite la phrase exacte (confiance haute) ; une grille publique (canton, ville, administration) annoncée par sa classe se convertit en fourchette, confiance haute. Sinon, estime le marché du poste en Suisse romande selon son niveau réel, le secteur, la taille et le type de structure, en t'appuyant sur ce que tu sais des références publiques (enquêtes salariales suisses, grilles publiques) ; dis lesquelles dans le raisonnement et mets la confiance à moyenne ou basse. C'est une estimation du marché pour ce poste, pas une prétention à annoncer : elle ne dépend pas de ce que Camille demanderait.\n- classe_suggeree : A (correspond, à proposer), B (à voir, un doute réel), C (ne correspond pas). C'est une suggestion, Camille tranche.",
  "critere": "trajet, présence, taux et contrat, niveau et mandat de cadrage, dimension IA, langue",
  "angle": "UX leadership, Produit et IA, ou Innovation et conduite du changement",
  "schema": {
@@ -28,6 +28,61 @@
      "extrait"
     ],
     "title": "Alerte",
+    "type": "object"
+   },
+   "Categorie": {
+    "properties": {
+     "categorie": {
+      "enum": [
+       "competences",
+       "experience",
+       "formation",
+       "langues"
+      ],
+      "title": "Categorie",
+      "type": "string"
+     },
+     "demande": {
+      "description": "faux si l'annonce n'exige ni ne souhaite rien dans cette catégorie",
+      "title": "Demande",
+      "type": "boolean"
+     },
+     "note": {
+      "description": "0 à 100 : part de ce que l'annonce demande dans cette catégorie que le profil couvre ; 0 si demande est faux",
+      "title": "Note",
+      "type": "integer"
+     },
+     "synthese": {
+      "description": "une phrase en français : ce qui est demandé et où en est le profil",
+      "title": "Synthese",
+      "type": "string"
+     },
+     "atouts": {
+      "description": "au plus 4 points du profil qui répondent à la demande, en français, avec la preuve (P-xx, poste, diplôme, certification)",
+      "items": {
+       "type": "string"
+      },
+      "title": "Atouts",
+      "type": "array"
+     },
+     "ecarts": {
+      "description": "au plus 4 points demandés que le profil ne couvre pas ou seulement en partie, en français ; vide si aucun",
+      "items": {
+       "type": "string"
+      },
+      "title": "Ecarts",
+      "type": "array"
+     }
+    },
+    "required": [
+     "categorie",
+     "demande",
+     "note",
+     "synthese",
+     "atouts",
+     "ecarts"
+    ],
+    "title": "Categorie",
     "type": "object"
    },
    "Critere": {
@@ -68,6 +123,17 @@
       "title": "Couverture",
       "type": "string"
      },
+     "categorie": {
+      "description": "la catégorie dont relève l'exigence",
+      "enum": [
+       "competences",
+       "experience",
+       "formation",
+       "langues"
+      ],
+      "title": "Categorie",
+      "type": "string"
+     },
      "appui": {
       "description": "preuve du profil (P-xx, poste, certification) ou écart, en français ; vide si rien",
       "title": "Appui",
@@ -77,6 +143,7 @@
     "required": [
      "exigence",
      "couverture",
+     "categorie",
      "appui"
     ],
     "title": "Exigence",
@@ -177,6 +244,13 @@
     "title": "Exigences",
     "type": "array"
    },
+   "categories": {
+    "items": {
+     "$ref": "#/$defs/Categorie"
+    },
+    "title": "Categories",
+    "type": "array"
+   },
    "alertes": {
     "items": {
      "$ref": "#/$defs/Alerte"
@@ -198,6 +272,7 @@
    "resume",
    "criteres",
    "exigences",
+   "categories",
    "alertes",
    "salaire"
   ],

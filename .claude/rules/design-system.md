@@ -74,6 +74,8 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
 | Ce que l'IA a produit | `.badge-ia` avec `icone("modele")` et un texte (« Question de l'IA », « Proposés par l'IA ») ; une seule étiquette IA, et jamais sur ce qui ne vient pas de l'IA |
 | État vide (EmptyState) | macro `etat_vide()` uniquement (test dans `tests/test_pipeline_web.py`) |
 | Champ (TextField, SelectField) | `.champ` > `label` + contrôle + `.aide`, dans `.grille-champs` (`.champ.large` pour toute la largeur) ; erreur `.erreur-champ` ; préfixe `.avec-prefixe` |
+| Liste libre, une valeur par champ (au lieu d'une zone de texte « une par ligne ») | macro `champ_lignes` : une colonne pour une liste simple (type « liste » du profil), plusieurs pour des lignes à plusieurs parties ; croix pour retirer, « Ajouter » pour ouvrir un champ |
+| Liste déroulante avec recherche (SelectField qui filtre) | `<select data-liste-recherche>` : `champs.js` le cache derrière `.liste-recherche` (saisie + `.panneau-liste`) ; dans des lignes répétables, colonne `(…, choix, "recherche")` de `champ_lignes`, où une valeur déjà choisie dans une autre ligne n'est plus proposée |
 | Téléphone, date (PhoneField, DateField) | structures `.telephone` et `.date-saisie` pilotées par `champs.js` (voir `_champs_profil.html`) |
 | Choix | cartes radio `.carte-choix`, pilules à cocher `.puce-canton`, étiquettes `.tags`, cases `.cases` |
 | Interrupteur (Toggle) | `button.interrupteur` (réglage immédiat, sans bouton Enregistrer) |

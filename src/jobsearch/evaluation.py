@@ -2,7 +2,8 @@
 
 Pour chaque annonce à trancher : une note globale sur 100 (profil × annonce ×
 critères), l'adéquation du profil aux exigences en %, l'état de chaque
-critère non négociable, et les signaux d'une entreprise malsaine ou de
+critère non négociable, l'analyse par catégorie (compétences, expérience, formation, langues :
+`adequation.py`), et les signaux d'une entreprise malsaine ou de
 conditions très contraignantes, cités mot pour mot dans l'annonce.
 
 Le profil vient de la base Parcours de l'application (`parcours.py` : postes, projets,
@@ -21,12 +22,12 @@ import json
 
 from pydantic import BaseModel, Field, create_model
 
-from . import moteur
+from . import adequation, moteur
 from . import profil as profil_mod
 from .db import maintenant
 
 MODELE = moteur.MODELE
-VERSION = "3"            # à incrémenter quand la consigne change : les notes seront recalculées
+VERSION = "4"            # à incrémenter quand la consigne change : les notes seront recalculées
 PASSE_IA = 2             # la passe du pré-tri tenue par l'IA (0 et 1 : règles de prefilter.py)
 PERIMETRES = ("dans", "limite", "hors")
 
@@ -51,6 +52,7 @@ class Critere(BaseModel):
 class Exigence(BaseModel):
     exigence: str = Field(description="exigence majeure, formulée dans la langue de l'annonce")
     couverture: str = Field(description="oui, partiel ou non")
+    categorie: adequation.Cle = Field(description="la catégorie dont relève l'exigence")
     appui: str = Field(description="preuve du profil (P-xx, poste, certification) ou écart, en français ; vide si rien")
 
 
@@ -81,6 +83,7 @@ class Evaluation(BaseModel):
     resume: str = Field(description="deux phrases en français : pourquoi cette note")
     criteres: list[Critere]
     exigences: list[Exigence]
+    categories: list[adequation.Categorie]
     alertes: list[Alerte]
     salaire: Salaire
 
@@ -118,6 +121,7 @@ def consigne():
             profil_mod.nombre_fr(len(criteres)), ", ".join(" ".join(x for x in c if x) for c in criteres))
             if criteres else "chacun des critères non négociables du profil",
         "marche": " en " + region if region else "",
+        "categories": adequation.REGLE,
     }
 
 
@@ -129,6 +133,7 @@ Règles :
 - Les exigences et les extraits restent dans la langue de l'annonce, mot pour mot : ils serviront de mots-clés au CV et à la lettre. Tes explications sont en français.
 - note_globale (0-100) combine trois choses : l'adéquation du profil, le respect des critères non négociables de %(prenom)s, et l'intérêt du poste au regard de ses critères%(interet)s. Un critère non négociable clairement violé plafonne la note à 40. 80 et plus : à ne pas rater. 60-79 : à regarder. Moins de 60 : probablement non.
 - adequation_profil (0-100) : seulement la couverture des exigences majeures de l'annonce (3 à 6 exigences) par le profil, comme un recruteur la mesurerait.
+%(categories)s
 - criteres : évalue %(criteres)s. « incertain » quand l'annonce ne permet pas de conclure.
 - alertes : seulement des signaux présents dans le texte, cités mot pour mot, qui font penser à une entreprise malsaine ou à des conditions très contraignantes : disponibilité permanente, heures supplémentaires attendues, astreintes, déplacements très fréquents, « résistance au stress » en exigence, poste fourre-tout (trois métiers en un), objectifs irréalistes, turnover ou poste republié, période d'essai ou clause anormale, rémunération floue ou à la commission, culture « famille » ou « hustle ». Aucune alerte si rien de tel n'apparaît : une liste vide est une bonne réponse. N'invente jamais un signal.
 - salaire : fourchette annuelle brute en CHF pour ce poste à 100 %%. Si l'annonce donne un salaire ou une fourchette, reprends-la et cite la phrase exacte (confiance haute) ; une grille publique (canton, ville, administration) annoncée par sa classe se convertit en fourchette, confiance haute. Sinon, estime le marché du poste%(marche)s selon son niveau réel, le secteur, la taille et le type de structure, en t'appuyant sur ce que tu sais des références publiques (enquêtes salariales suisses, grilles publiques) ; dis lesquelles dans le raisonnement et mets la confiance à moyenne ou basse. C'est une estimation du marché pour ce poste, pas une prétention à annoncer : elle ne dépend pas de ce que %(prenom)s demanderait.
@@ -198,6 +203,7 @@ def evaluer(c, f, texte_profil, decisions=""):
     ev = r.objet
     ev.note_globale = max(0, min(100, ev.note_globale))
     ev.adequation_profil = max(0, min(100, ev.adequation_profil))
+    ev.categories = adequation.normaliser(ev.categories)
     return ev, dict(r.usage or {}, cout_usd=r.cout_usd)
 
 

@@ -33,16 +33,22 @@
         apres=("Mots gardés pour le pré-tri : " ~ c.mots | join(", ") ~ ".") if c.mots else "") }}
     {% if c.proposes %}{% with pp=c.proposes, ia=c.ia %}{% include "_postes_proposes.html" %}{% endwith %}{% endif %}
     {% elif c.type == 'lignes' %}
-    {# Certifications, langues : une ligne par élément, une case par colonne. #}
+    {# Formation, certifications, langues : une ligne par élément, une case par colonne. #}
     {{ champ_lignes(c.cle, c.libelle, c.colonnes, c.valeur, c.cle, aide=c.aide, requis=c.requis,
-        ajout={"dossier.certifications": "Ajouter une certification", "dossier.langues": "Ajouter une langue"}.get(c.cle, "Ajouter une ligne")) }}
+        ajout={"dossier.formations": "Ajouter un diplôme", "dossier.certifications": "Ajouter une certification", "dossier.langues": "Ajouter une langue"}.get(c.cle, "Ajouter une ligne")) }}
+    {% elif c.type == 'liste' %}
+    {# Une liste simple : une valeur par champ, « Ajouter » pour en ouvrir un autre. #}
+    {% set lignes = [] %}{% for x in c.valeur.split('\n') | map('trim') | select %}{% set _ = lignes.append([x]) %}{% endfor %}
+    {{ champ_lignes(c.cle, c.libelle, [("", c.libelle, c.exemple)], lignes, c.cle, aide=c.aide, requis=c.requis,
+        ajout={"recherche.entreprises": "Ajouter une entreprise"}.get(c.cle, "Ajouter une ligne"),
+        par_defaut=c.par_defaut and c.valeur) }}
     {% elif c.type == 'criteres' %}
     {% if c.aide %}<p class="champ-intro">{{ c.aide }}</p>{% endif %}
     {% if ident == "criteres" %}<p class="champ-intro">Tu préfères répondre à des questions ?
       <a class="lien-neutre" href="/premiers-pas/criteres">Questionnaire « Ce qui compte pour toi »</a></p>{% endif %}
     {{ champs_criteres(criteres_def, c.valeur, id="profil") }}
     {% else %}
-    <div class="champ{{ ' large' if c.type == 'liste' or c.large }}">
+    <div class="champ{{ ' large' if c.large }}">
       <label for="{{ c.cle }}">{{ c.libelle }}{% if c.requis %} <span class="requis" title="obligatoire">*</span>{% endif %}
         {% if c.par_defaut and c.valeur %}<span class="puce" title="Valeur des fichiers de config/ : enregistrée dans le profil seulement si tu la changes">par défaut</span>{% endif %}</label>
       {% if c.type == 'choix' %}
@@ -98,9 +104,6 @@
           {% if c.exemple %}placeholder="{{ c.exemple }}"{% endif %} inputmode="url" spellcheck="false" autocapitalize="off"
           aria-label="{{ c.libelle }} (après {{ c.prefixe }})"{% if c.aide %} aria-describedby="{{ c.cle }}-aide"{% endif %}>
       </div>
-      {% elif c.type == 'liste' %}
-      <textarea id="{{ c.cle }}" name="{{ c.cle }}" rows="{{ [3, [12, (c.valeur.split('\n') | length) + 1] | min] | max }}"
-        {% if c.aide %}aria-describedby="{{ c.cle }}-aide"{% endif %} spellcheck="false">{{ c.valeur }}</textarea>
       {% else %}
       <input type="{{ 'date' if c.type == 'date' else 'text' }}" id="{{ c.cle }}" name="{{ c.cle }}" value="{{ c.valeur }}"
         {% if c.type == 'date' %}max="{{ aujourdhui }}" min="1900-01-01"{% endif %}
