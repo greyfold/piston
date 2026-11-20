@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone, meta, delais, adequation %}
+{% from "_macros.html" import icone, meta, delais, adequation, meme_employeur as bandeau_employeur %}
 {% block titre %}À trancher · Recherche d'emploi{% endblock %}
 {# Tri en mode concentré : à l'ouverture de l'application, s'il y a des annonces à trancher, elles passent avant
    tout le reste. Pas de barre de menu : une carte à la fois (pile de tri, tri.js), oui, non ou peut-être en bas.
@@ -38,6 +38,7 @@
           <span class="puce {{ f.statut }}">{{ f.statut | statut }}</span>
         </div>
         {{ delais(f) }}
+        {{ bandeau_employeur(f, meme_employeur.get(f.empreinte)) }}
         {{ adequation(evals.get(f.empreinte)) }}
         {% if f.angle %}<p class="ligne-carte petit"><b>Angle :</b> {{ f.angle }}</p>{% endif %}
         {% if f.exigences %}<ul class="exig">{% for e in f.exigences[:3] %}<li>{{ e }}</li>{% endfor %}</ul>

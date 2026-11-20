@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone, bouton_action, bouton_ajout, meta, decision, notes, detail_avis, categories, detail_categories, alertes, delais, annuler_go, postuler, entete_page, etat_vide %}
+{% from "_macros.html" import icone, bouton_action, bouton_ajout, meta, decision, notes, detail_avis, categories, detail_categories, alertes, delais, annuler_go, postuler, entete_page, etat_vide, meme_employeur as bandeau_employeur %}
 {% block titre %}{{ f.entreprise }} · {{ f.titre }}{% endblock %}
 {# Une annonce : l'en-tête (Nexus PageHeader) porte à droite « Postuler sur le site », « Ajouter un suivi » et le
    menu d'actions, la décision sous le titre pour une annonce à trancher ; dessous, les onglets Adéquation, Dossier, Sources, Journal
@@ -13,6 +13,7 @@
 {% call entete_page(f.titre, f.entreprise, retour=("/?ensuite=1", "Aujourd'hui"), actions=actions, menu=menu) %}
   <p class="meta-entete">{{ meta(f) }}</p>
   {{ delais(f) }}
+  {{ bandeau_employeur(f, meme_employeur) }}
   {% if f.statut in ("A", "B", "nouvelle") %}{{ decision(f, raisons, retour, fonctions) }}{% endif %}
 {% endcall %}
 
