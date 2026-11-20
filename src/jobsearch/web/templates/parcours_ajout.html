@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icone %}
+{% from "_questions_criteres.html" import reponse_question %}
+{% block titre %}Ajouter à ta base · Recherche d'emploi{% endblock %}
+{# Mode concentré, la même salle que l'entretien de « Ton parcours » : on ajoute un élément en répondant dans le
+   fil. D'abord le genre, à cliquer ; puis ses champs. Un poste ou un engagement enchaîne ensuite sur son
+   entretien, dans la même salle, où cet ajout reste comme premier échange (parcours.ajouter_en_entretien). #}
+{% block barre %}{% endblock %}
+{% block classe_corps %}concentre entretien-fixe{% endblock %}
+{% block contenu %}
+<div class="salle-entretien">
+  <header class="tete-salle">
+    <div class="bande-page">
+      <a class="retour-salle" href="/parcours{{ suite }}#base">{{ icone("precedent") }}<span>Ta base</span></a>
+      <h1>Ton parcours</h1>
+    </div>
+    <div class="bande-entretien">
+      <div class="dedans-salle">
+        <div class="tete-entretien">
+          <div>
+            <p class="surtitre">Ajout à ta base</p>
+            <h2 id="entretien-titre">{{ genres[genre] if genre else "Nouvel élément" }}</h2>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+  <section class="corps-salle" id="fil-entretien" aria-labelledby="entretien-titre">
+    <div class="dedans-salle">
+      <ol class="fil" aria-label="Questions et réponses">
+        <li class="message ia{% if not genre %} courante{% endif %}"><span class="badge-fixe">Question de départ</span>
+          <p>{{ question }}</p>
+          {% if not genre %}<span class="aide-question">Un poste ou un engagement se poursuit en entretien avec l'IA, ici même.</span>{% endif %}</li>
+        {% if not genre %}
+        <li class="message reponses-rapides">
+          <form method="get" action="/parcours/ajout#entretien" class="reponse-guidee" data-auto>
+            {% if de %}<input type="hidden" name="de" value="{{ de }}">{% endif %}
+            {{ reponse_question({"question": question, "choix": genres.items() | list}, none, {}, nom_choix="genre", id="ajout") }}
+            <div class="actions-reponse">
+              <button class="go">Valider {{ icone("envoyer") }}</button>
+            </div>
+          </form>
+        </li>
+        {% else %}
+        <li class="message moi"><span class="cache">Ta réponse : </span><p>{{ genres[genre] }}</p>
+          <a class="lien-neutre petit" href="/parcours/ajout{{ suite }}#entretien">Modifier<span class="cache"> le genre</span></a></li>
+        <li class="message ia courante"><span class="badge-fixe">Question de départ</span><p>{{ question_champs }}</p></li>
+        <li class="message reponses-rapides">
+          <form method="post" action="/parcours/ajouter{{ suite }}" class="reponse-guidee">
+            <input type="hidden" name="genre" value="{{ genre }}">
+            {{ reponse_question({"question": question_champs, "champs": champs}, none, {}, prefixe="", id="ajout") }}
+            {% if genre in sous %}
+            <div class="champs-reponse">
+              <div class="champ large"><label for="ajout-parent">Rangé sous</label>
+                <select id="ajout-parent" name="parent"{% if genre != "competence" %} required{% endif %}>
+                  <option value="">{{ "— (premier niveau)" if genre == "competence" else "Choisis…" }}</option>
+                  {% for g, titre, noeuds in arbre if g in cadres %}{% for n in noeuds recursive %}{% if n.genre in cadres or n.genre == "projet" %}
+                  <option value="{{ n.id }}">{{ "· " * (loop.depth - 1) }}{{ n.titre }}{% if n.organisation %} ({{ n.organisation }}){% endif %}</option>
+                  {% if n.enfants %}{{ loop(n.enfants) }}{% endif %}{% endif %}{% endfor %}{% endfor %}
+                </select></div>
+            </div>
+            {% endif %}
+            <div class="actions-reponse">
+              <a class="lien-neutre" href="/parcours{{ suite }}#base">Annuler</a>
+              <button class="go">Valider {{ icone("envoyer") }}</button>
+            </div>
+          </form>
+        </li>
+        {% endif %}
+      </ol>
+    </div>
+  </section>
+</div>
+<script src="/static/entretien.js?v={{ version_css() }}"></script>
+<script>
+(function () {
+  var form = document.querySelector(".reponse-guidee");
+  if (form && form.hasAttribute("data-auto")) {       // le genre part au clic, comme une réponse rapide
+    form.querySelectorAll('input[type="radio"]').forEach(function (r) {
+      r.addEventListener("change", function () { form.requestSubmit(); });
+    });
+  }
+  var premier = form && form.querySelector('input:not([type=hidden]), select, textarea');
+  if (premier && location.hash === "#entretien") premier.focus({preventScroll: true});
+  window.Entretien.salle();
+})();
+</script>
+{% endblock %}

@@ -630,7 +630,7 @@ def _prenom():
 def importer_cv(reg, texte, nom="CV", c=None):
     """Range le CV dans la base. Renvoie {"ajoutes": n, "ecartes": [titres], "doublons": n, "profil": {genre: n}}.
 
-    Les certifications et les langues du CV remplissent aussi leur onglet du profil (Réglages), où elles font
+    Les formations, les certifications et les langues du CV remplissent aussi leur onglet du profil (Réglages), où elles font
     foi pour les dossiers : seules celles qui n'y sont pas encore s'ajoutent. Le niveau que le CV permet de
     viser devient le niveau visé de la recherche s'il n'y en a pas encore ("niveau" du bilan)."""
     _schema(reg)
@@ -661,7 +661,7 @@ def importer_cv(reg, texte, nom="CV", c=None):
             continue
         if el.genre == "formation":
             formations.add(el.ref)
-        if el.genre in ("certification", "langue"):
+        if el.genre in ("formation", "certification", "langue"):
             pour_profil.append(el.model_dump())
         cle = (_plat(el.genre), _plat(el.titre), _plat(el.organisation), parent)
         if cle in existants:                            # CV importé deux fois : on rattache, on ne double pas
@@ -810,7 +810,29 @@ def appui_fixe(pourquoi, x=None):
 
 
 def element_en_cours(reg):
-    return next((x for x in cadres(reg) if not x["approfondi"]), None)
+    """Le poste ou l'engagement en entretien : celui dont la question est la plus récente (qu'on vient
+    d'ajouter ou de rouvrir), sinon le premier qui n'est pas encore approfondi, dans l'ordre de la base."""
+    restants = [x for x in cadres(reg) if not x["approfondi"]]
+    if not restants:
+        return None
+    r = reg.cx.execute("SELECT element FROM parcours_echanges WHERE sujet=? AND element IN (%s) ORDER BY id DESC LIMIT 1"
+                       % ",".join("?" * len(restants)), (SUJET_PARCOURS, *(x["id"] for x in restants))).fetchone()
+    return next((x for x in restants if r and x["id"] == r[0]), restants[0])
+
+
+def _ouvrir_question(reg, e):
+    """Pose la question d'un élément s'il n'en a pas déjà une sans réponse : la question de départ la
+    première fois, sinon une reprise."""
+    ech = _echanges(reg, SUJET_PARCOURS, e["id"])
+    if ech and ech[-1]["reponse"] is None:
+        return
+    if not any(not (x["appui"] or {}).get("ajout") for x in ech):
+        _poser_question(reg, SUJET_PARCOURS, e["id"], premiere_question(e), appui_fixe(
+            "Question de départ, écrite d'avance pour chaque %s de ta base : l'IA prend le relais après ta "
+            "réponse." % GENRES[e["genre"]].lower(), e))
+    else:
+        _poser_question(reg, SUJET_PARCOURS, e["id"], "Qu'aimerais-tu ajouter sur « %s » ?" % e["titre"],
+                        appui_fixe("Question écrite d'avance : l'entretien reprend sur cet élément.", e))
 
 
 def etat_entretien(reg):
@@ -820,16 +842,8 @@ def etat_entretien(reg):
     faits, total = progression(reg)
     if e is None:
         return {"element": None, "echanges": [], "faits": faits, "total": total}
+    _ouvrir_question(reg, e)
     ech = _echanges(reg, SUJET_PARCOURS, e["id"])
-    if not ech or ech[-1]["reponse"] is not None:
-        if not ech:
-            _poser_question(reg, SUJET_PARCOURS, e["id"], premiere_question(e), appui_fixe(
-                "Question de départ, écrite d'avance pour chaque %s de ta base : l'IA prend le relais après ta "
-                "réponse." % GENRES[e["genre"]].lower(), e))
-        else:
-            _poser_question(reg, SUJET_PARCOURS, e["id"], "Qu'aimerais-tu ajouter sur « %s » ?" % e["titre"],
-                            appui_fixe("Question écrite d'avance : l'entretien reprend sur cet élément.", e))
-        ech = _echanges(reg, SUJET_PARCOURS, e["id"])
     return {"element": element(reg, e["id"]), "echanges": ech, "faits": faits, "total": total,
             "rang": faits + 1}
 
@@ -915,7 +929,7 @@ def repondre(reg, reponse, c=None):
                    (reponse, maintenant(), ech[-1]["id"]))
     source = "\n".join([reponse] + [x["reponse"] for x in ech if x["reponse"]] + [rendu(reg)])
     ajoutes, ecartes = _appliquer_tour(reg, e, tour, reponse, source)
-    poses = sum(1 for x in ech)
+    poses = sum(1 for x in ech if not (x["appui"] or {}).get("ajout"))     # l'ajout n'est pas une question de l'entretien
     fini = tour.suffisant or not tour.question.strip() or poses > QUESTIONS_MAX
     if fini:
         reg.cx.execute("UPDATE parcours SET approfondi=1, maj_le=? WHERE id=?", (maintenant(), e["id"]))
@@ -944,6 +958,74 @@ def reprendre(reg, ident):
         raise ParcoursInvalide("seuls un poste ou un engagement se reprennent en entretien")
     reg.cx.execute("UPDATE parcours SET approfondi=0 WHERE id=?", (ident,))
     reg.commit()
+    _ouvrir_question(reg, e)                  # sa question, la plus récente, le met en tête de l'entretien
+
+
+# --- Ajouter un élément, dans la salle de l'entretien -------------------------------------------
+# Une première question (le genre, à cliquer), puis les champs de ce genre, dans le fil. Un poste ou un
+# engagement enchaîne sur l'entretien, dans la même salle : l'ajout y reste comme premier échange.
+
+QUESTION_AJOUT = "Qu'ajoutes-tu à ta base ?"
+QUESTIONS_CHAMPS = {
+    "poste": "L'essentiel du poste : l'intitulé, l'employeur, les dates. Ensuite, quelques questions pour faire "
+             "ressortir ce que tu y as accompli.",
+    "engagement": "L'essentiel de l'engagement : ton rôle, l'organisation, les dates. Ensuite, quelques questions "
+                  "pour faire ressortir ce que tu y as fait.",
+    "formation": "La formation en une ligne : le diplôme, l'école, les dates.",
+    "certification": "La certification : son nom, l'organisme, la date.",
+    "projet": "Le projet : son nom, ce qu'il visait, et le poste ou l'engagement sous lequel le ranger.",
+    "realisation": "La réalisation : ce que tu as fait, son résultat, et où la ranger.",
+    "competence": "La compétence, et où tu l'as montrée si tu veux la ranger sous une expérience.",
+    "langue": "La langue et ton niveau.",
+}
+TITRES_AJOUT = {"poste": "Intitulé du poste", "engagement": "Rôle", "formation": "Diplôme ou formation",
+                "certification": "Certification", "projet": "Projet", "realisation": "Réalisation",
+                "competence": "Compétence", "langue": "Langue"}
+ORGANISATIONS_AJOUT = {"poste": "Employeur", "engagement": "Organisation", "formation": "École",
+                       "certification": "Organisme"}
+
+
+def champs_ajout(genre):
+    """Les champs à remplir pour un genre, dans l'ordre : [{nom, libelle, exemple, long, requis}]."""
+    if genre not in GENRES:
+        return []
+    out = [{"nom": "titre", "libelle": TITRES_AJOUT[genre], "requis": True}]
+    if genre in ORGANISATIONS_AJOUT:
+        out += [{"nom": "organisation", "libelle": ORGANISATIONS_AJOUT[genre]}, {"nom": "lieu", "libelle": "Lieu"}]
+    if genre not in ("competence", "langue"):
+        out.append({"nom": "debut", "libelle": "Début" if genre != "certification" else "Date", "exemple": "MM.AAAA"})
+        if genre != "certification":
+            out.append({"nom": "fin", "libelle": "Fin", "exemple": "vide : en cours" if genre in CADRES else "MM.AAAA"})
+    if genre == "langue":
+        out.append({"nom": "detail", "libelle": "Niveau", "exemple": "C1, courant, langue maternelle…"})
+    elif genre not in CADRES + ("formation",):
+        out.append({"nom": "detail", "libelle": "Description", "long": True})
+    if genre == "realisation":
+        out.append({"nom": "resultat", "libelle": "Résultat", "long": True})
+    return out
+
+
+def resume(e):
+    """Un élément en une ligne, tel que la personne l'a donné : « Poste · Intitulé · Employeur · dates »."""
+    dates = e["debut"] and (e["debut"] + (" – " + e["fin"] if e["fin"] else
+                                           " – aujourd'hui" if e["genre"] in CADRES else ""))
+    return " · ".join(v for v in (GENRES[e["genre"]], e["titre"], e["organisation"], e["lieu"], dates) if v)
+
+
+def ajouter_en_entretien(reg, genre, titre, parent=None, **champs):
+    """Ajoute un élément saisi dans la salle de l'entretien. Un poste ou un engagement y garde l'ajout comme
+    premier échange et reçoit aussitôt sa question de départ : il devient l'élément en entretien."""
+    ident = ajouter(reg, genre, titre, parent=parent, origine="saisie", citation=titre, **champs)
+    if genre in CADRES:
+        e = element(reg, ident)
+        _poser_question(reg, SUJET_PARCOURS, ident, QUESTION_AJOUT,
+                        dict(appui_fixe("Question écrite d'avance : ce que tu ajoutes à ta base, en quelques champs."),
+                             ajout=True))
+        reg.cx.execute("UPDATE parcours_echanges SET reponse=?, repondu_le=? WHERE id=(SELECT MAX(id) FROM "
+                       "parcours_echanges WHERE element=?)", (resume(e), maintenant(), ident))
+        reg.commit()
+        _ouvrir_question(reg, e)
+    return ident
 
 
 def date_fr(iso):

@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>{% block titre %}Recherche d'emploi{% endblock %}</title>
+<title>{% block titre %}{% if reglage %}{{ reglage.nom }} · Réglages · {% endif %}Recherche d'emploi{% endblock %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
-{% from "_macros.html" import icone %}
+{% from "_macros.html" import icone, flash_message %}
 <link rel="stylesheet" href="/static/style.css?v={{ version_css() }}">
 <script src="/static/champs.js?v={{ version_css() }}" defer></script>
 <script src="/static/compositeur.js?v={{ version_css() }}" defer></script>
@@ -28,11 +28,11 @@
 {% if profil_manquants and not accueil and not concentre and not premiers_pas_affiches and not nav.startswith(('/profil', '/connexion')) %}<div class="bandeau attention"><span class="point"></span><span>Profil incomplet ({{ profil_manquants | map('last') | join(', ') }}) : <a href="/profil">le compléter</a>.</span></div>{% endif %}
 {% if a_configurer and not accueil and nav in ('/', '/sante') %}{% for c in a_configurer %}<div class="bandeau attention"><span class="point"></span><span>{{ c.nom }} n'est pas branché : {{ c.message }}. Les autres sources tournent normalement, et {{ c.nom }} reprendra de lui-même une fois le réglage fait. <a href="/connecteurs#{{ c.id }}">Que faire</a></span></div>{% endfor %}{% endif %}
 {# Réglages : la page ouverte sur une seule colonne, de la largeur d'un formulaire, avec un retour vers la
-   page Réglages (sauf sur celle-ci). #}
+   page Réglages (sauf sur celle-ci), ou vers `retour_cadre` pour une sous-page (le détail d'une source). #}
 {% set cadre_reglages = dans_reglages and not accueil %}
 {% if cadre_reglages %}<div class="reglages-contenu">{% if nav != '/reglages' %}
-<a class="retour" href="/reglages">{{ icone("precedent") }} Réglages</a>{% endif %}{% endif %}
-{% block message %}{% if msg %}<div class="flash {{ '' if ok else 'ko' }}" role="status">{{ msg }}</div>{% endif %}{% endblock %}
+{% set r = retour_cadre or {"href": "/reglages", "nom": "Réglages"} %}<a class="retour" href="{{ r.href }}">{{ icone("precedent") }} {{ r.nom }}</a>{% endif %}{% endif %}
+{% block message %}{% if msg %}{{ flash_message(msg, ok) }}{% endif %}{% endblock %}
 {% block contenu %}{% endblock %}
 {% if cadre_reglages %}</div>{% endif %}
 </main>
@@ -73,7 +73,13 @@ document.querySelectorAll("[data-suivi-dossier]").forEach(function (el) {
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (!d) return;
-        if (d.etat !== "en_cours") { clearInterval(minuterie); location.replace(location.pathname + location.hash); return; }
+        if (d.etat !== "en_cours") {                       // fini : la page se recharge, sur le même onglet
+          clearInterval(minuterie);
+          var q = new URLSearchParams(location.search);
+          q.delete("msg"); q.delete("ok");
+          location.replace(location.pathname + (q.toString() ? "?" + q : "") + location.hash);
+          return;
+        }
         el.textContent = d.libelle;
       })
       .catch(function () {});
@@ -106,8 +112,33 @@ document.querySelectorAll("[data-confirmer-modale]").forEach(function (b) {
     if (d && d.showModal) d.showModal();
   });
 });
+// Ajout dans une modale (macro modale_ajout) : le bouton [data-ouvrir-modale="id"] l'ouvre.
+document.querySelectorAll("[data-ouvrir-modale]").forEach(function (b) {
+  b.addEventListener("click", function () {
+    var d = document.getElementById(b.dataset.ouvrirModale);
+    if (d && d.showModal && !d.open) d.showModal();
+  });
+});
 document.querySelectorAll("dialog [data-fermer-modale]").forEach(function (b) {
   b.addEventListener("click", function () { b.closest("dialog").close(); });
+});
+// Menu d'actions (macro menu_actions, Nexus DropdownMenu) : un seul ouvert ; un clic à côté, un choix ou Échap le referme.
+document.addEventListener("click", function (e) {
+  document.querySelectorAll("details.menu-actions[open]").forEach(function (m) {
+    if (!m.contains(e.target) || e.target.closest(".element-menu")) m.open = false;
+  });
+});
+document.addEventListener("keydown", function (e) {
+  if (e.key !== "Escape") return;
+  document.querySelectorAll("details.menu-actions[open]").forEach(function (m) {
+    m.open = false;
+    m.querySelector("summary").focus();
+  });
+});
+// « Postuler sur le site » (macro postuler) : le formulaire officiel s'ouvre dans le navigateur, et le
+// formulaire de la page note le clic puis revient sur l'onglet Dossier, avec les fichiers à joindre.
+document.querySelectorAll("form[data-postuler]").forEach(function (f) {
+  f.addEventListener("submit", function () { window.open(f.dataset.postuler, "_blank", "noopener"); });
 });
 // Retour arrière : la page revient du cache avec le bouton bloqué ; on le rend.
 window.addEventListener("pageshow", function (e) {

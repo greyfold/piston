@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icone, confirmation, entete_reglage %}
+{% block titre %}{{ s.nom }} · Sources · Réglages · Recherche d'emploi{% endblock %}
+{% block contenu %}
+{# Une source : ses réglages en lignes de réglage, ce qu'elle a donné en chiffres clés, l'examen par l'IA. #}
+{% call entete_reglage({"nom": s.nom}) %}{% if s.nature %}{{ s.nature }}{% endif %}{% if s.url %}{{ " · " if s.nature }}<a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">ouvrir le site</a>{% endif %}{% if s.manuelle and s.ajoutee_le %}{{ " · " if s.nature or s.url }}ajoutée le {{ s.ajoutee_le[:10] | date_fr(True) }}{% endif %}{% endcall %}
+{% if s.remarques %}<p>{{ s.remarques }}</p>{% endif %}
+
+<section class="groupe-reglages" aria-labelledby="source-reglages">
+  <h2 class="section-base" id="source-reglages">Réglages</h2>
+  <ul class="reglages-liste">
+    {% if s.branchee %}
+    <li class="reglage-ligne">
+      <span class="texte"><span class="titre" id="source-actif">Interroger à chaque passage</span>
+        <span class="description">Page carrière branchée{% if s.type %} ({{ s.type }}){% endif %}. Désactivée, elle reste dans le répertoire sans être lue.</span></span>
+      <form method="post" action="/sources/{{ s.id | urlencode }}/{{ 'desactiver' if s.actif else 'activer' }}">
+        <button class="interrupteur{{ ' actif' if s.actif }}" role="switch" aria-checked="{{ 'true' if s.actif else 'false' }}" aria-labelledby="source-actif">
+          <span class="curseur" aria-hidden="true"></span></button>
+      </form>
+    </li>
+    {% endif %}
+    <li class="reglage-ligne">
+      <span class="texte"><span class="titre">Accès <span class="puce {{ s.statut[0] }}">{{ s.statut[1] }}</span></span>
+        <span class="description">{{ s.acces }}</span></span>
+    </li>
+    <li class="reglage-ligne">
+      <span class="texte"><span class="titre">État de la route
+          {% if s.etat %}<span class="puce {{ 'B' if s.etat.dernier_test_ok else 'retard' }}">{{ s.etat.etat }}</span>{% endif %}</span>
+        <span class="description">{% if s.etat %}Testée le {{ s.etat.dernier_test_le[:10] | date_fr(True) }}{% if s.etat.derniere_reussite_le %} · dernière réussite le {{ s.etat.derniere_reussite_le[:10] | date_fr(True) }}{% endif %}{% if s.etat.remarques and not s.etat.dernier_test_ok %}. {{ s.etat.remarques }}{% endif %}{% else %}Pas encore interrogée par un passage.{% endif %}</span></span>
+    </li>
+  </ul>
+</section>
+
+<section class="groupe-reglages" aria-labelledby="source-chiffres">
+  <h2 class="section-base" id="source-chiffres">Ce qu'elle a donné</h2>
+  <div class="chiffres">
+    <div class="chiffre"><b>{{ s.n.vues or 0 }}</b><span>vues</span></div>
+    <div class="chiffre"><b>{{ s.n.ab or 0 }}</b><span>A ou B</span></div>
+    <div class="chiffre"><b>{{ s.n.go or 0 }}</b><span>Oui</span></div>
+    <div class="chiffre"><b>{{ s.n.envoyees or 0 }}</b><span>envoyées</span></div>
+    <div class="chiffre"><b>{{ s.n.entretiens or 0 }}</b><span>entretiens</span></div>
+    <div class="chiffre"><b>{{ s.n.refus or 0 }}</b><span>refus</span></div>
+  </div>
+  <p class="petit muet">Une annonce vue par plusieurs sources compte pour chacune.</p>
+</section>
+
+{% set verdicts = {"permise": ("B", "Accès automatisé permis"), "sous conditions": ("nouvelle", "Permis sous conditions"),
+                   "interdite": ("retard", "Accès automatisé interdit"), "inconnue": ("", "Conditions non établies")} %}
+{% set apis = {"publique": "API publique", "sur accord": "API sur accord ou payante", "aucune": "Aucune API", "inconnue": "API : rien trouvé"} %}
+{% set mcps = {"officiel": "Serveur MCP officiel", "communautaire": "Serveur MCP communautaire", "aucun": "Aucun serveur MCP", "inconnu": "MCP : rien trouvé"} %}
+<section class="groupe-reglages" aria-labelledby="source-examen">
+  <h2 class="section-base" id="source-examen">Examen de la source</h2>
+  {% if en_cours %}
+  <div class="statut-ia petit" role="status" data-recharger="10"><span class="spinner" aria-hidden="true"></span>
+    <span>L'IA examine les conditions de {{ s.nom }}, son API et ses serveurs MCP…</span></div>
+  {% elif ex and ex.examen %}{% set e = ex.examen %}{% set v = verdicts.get(e.automatisation, ("", e.automatisation)) %}
+  <div class="carte pile">
+    <div><span class="puce {{ v[0] }}">{{ v[1] }}</span> <span class="badge-ia">{{ icone("modele") }}Examen de l'IA</span> <span class="muet">le {{ ex.examinee_le[:10] | date_fr(True) }}</span></div>
+    <div>{{ e.nature }}</div>
+    <div><b>Conditions générales</b> : {% if e.conditions_url %}<a href="{{ e.conditions_url }}" target="_blank" rel="noopener noreferrer">{{ "lues" if e.conditions_lues else "trouvées, pas lues" }}</a>{% else %}introuvables{% endif %}.
+      {% for x in e.extraits %}<div class="muet">« {{ x }} »</div>{% endfor %}
+      {% if e.robots %}<div class="muet">robots.txt : {{ e.robots }}</div>{% endif %}</div>
+    <div><b>{{ apis.get(e.api, e.api) }}</b>{% if e.api_url %} · <a href="{{ e.api_url }}" target="_blank" rel="noopener noreferrer">documentation</a>{% endif %}{% if e.api_detail %} · {{ e.api_detail }}{% endif %}</div>
+    <div><b>{{ mcps.get(e.mcp, e.mcp) }}</b>{% if e.mcp_nom %} · {% if e.mcp_url %}<a href="{{ e.mcp_url }}" target="_blank" rel="noopener noreferrer">{{ e.mcp_nom }}</a>{% else %}{{ e.mcp_nom }}{% endif %}{% endif %}</div>
+    {% if e.autres_voies %}<div><b>Autres voies</b> : {{ e.autres_voies }}</div>{% endif %}
+    <div><b>Accès conseillé : « {{ e.acces_conseille }} »</b>. {{ e.raisons }}</div>
+    {% if s.manuelle and not s.branchee and s.acces != e.acces_conseille %}
+    <form method="post" action="/sources/appliquer"><input type="hidden" name="id" value="{{ s.id }}"><input type="hidden" name="acces" value="{{ e.acces_conseille }}">
+      <button class="petit">Noter l'accès « {{ e.acces_conseille }} »</button></form>
+    {% endif %}
+    <div class="petit muet">Ce n'est pas un avis juridique : relis les conditions avant de brancher une source.</div>
+  </div>
+  {% else %}
+  {% if ex and ex.erreur %}<p><span class="echec-tache" role="alert">Examen impossible : {{ ex.erreur[:160] }}</span></p>{% endif %}
+  <p class="petit muet">L'IA lit ses conditions générales et cherche une API publique ou un serveur MCP. Une tâche sur ton abonnement Claude.</p>
+  {% endif %}
+  {% if not en_cours %}
+  <form method="post" action="/sources/examiner" class="boutons"><input type="hidden" name="id" value="{{ s.id }}">
+    <button class="discret petit">{{ "Réexaminer" if ex and ex.examen else "Examiner avec l'IA" }}</button></form>
+  {% endif %}
+</section>
+
+{% if s.manuelle %}
+<form method="post" action="/sources/retirer" id="retirer-source" class="boutons"><input type="hidden" name="id" value="{{ s.id }}">
+  <button type="button" class="lien-danger" data-confirmer-modale="confirmer-retirer-source">Retirer cette source</button></form>
+{{ confirmation("confirmer-retirer-source", "Retirer cette source ?", "« " ~ s.nom ~ " » sera retirée du répertoire des sources.",
+     "Retirer la source", "retirer-source", "confirme", "1") }}
+{% endif %}
+{% endblock %}

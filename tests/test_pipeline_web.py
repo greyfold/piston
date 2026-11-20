@@ -199,8 +199,10 @@ def test_menu_lateral_et_reglages(web, reg):
     assert '<a href="/reglages" class="actif" aria-current="true">' in sources
     assert 'class="retour" href="/reglages"' in sources
     profil = web.get("/profil/identite").text
-    onglets = profil.split('class="onglets-annonce"')[1].split("</nav>")[0]
-    assert 'href="/profil/langues"' in onglets and 'class="actif" aria-current="step">Identité' in onglets
+    assert "onglets-annonce" not in profil and "<h1>Identité</h1>" in profil
+    assert 'class="retour" href="/profil"' in profil and 'class="retour" href="/reglages"' not in profil
+    etapes = web.get("/profil").text                                      # la liste des étapes, en lignes de réglage
+    assert 'class="reglage-ligne" href="/profil/langues"' in etapes and 'class="retour" href="/reglages"' in etapes
     assert 'class="reglages-contenu"' in sources and 'class="reglages-contenu"' not in html
 
 
@@ -280,19 +282,21 @@ def test_a_l_ouverture_le_tri_passe_d_abord(web, reg):
     page = web.get("/?ensuite=1")
     assert "tri_passe" in page.headers.get("set-cookie", "") and "Trancher maintenant" in page.text
     assert web.get("/", follow_redirects=False).status_code == 200              # tri passé : plus de détour
+    r = web.get("/?ouverture=1", follow_redirects=False)                         # la fenêtre se rouvre : le tri d'abord
+    assert r.status_code == 303 and r.headers["location"] == "/trier"
 
 
 def test_trancher_en_json_puis_tout_est_tranche(web, reg):
     e = annonce(reg, statut="A", texte=FR)
     r = web.post("/action", data={"empreinte": e, "type": "pasgo", "raisons": ["salaire"], "retour": "/trier"},
                  headers={"accept": "application/json"})
-    assert r.json()["ok"] is True and "Pas go" in r.json()["msg"]
+    assert r.json()["ok"] is True and ": Non" in r.json()["msg"]
     reg.cx.rollback()
     assert reg.get(e)["statut"] == "C" and reg.get(e)["raison_decision"] == ["salaire"]
     r = web.post("/action", data={"empreinte": "inconnue", "type": "go"}, headers={"accept": "application/json"})
     assert r.json()["ok"] is False and "aucune annonce" in r.json()["msg"]
-    tri = web.get("/trier").text                         # plus rien : la fin, et le chemin vers la suite
-    assert "Tout est tranché" in tri and "Passer à la suite" in tri and "data-form-tri" not in tri
+    r = web.get("/trier?msg=Fini&ok=1", follow_redirects=False)   # plus rien : droit à « À faire aujourd'hui »
+    assert r.status_code == 303 and r.headers["location"] == "/?ensuite=1&msg=Fini&ok=1"
     assert web.get("/", follow_redirects=False).status_code == 200
 
 
@@ -432,6 +436,26 @@ def test_cartes_montrent_note_et_alertes(web, reg):
     assert "130–150 k CHF" in page
     detail = web.get("/annonce/" + e).text
     assert "Critères et exigences" in detail and "130’000 – 150’000 CHF" in detail
+    assert 'aria-label="Adéquation par catégorie"' in detail and "85<small>/100</small>" in detail
+    assert 'style="width: 85%"' in detail and "Pas de MLOps" in detail and "Atouts et écarts par catégorie" in detail
+    assert "Rien d'exigé dans l'annonce pour : formation." in unescape(detail)
+
+
+def test_annonce_evaluee_avant_l_analyse_par_categorie(web, reg):
+    """Une note d'avant l'analyse par catégorie s'affiche comme avant, sans bloc vide."""
+    import json
+    from jobsearch import evaluation
+    from test_evaluation import FauxMoteur, _ev
+    e = annonce(reg, statut="A", texte=FR)
+    evaluation.evaluer_lot(reg, [reg.get(e)], c=FauxMoteur([_ev()]), texte_profil="P")
+    ancien = evaluation.lire(reg, e)["resultat"]
+    del ancien["categories"]
+    del ancien["exigences"][0]["categorie"]
+    reg.cx.execute("UPDATE evaluations SET resultat=?", (json.dumps(ancien),))
+    reg.commit()
+    detail = web.get("/annonce/" + e).text
+    assert "82<small>/100</small>" in detail and "Own the AI product roadmap" in detail
+    assert "Adéquation par catégorie" not in detail and "Atouts et écarts" not in detail
 
 
 def test_go_lance_le_dossier(web, reg, monkeypatch):
@@ -536,7 +560,7 @@ def test_rythme_et_alerte_du_vendredi(reg, sans_notification):
 def test_accueil_montre_le_rythme(web, reg):
     annonce(reg, statut="candidature", postulee_le=dt.date.today().isoformat())
     html = web.get("/").text
-    assert "postulations cette semaine" in html and "postulations ce mois" in html
+    assert "<span>cette semaine</span>" in html and "<span>ce mois</span>" in html
 
 
 def test_objectifs_choisis_par_periode(web, reg, sans_notification):
@@ -547,13 +571,13 @@ def test_objectifs_choisis_par_periode(web, reg, sans_notification):
                  follow_redirects=False)
     assert r.status_code == 303 and "ok=1" in r.headers["location"]
     html = web.get("/?ensuite=1").text
-    assert "postulations ce mois" in html and "postulations cette semaine" not in html
+    assert "<span>ce mois</span>" in html and "<span>cette semaine</span>" not in html
     vendredi = dt.datetime(2026, 10, 30, 10, 0)
     assert not followups.rythme(reg, vendredi.date())["alerte"]      # pas d'objectif de semaine : pas de rappel
     assert not pipeline.rappel_rythme(reg, vendredi)["alerte"] and not sans_notification
     assert 'value="10"' in web.get("/profil/objectifs").text            # dans Ma recherche › Objectifs
     web.post("/profil/objectifs", data={"objectifs.semaine_min": "", "objectifs.mois_min": ""})
-    assert "postulations ce mois" not in web.get("/").text
+    assert "<span>ce mois</span>" not in web.get("/").text
     assert "nombre entier" in web.post("/profil/objectifs", data={"objectifs.semaine_min": "x",
                                                                    "objectifs.mois_min": ""}).text
 
@@ -564,7 +588,7 @@ def test_sans_objectif_sans_rappel(web, reg, sans_notification):
     vendredi = dt.datetime(2026, 10, 30, 10, 0)
     assert not followups.rythme(reg, vendredi.date())["actif"]
     assert not pipeline.rappel_rythme(reg, vendredi)["alerte"]
-    assert "postulations cette semaine" not in web.get("/").text
+    assert "<span>cette semaine</span>" not in web.get("/").text
 
 
 def test_marquer_envoyee_depuis_le_tableau_de_bord_lance_claude(web, reg):
@@ -599,27 +623,54 @@ def test_entretien_onglet_et_accueil(web, reg, tmp_path):
 def test_sans_fiche_pas_d_onglet(web, reg):
     e = annonce(reg, statut="entretien", texte=FR)
     page = web.get("/annonce/%s?onglet=entretien" % e).text
-    assert "onglets-annonce" not in page and "rendez-vous" not in page
+    assert "?onglet=entretien" not in page and "rendez-vous" not in page and "?onglet=dossier" not in page
+    assert 'aria-current="page">Adéquation' in page                   # onglet inconnu : l'adéquation
 
 
-def test_bouton_claude_bloque_pendant_la_session_et_libre_apres_un_echec(web, reg, tmp_path):
-    from jobsearch import agent_claude, dossier as dmod
-    e = annonce(reg, statut="retenue", url="https://exemple.ch/postuler")
+def test_postuler_sur_le_site_puis_les_fichiers_a_joindre(web, reg, tmp_path):
+    """« Remplir avec Claude » n'est plus proposé : « Postuler sur le site » ouvre le formulaire officiel, note
+    le clic, et l'onglet Dossier montre alors les fichiers à joindre, un par un ou tous ensemble."""
+    import io
+    import zipfile
+    from jobsearch import dossier as dmod
+    e = annonce(reg, statut="retenue", texte=FR, url="https://exemple.ch/postuler")
+    (tmp_path / "Camille-CV-Exemple.pdf").write_bytes(b"%PDF-1.4")
+    (tmp_path / "Camille-Lettre-Exemple.pdf").write_bytes(b"%PDF-1.4")
     reg.cx.executescript(dmod.SCHEMA)
     reg.cx.execute("INSERT INTO dossiers (empreinte, etat, chemin) VALUES (?,?,?)", (e, "pret", str(tmp_path)))
     reg.commit()
-    page = web.get("/").text
-    assert "Remplir avec Claude" in page and 'data-occupe="Claude démarre…"' in page and "data-suivi-tache=" not in page
-    t = agent_claude.lancer(reg, "formulaire", e)
-    page = web.get("/").text
-    assert 'disabled aria-busy="true" data-suivi-tache="%d"' % t in page and "Claude travaille…" in page
-    assert web.get("/tache/%d/etat" % t).json() == {"etat": "en_cours", "libelle": "Claude travaille…", "active": True}
-    agent_claude.noter(reg, t, "arret", "Le portail a refusé la page")
-    page = web.get("/").text
-    assert "data-suivi-tache=" not in page and "Échec de Claude : Le portail a refusé la page" in page
-    assert ">Remplir avec Claude</button>" in page
-    assert web.get("/tache/%d/etat" % t).json()["active"] is False
-    assert web.get("/tache/999/etat").status_code == 404
+    accueil = web.get("/?ensuite=1").text
+    assert "Remplir avec Claude" not in accueil and 'data-postuler="https://exemple.ch/postuler"' in accueil
+    assert "Annuler la candidature" in accueil and 'class="menu-actions"' in accueil
+    page = web.get("/annonce/%s?onglet=dossier" % e).text
+    assert 'data-postuler="https://exemple.ch/postuler"' in page and "Fichiers à joindre" not in page
+    r = web.post("/action", data={"empreinte": e, "type": "postuler",
+                                  "retour": "/annonce/%s?onglet=dossier#fichiers" % e}, follow_redirects=False)
+    assert r.status_code == 303 and "onglet=dossier" in r.headers["location"] and "ok=1" in r.headers["location"]
+    reg.cx.rollback()
+    assert reg.get(e)["statut"] == "retenue"                     # rien ne change au registre
+    page = web.get("/annonce/%s?onglet=dossier" % e).text
+    assert "Fichiers à joindre" in page and "/dossier/%s/fichier/Camille-CV-Exemple.pdf" % e in page
+    assert "/dossier/%s/tout.zip" % e in page
+    z = web.get("/dossier/%s/tout.zip" % e)
+    assert z.status_code == 200 and z.headers["content-disposition"].startswith("attachment")
+    assert sorted(zipfile.ZipFile(io.BytesIO(z.content)).namelist()) == ["Camille-CV-Exemple.pdf", "Camille-Lettre-Exemple.pdf"]
+    # Pas de Go : on ne postule pas.
+    b = annonce(reg, statut="B", texte=FR, titre="Autre poste", url="https://exemple.ch/b")
+    r = web.post("/action", data={"empreinte": b, "type": "postuler"}, headers={"accept": "application/json"})
+    assert r.json()["ok"] is False
+
+
+def test_annonce_en_onglets_et_suivi_en_modale(web, reg):
+    e = annonce(reg, statut="retenue", texte=FR)
+    page = web.get("/annonce/" + e).text
+    assert 'class="entete-page"' in page and 'aria-current="page">Adéquation' in page
+    for onglet in ("sources", "journal"):
+        assert "?onglet=%s" % onglet in page
+        assert web.get("/annonce/%s?onglet=%s" % (e, onglet)).status_code == 200
+    assert 'data-ouvrir-modale="suivi"' in page and '<dialog class="modale large" id="suivi"' in page
+    assert 'class="menu-actions"' in page and 'value="annuler_go"' in page
+    assert web.get("/dossier/%s" % e, follow_redirects=False).headers["location"] == "/annonce/%s?onglet=dossier" % e
 
 
 def test_courrier_a_trancher_propose_et_se_cherche(web, reg):
@@ -675,14 +726,17 @@ def test_page_confidentialite_montre_ce_que_l_ia_recoit(web, monkeypatch):
 
 
 def test_reglages_sans_dossier_et_comptes_mail_dans_connecteurs(web):
-    profil_page = web.get("/profil/identite").text
+    profil_page = web.get("/profil").text                                         # la liste des étapes
     assert 'href="/profil/dossier"' not in profil_page and 'href="/profil/objectifs"' in profil_page
     assert "Objectifs de postulation" in profil_page and 'href="/fonctions"' in web.get("/reglages").text
     assert 'name="courrier.comptes"' not in web.get("/profil/objectifs").text
     r = web.post("/connecteurs/apple-mail/comptes", data={"comptes": "iCloud\nTravail"}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].endswith("#apple-mail")
     assert profil.comptes_courrier() == ["iCloud", "Travail"]
-    assert "iCloud\nTravail</textarea>" in web.get("/connecteurs").text
+    page = web.get("/connecteurs").text                                           # une valeur par champ (champ_lignes)
+    assert 'name="comptes" value="iCloud"' in page and 'name="comptes" value="Travail"' in page and "<textarea" not in page
+    web.post("/connecteurs/apple-mail/comptes", data={"comptes": ["iCloud", "", "Perso"]})
+    assert profil.comptes_courrier() == ["iCloud", "Perso"]
     assert web.get("/premiers-pas/dossier?formulaire=1").status_code == 200       # toujours l'entretien
 
 
@@ -715,3 +769,23 @@ def test_passage_avec_ia_pre_selectionne(reg, monkeypatch):
     assert reg.stats()["par_statut"] == {"nouvelle": 1, "C": 1}
     c = next(f for f in reg.liste(["C"]))
     assert c["passe_ecart"] == 2 and c["limite"] and c["titre"] == "Product Manager cuisine"
+
+
+def test_offres_sans_les_non_et_libelles_oui_peut_etre_non(web, reg):
+    """20.11 : ce qui est non (C, doublon, expirée) reste dans la base des offres, hors de la vue par
+    défaut ; les statuts se lisent oui, peut-être, non ; l'empreinte n'est plus affichée."""
+    garde = annonce(reg, titre="UX Lead", statut="B", texte=FR)
+    ecartee = annonce(reg, titre="Cheffe de cuisine", statut="C", motif="Hors métier")
+    offres = web.get("/offres").text
+    assert "/annonce/" + garde in offres and "/annonce/" + ecartee not in offres
+    assert "1 annonce écartée n'est pas affichée" in offres and 'href="?statut=C"' in offres
+    assert '<span class="puce B">peut-être</span>' in offres
+    non = web.get("/offres?statut=C").text
+    assert "/annonce/" + ecartee in non and '<span class="puce C">non</span>' in non
+    assert "/annonce/" + ecartee in web.get("/offres?q=cuisine").text          # une recherche retrouve tout
+    page = web.get("/annonce/" + garde).text
+    assert "Empreinte" not in page                     # le statut se lit dans les boutons, pas en pastille
+    assert ">Oui</button>" in page and ">Peut-être</button>" in page and ">Non</button>" in page
+    page = web.get("/annonce/" + ecartee).text
+    assert "Remettre à trancher" in page and "Remettre en B" not in page
+

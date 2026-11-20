@@ -1,6 +1,7 @@
-// Pile de tri (trier.html) : la carte du dessus se tire à droite (Go) ou à gauche (Pas go), ou se tranche
+// Pile de tri (trier.html) : la carte du dessus se tire à droite (oui) ou à gauche (non), ou se tranche
 // par les boutons et les flèches du clavier. La décision part sans recharger la page (/action en JSON) ;
-// la carte s'envole tout de suite et revient si le serveur refuse. À la dernière : « Tout est tranché ».
+// la carte s'envole tout de suite et revient si le serveur refuse. Après la dernière : droit au tableau de
+// bord (« À faire aujourd'hui »), le bilan du tri en message.
 (function () {
   "use strict";
   var salle = document.querySelector("[data-tri]");
@@ -45,18 +46,13 @@
   function pluriel(n, mot) { return n + " " + mot + (n > 1 ? "s" : ""); }
 
   function finir() {
-    pile.hidden = true;
-    salle.querySelector("[data-pied-tri]").hidden = true;
-    var fin = salle.querySelector("[data-fin]");
     var parts = [];
-    if (bilan.go) parts.push(bilan.go + " Go");
-    if (bilan.pasgo) parts.push(bilan.pasgo + " Pas go");
-    if (bilan.attendre) parts.push(bilan.attendre + " pour plus tard");
+    if (bilan.go) parts.push(bilan.go + " oui");
+    if (bilan.pasgo) parts.push(bilan.pasgo + " non");
+    if (bilan.attendre) parts.push(bilan.attendre + " peut-être");
     var texte = pluriel(faits, "annonce") + " " + (faits > 1 ? "tranchées" : "tranchée") + " : " + parts.join(", ") + ".";
-    if (bilan.go) texte += " Les dossiers des Go se préparent ; tu les retrouves dans le tableau de bord.";
-    fin.querySelector(".etat-vide p").textContent = texte;
-    fin.hidden = false;
-    fin.querySelector("a").focus();
+    if (bilan.go) texte += " Les dossiers des oui se préparent ; tu les retrouves ci-dessous.";
+    window.location.replace("/?ensuite=1&ok=1&msg=" + encodeURIComponent(texte));
   }
 
   function avancer() {
@@ -111,7 +107,7 @@
     trancher(type);
   });
 
-  // Glisser : la carte suit le pointeur et penche ; le tampon Go ou Pas go apparaît avec la distance.
+  // Glisser : la carte suit le pointeur et penche ; le tampon Oui ou Non apparaît avec la distance.
   pile.addEventListener("pointerdown", function (e) {
     var carte = dessus();
     if (occupe || e.button !== 0 || !carte || !carte.contains(e.target)) return;

@@ -4,9 +4,81 @@
 {# Mode concentré : pas de barre de menu. Pendant l'entretien, la page prend toute la fenêtre ; le message
    du passage précédent s'affiche au-dessus de la saisie plutôt qu'en haut. #}
 {% block barre %}{% endblock %}
-{% block message %}{% if vide or not entretien.element %}{{ super() }}{% endif %}{% endblock %}
 {% block classe_corps %}concentre{% if not vide and entretien.element %} entretien-fixe{% endif %}{% endblock %}
 {% block contenu %}
+{# La base : le lien vers l'ajout d'un élément, puis l'arbre (chaque élément se déplie pour être corrigé ou retiré), le CV
+   d'origine et la remise à zéro. Rendue une seule fois par page : dans le volet pendant l'entretien, sur la
+   page une fois l'entretien terminé. #}
+{% macro contenu_base() %}
+      {# L'ajout se fait dans la salle de l'entretien (/parcours/ajout) : un poste ou un engagement y enchaîne
+         sur ses questions, sans changer d'écran. #}
+      <a class="bouton discret petit bouton-ajout" href="/parcours/ajout{{ suite }}#entretien">{{ icone("plus") }}<span>Ajouter un élément</span></a>
+
+      {% for genre, titre, noeuds in arbre %}
+      <h3 class="section-base">{{ titre }}</h3>
+      <ul class="arbre">
+        {% for n in noeuds recursive %}
+        <li class="noeud {{ n.genre }}" id="element-{{ n.id }}">
+          <details>
+            <summary>
+              <span class="genre">{{ genres[n.genre] }}</span>
+              <span class="titre-el">{{ n.titre }}</span>
+              {% if n.organisation or n.debut %}<span class="meta">{{ n.organisation }}{% if n.organisation and n.debut %} · {% endif %}{{ n.debut }}{% if n.fin %} – {{ n.fin }}{% elif n.debut and n.genre in ("poste", "engagement") %} – aujourd'hui{% endif %}</span>{% endif %}
+              <span class="origine {{ n.origine }}">{{ {"cv": "CV", "entretien": "tes mots", "saisie": "saisi"}[n.origine] }}</span>
+              {% if n.genre in cadres and n.approfondi %}<span class="approfondi" title="Entretien fait">{{ icone("fin") }}</span>{% endif %}
+            </summary>
+            <div class="corps-el">
+              {% if n.detail %}<p class="detail">{{ n.detail }}</p>{% endif %}
+              {% if n.resultat %}<p><b>Résultat :</b> {{ n.resultat }}</p>{% endif %}
+              {% if n.citation and n.origine != "saisie" and n.citation != n.titre %}<blockquote>« {{ n.citation }} »</blockquote>{% endif %}
+              <form method="post" action="/parcours/{{ n.id }}/modifier{{ suite }}" class="edition">
+                <div class="champ"><label for="t{{ n.id }}">Intitulé</label><input type="text" id="t{{ n.id }}" name="titre" value="{{ n.titre }}" required></div>
+                {% if n.genre in cadres or n.genre in ("formation", "certification") %}
+                <div class="champ"><label for="o{{ n.id }}">Organisation</label><input type="text" id="o{{ n.id }}" name="organisation" value="{{ n.organisation }}"></div>
+                <div class="champ"><label for="l{{ n.id }}">Lieu</label><input type="text" id="l{{ n.id }}" name="lieu" value="{{ n.lieu }}"></div>
+                {% endif %}
+                {% if n.genre not in ("competence", "langue") %}
+                <div class="deux">
+                  <div class="champ"><label for="d{{ n.id }}">Début</label><input type="text" id="d{{ n.id }}" name="debut" value="{{ n.debut }}" placeholder="MM.AAAA"></div>
+                  <div class="champ"><label for="f{{ n.id }}">Fin</label><input type="text" id="f{{ n.id }}" name="fin" value="{{ n.fin }}" placeholder="vide : en cours"></div>
+                </div>
+                {% endif %}
+                {% if n.genre != "formation" %}
+                <div class="champ"><label for="x{{ n.id }}">{{ "Niveau" if n.genre == "langue" else "Description" }}</label><textarea id="x{{ n.id }}" name="detail" rows="3">{{ n.detail }}</textarea></div>
+                {% endif %}
+                {% if n.genre == "realisation" %}
+                <div class="champ"><label for="r{{ n.id }}">Résultat</label><input type="text" id="r{{ n.id }}" name="resultat" value="{{ n.resultat }}"></div>
+                {% endif %}
+                <div class="actions-el">
+                  <button class="go">Enregistrer</button>
+                  {% if n.genre in cadres and n.approfondi %}<button type="submit" class="lien-neutre" formaction="/parcours/{{ n.id }}/reprendre{{ suite }}">Reprendre l'entretien</button>{% endif %}
+                  <button type="submit" class="lien-danger" formaction="/parcours/{{ n.id }}/retirer{{ suite }}" formnovalidate
+                          data-confirmer="Retirer « {{ n.titre }} »{% if n.enfants %} et ce qui est rangé dessous{% endif %} ?">Retirer</button>
+                </div>
+              </form>
+            </div>
+          </details>
+          {% if n.enfants %}<ul>{{ loop(n.enfants) }}</ul>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endfor %}
+
+      {% if cv %}
+      <details class="ajout-base">
+        <summary>CV d'origine{% if cv | length > 1 %}s ({{ cv | length }}){% endif %}</summary>
+        {% for d in cv %}<p class="petit muet">{{ d.nom }}, importé le {{ d.importe_le | date_fr }}</p><pre class="cv-origine">{{ d.texte }}</pre>{% endfor %}
+      </details>
+      {% endif %}
+      <details class="ajout-base">
+        <summary>Repartir de zéro</summary>
+        <form method="post" action="/parcours/vider{{ suite }}" class="edition">
+          <p class="petit">Retire toute la base, l'entretien et le CV importé. Rien ne se récupère ensuite.</p>
+          <label class="petit"><input type="checkbox" name="confirmer" value="oui" required> Je veux vider mon parcours</label>
+          <div class="actions-el"><button class="lien-danger">Vider le parcours</button></div>
+        </form>
+      </details>
+{% endmacro %}
 {# Ton parcours : import du CV, puis entretien guidé par l'IA, poste après poste (parcours.py).
    La base vit dans l'application ; chaque élément montre d'où il vient. #}
 {% set e = entretien.element if not vide else none %}
@@ -16,7 +88,7 @@
 <div class="salle-entretien">
   <header class="tete-salle">
     <div class="bande-page">
-      <a class="retour-salle" href="/#premiers-pas">{{ icone("precedent") }}<span>Tableau de bord</span></a>
+      <a class="retour-salle" href="{{ retour.href }}">{{ icone("precedent") }}<span>{{ retour.nom }}</span></a>
       <h1>Ton parcours</h1>
       {% if rang is not none %}<p class="etape-salle">Bien démarrer · {{ rang + 1 }} sur {{ total }}</p>{% endif %}
     </div>
@@ -47,8 +119,7 @@
         <span>L'entretien demande ton IA.
           <button type="button" class="lien-neutre" data-connexion-ia="claude" data-nom="Claude">Connecter Claude</button></span></div>
       {% endif %}
-      {% if msg %}<div class="flash {{ '' if ok else 'ko' }}" role="status">{{ msg }}</div>{% endif %}
-      <form data-repondre>
+      <form data-repondre data-de="{{ de }}">
         {{ compositeur("Réponds avec tes mots : ils sont gardés tels quels.", "L'IA range ta réponse…",
                        "Et prépare la question suivante.", desactive=not ia, rows=1,
                        avert="L'IA peut se tromper. Vérifie ce qu'elle range dans ta base.") }}
@@ -60,15 +131,18 @@
 </div>
 {% else %}
 <div class="parcours-page centree">
-  <a class="retour" href="/#premiers-pas">{{ icone("precedent") }} Tableau de bord</a>
+  <a class="retour" href="{{ retour.href }}">{{ icone("precedent") }} {{ retour.nom }}</a>
   <div class="titre-etape tete-parcours">
     <span class="pastille">{{ icone("dossier") }}</span>
     <div>
       {% if rang is not none %}<p class="surtitre">Bien démarrer · {{ rang + 1 }} sur {{ total }}</p>{% endif %}
       <h1>Ton parcours</h1>
+      {# L'explication ne sert qu'avant l'import : une fois la base remplie, la page montre la base. #}
+      {% if vide %}
       <p class="intro">Ton CV d'abord, puis l'IA te pose des questions, expérience après expérience, pour faire ressortir
         tes projets et tes réalisations ; tes formations restent une simple ligne. Tout est gardé dans l'application, avec tes mots : c'est cette base, en entier, qui sert
         ensuite à noter les annonces et à écrire tes CV et tes lettres.</p>
+      {% endif %}
     </div>
   </div>
 
@@ -84,7 +158,7 @@
     <p class="intro">PDF, Word ou texte. L'IA le range en expériences, projets et réalisations, sans rien résumer :
       chaque puce devient une réalisation, mot pour mot, et le texte d'origine est gardé tel quel. Tes formations
       restent une ligne : intitulé, école, dates.</p>
-    <form data-import enctype="multipart/form-data" class="formulaire-import">
+    <form data-import data-de="{{ de }}" enctype="multipart/form-data" class="formulaire-import">
       <label class="depot">
         <input type="file" name="fichier" accept=".pdf,.docx,.txt,.md,application/pdf" data-fichier>
         {{ icone("dossier") }}
@@ -105,27 +179,29 @@
   </section>
   {% else %}
   <div class="parcours-colonne">
-    <section class="carte-accueil entretien" id="entretien" aria-labelledby="entretien-titre">
-      <div class="tete-entretien"><h2 id="entretien-titre">Entretien</h2>
-        <button type="button" class="bouton-volet" data-ouvrir-volet="volet-base" aria-haspopup="dialog" aria-controls="volet-base">
-          {{ icone("base") }}<span>Ta base</span><span class="compte-volet">{{ nb_elements }} élément{{ "s" if nb_elements > 1 }}</span></button>
-      </div>
-      <div class="etat-tache ok">{{ icone("fin") }}
-        <div><p class="fort">Entretien terminé</p>
-          <p>Ton parcours est dans l'application : l'IA s'en sert pour noter les annonces et écrire tes dossiers. Tu peux
-            le corriger ici, ou reprendre l'entretien sur un poste.</p></div></div>
-      <div class="actions-accueil">
-        <a class="lien-neutre" href="/">Tableau de bord</a>
-        <a class="bouton go grand" href="/premiers-pas/criteres">Ce qui compte pour toi {{ icone("suivant") }}</a>
-      </div>
+    {# Entretien terminé : la base, seule sur la page, pour être relue, corrigée et complétée. #}
+    <section class="base-page" id="base" aria-labelledby="base-titre">
+      <div class="tete-entretien"><h2 id="base-titre">Ta base</h2>
+        <span class="compte-volet">{{ nb_elements }} élément{{ "s" if nb_elements > 1 }}</span></div>
+      <p class="petit muet">Ce qui est rangé, et d'où ça vient : <span class="origine cv">CV</span> ton CV,
+          <span class="origine entretien">tes mots</span> tes réponses, <span class="origine saisie">saisi</span> ajouté à la main.
+          Corrige ou retire ce qui n'est pas juste.</p>
+      {{ contenu_base() }}
     </section>
+    {# Pendant « Bien démarrer » seulement : le passage à l'étape suivante. #}
+    {% if rang is not none %}
+    <div class="actions-accueil">
+      <span></span>
+      <a class="bouton go grand" href="/premiers-pas/criteres">Ce qui compte pour toi {{ icone("suivant") }}</a>
+    </div>
+    {% endif %}
   </div>
   {% endif %}
 </div>
 {% endif %}
 
-{% if not vide %}
-  {# Volet latéral gauche (Nexus SlideOver, side="left") : la base, consultée et corrigée à la demande.
+{% if e %}
+  {# Volet latéral gauche (Nexus SlideOver, side="left") : la base, consultée et corrigée pendant l'entretien.
      <dialog> modal : focus gardé dans le volet et rendu au bouton, Échap et clic à côté ferment. #}
   <dialog class="volet gauche base-parcours" id="volet-base" aria-labelledby="base-titre" aria-describedby="base-description">
     <div class="tete-volet">
@@ -139,93 +215,7 @@
         {{ icone("fermer") }}</button>
     </div>
     <div class="corps-volet">
-      {% for genre, titre, noeuds in arbre %}
-      <h3 class="section-base">{{ titre }}</h3>
-      <ul class="arbre">
-        {% for n in noeuds recursive %}
-        <li class="noeud {{ n.genre }}" id="element-{{ n.id }}">
-          <details>
-            <summary>
-              <span class="genre">{{ genres[n.genre] }}</span>
-              <span class="titre-el">{{ n.titre }}</span>
-              {% if n.organisation or n.debut %}<span class="meta">{{ n.organisation }}{% if n.organisation and n.debut %} · {% endif %}{{ n.debut }}{% if n.fin %} – {{ n.fin }}{% elif n.debut and n.genre in ("poste", "engagement") %} – aujourd'hui{% endif %}</span>{% endif %}
-              <span class="origine {{ n.origine }}">{{ {"cv": "CV", "entretien": "tes mots", "saisie": "saisi"}[n.origine] }}</span>
-              {% if n.genre in cadres and n.approfondi %}<span class="approfondi" title="Entretien fait">{{ icone("fin") }}</span>{% endif %}
-            </summary>
-            <div class="corps-el">
-              {% if n.detail %}<p class="detail">{{ n.detail }}</p>{% endif %}
-              {% if n.resultat %}<p><b>Résultat :</b> {{ n.resultat }}</p>{% endif %}
-              {% if n.citation and n.origine != "saisie" and n.citation != n.titre %}<blockquote>« {{ n.citation }} »</blockquote>{% endif %}
-              <form method="post" action="/parcours/{{ n.id }}/modifier" class="edition">
-                <div class="champ"><label for="t{{ n.id }}">Intitulé</label><input type="text" id="t{{ n.id }}" name="titre" value="{{ n.titre }}" required></div>
-                {% if n.genre in cadres or n.genre in ("formation", "certification") %}
-                <div class="champ"><label for="o{{ n.id }}">Organisation</label><input type="text" id="o{{ n.id }}" name="organisation" value="{{ n.organisation }}"></div>
-                <div class="champ"><label for="l{{ n.id }}">Lieu</label><input type="text" id="l{{ n.id }}" name="lieu" value="{{ n.lieu }}"></div>
-                {% endif %}
-                {% if n.genre not in ("competence", "langue") %}
-                <div class="deux">
-                  <div class="champ"><label for="d{{ n.id }}">Début</label><input type="text" id="d{{ n.id }}" name="debut" value="{{ n.debut }}" placeholder="MM.AAAA"></div>
-                  <div class="champ"><label for="f{{ n.id }}">Fin</label><input type="text" id="f{{ n.id }}" name="fin" value="{{ n.fin }}" placeholder="vide : en cours"></div>
-                </div>
-                {% endif %}
-                {% if n.genre != "formation" %}
-                <div class="champ"><label for="x{{ n.id }}">{{ "Niveau" if n.genre == "langue" else "Description" }}</label><textarea id="x{{ n.id }}" name="detail" rows="3">{{ n.detail }}</textarea></div>
-                {% endif %}
-                {% if n.genre == "realisation" %}
-                <div class="champ"><label for="r{{ n.id }}">Résultat</label><input type="text" id="r{{ n.id }}" name="resultat" value="{{ n.resultat }}"></div>
-                {% endif %}
-                <div class="actions-el">
-                  <button class="go">Enregistrer</button>
-                  {% if n.genre in cadres and n.approfondi %}<button type="submit" class="lien-neutre" formaction="/parcours/{{ n.id }}/reprendre">Reprendre l'entretien</button>{% endif %}
-                  <button type="submit" class="lien-danger" formaction="/parcours/{{ n.id }}/retirer" formnovalidate
-                          data-confirmer="Retirer « {{ n.titre }} »{% if n.enfants %} et ce qui est rangé dessous{% endif %} ?">Retirer</button>
-                </div>
-              </form>
-            </div>
-          </details>
-          {% if n.enfants %}<ul>{{ loop(n.enfants) }}</ul>{% endif %}
-        </li>
-        {% endfor %}
-      </ul>
-      {% endfor %}
-
-      <details class="ajout-base">
-        <summary>Ajouter un élément</summary>
-        <form method="post" action="/parcours/ajouter" class="edition">
-          <div class="deux">
-            <div class="champ"><label for="ajout-genre">Genre</label>
-              <select id="ajout-genre" name="genre">{% for k, v in genres.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></div>
-            <div class="champ"><label for="ajout-parent">Rangé sous</label>
-              <select id="ajout-parent" name="parent"><option value="">— (premier niveau)</option>
-                {% for genre, titre, noeuds in arbre if genre in cadres %}{% for n in noeuds recursive %}{% if n.genre in cadres or n.genre == "projet" %}
-                <option value="{{ n.id }}">{{ "· " * (loop.depth - 1) }}{{ n.titre }}{% if n.organisation %} ({{ n.organisation }}){% endif %}</option>
-                {% if n.enfants %}{{ loop(n.enfants) }}{% endif %}{% endif %}{% endfor %}{% endfor %}
-              </select></div>
-          </div>
-          <div class="champ"><label for="ajout-titre">Intitulé</label><input type="text" id="ajout-titre" name="titre" required></div>
-          <div class="deux">
-            <div class="champ"><label for="ajout-org">Organisation</label><input type="text" id="ajout-org" name="organisation"></div>
-            <div class="champ"><label for="ajout-debut">Début</label><input type="text" id="ajout-debut" name="debut" placeholder="MM.AAAA"></div>
-          </div>
-          <div class="champ"><label for="ajout-detail">Description</label><textarea id="ajout-detail" name="detail" rows="3"></textarea></div>
-          <div class="actions-el"><button class="go">Ajouter</button></div>
-        </form>
-      </details>
-
-      {% if cv %}
-      <details class="ajout-base">
-        <summary>CV d'origine{% if cv | length > 1 %}s ({{ cv | length }}){% endif %}</summary>
-        {% for d in cv %}<p class="petit muet">{{ d.nom }}, importé le {{ d.importe_le | date_fr }}</p><pre class="cv-origine">{{ d.texte }}</pre>{% endfor %}
-      </details>
-      {% endif %}
-      <details class="ajout-base">
-        <summary>Repartir de zéro</summary>
-        <form method="post" action="/parcours/vider" class="edition">
-          <p class="petit">Retire toute la base, l'entretien et le CV importé. Rien ne se récupère ensuite.</p>
-          <label class="petit"><input type="checkbox" name="confirmer" value="oui" required> Je veux vider mon parcours</label>
-          <div class="actions-el"><button class="lien-danger">Vider le parcours</button></div>
-        </form>
-      </details>
+      {{ contenu_base() }}
     </div>
   </dialog>
 {% endif %}
@@ -305,20 +295,19 @@
         });
     });
   }
+  // La page d'où l'on vient (les réglages) suit les rechargements : le lien de retour y ramène.
+  function venuDe(form) { return form.dataset.de ? "&de=" + encodeURIComponent(form.dataset.de) : ""; }
   var imp = document.querySelector("[data-import]");
   if (imp) {
-    var champ = imp.querySelector("[data-fichier]");
-    champ.addEventListener("change", function () {
-      imp.querySelector("[data-nom-fichier]").textContent = champ.files[0] ? champ.files[0].name : "Choisir mon CV";
-    });
     envoyer(imp, "/parcours/importer", function (d) {
       var m = d.ajoutes + " éléments rangés" + (d.ecartes.length ? " ; " + d.ecartes.length + " écartés, introuvables mot pour mot dans le CV" : "") + ".";
       var p = d.profil || {}, ajouts = [];
+      if (p.formation) ajouts.push(p.formation + (p.formation > 1 ? " formations" : " formation"));
       if (p.certification) ajouts.push(p.certification + (p.certification > 1 ? " certifications" : " certification"));
       if (p.langue) ajouts.push(p.langue + (p.langue > 1 ? " langues" : " langue"));
       if (d.niveau) ajouts.push("le niveau visé (" + d.niveau + ")");
-      if (ajouts.length) m += " Ajouté à tes réglages : " + ajouts.join(" et ") + ".";
-      return "/parcours?ok=1&msg=" + encodeURIComponent(m);
+      if (ajouts.length) m += " Ajouté à tes réglages : " + ajouts.join(", ") + ".";
+      return "/parcours?ok=1" + venuDe(imp) + "&msg=" + encodeURIComponent(m);
     }, "");
   }
   var rep = document.querySelector("[data-repondre]");
@@ -326,7 +315,7 @@
     envoyer(rep, "/parcours/repondre", function (d) {
       var m = d.ajoutes.length ? "Rangé dans ta base : " + d.ajoutes.join(" ; ") + "." : "";
       if (d.ecartes.length) m += " " + d.ecartes.length + " écarté(s) : pas dans tes mots.";
-      return "/parcours?ok=1" + (m ? "&msg=" + encodeURIComponent(m.trim()) : "") + "#entretien";
+      return "/parcours?ok=1" + venuDe(rep) + (m ? "&msg=" + encodeURIComponent(m.trim()) : "") + "#entretien";
     }, "", document.querySelector(".corps-salle .fil"));
     if (location.hash === "#entretien") rep.querySelector("textarea").focus({preventScroll: true});
     // Comme une conversation : la page s'ouvre tout en bas, sur le dernier échange au-dessus de la saisie.
@@ -338,7 +327,17 @@
     window.addEventListener("load", enBas);
     if (document.fonts) document.fonts.ready.then(enBas);
   }
+  // La base : dans le volet pendant l'entretien, sur la page ensuite. Un élément se montre au centre, signalé.
   var volet = document.getElementById("volet-base");
+  function montrer(li, deplier) {
+    if (!li) return;
+    if (volet && !volet.open) volet.showModal();
+    var d = li.querySelector(":scope > details"), s = li.querySelector("summary");
+    if (deplier && d) d.open = true;
+    li.scrollIntoView({block: "center"});
+    li.classList.remove("signale"); void li.offsetWidth; li.classList.add("signale");
+    if (deplier && s) s.focus({preventScroll: true});
+  }
   if (volet) {
     var ouvrir = document.querySelector("[data-ouvrir-volet]");
     var fermer = function () { volet.classList.add("ferme"); setTimeout(function () { volet.close(); volet.classList.remove("ferme"); }, 180); };
@@ -346,24 +345,20 @@
     volet.querySelector("[data-fermer-volet]").addEventListener("click", fermer);
     volet.addEventListener("cancel", function (ev) { ev.preventDefault(); fermer(); });
     volet.addEventListener("click", function (ev) { if (ev.target === volet) fermer(); });   // clic sur le fond
-    volet.addEventListener("close", function () {
-      if (location.hash === "#base") history.replaceState(null, "", location.pathname + location.search);
-      ouvrir.focus();
-    });
-    if (location.hash === "#base") volet.showModal();          // retour d'une correction : le volet reste ouvert
+    volet.addEventListener("close", function () { ouvrir.focus(); });
+    if (location.hash === "#base") {                           // retour d'un retrait : le volet reste ouvert
+      volet.showModal();
+      history.replaceState(null, "", location.pathname + location.search);
+    }
     // Un élément cité sous une question : le volet s'ouvre sur lui, déplié et signalé.
     document.querySelectorAll("[data-voir-element]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        var li = document.getElementById("element-" + b.dataset.voirElement);
-        if (!li) return;
-        volet.showModal();
-        for (var n = li; n && n !== volet; n = n.parentElement) if (n.tagName === "DETAILS") n.open = true;
-        var d = li.querySelector(":scope > details"); if (d) d.open = true;
-        li.scrollIntoView({block: "center"});
-        li.classList.remove("signale"); void li.offsetWidth; li.classList.add("signale");
-        var s = li.querySelector("summary"); if (s) s.focus({preventScroll: true});
-      });
+      b.addEventListener("click", function () { montrer(document.getElementById("element-" + b.dataset.voirElement), true); });
     });
+  }
+  // Retour d'une correction ou d'un ajout (#element-N) : on revient sur l'élément, là où l'on travaillait.
+  if (/^#element-\d+$/.test(location.hash)) {
+    montrer(document.getElementById(location.hash.slice(1)), false);
+    history.replaceState(null, "", location.pathname + location.search);
   }
   document.querySelectorAll("[data-confirmer]").forEach(function (b) {
     b.addEventListener("click", function (ev) { if (!confirm(b.dataset.confirmer)) ev.preventDefault(); });

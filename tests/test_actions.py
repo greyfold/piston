@@ -97,7 +97,7 @@ def test_annuler_un_go(reg):
     e = annonce(reg, statut="retenue", cv_genere=True, dossier="2026-10-25 - X")
     appliquer(reg, e, "annuler_go", {"raisons": ["exigence que je n'ai pas"], "note": "allemand exigé"})
     f = reg.get(e)
-    assert f["statut"] == "C" and "Go annulé" in f["motif"] and "allemand exigé" in f["motif"]
+    assert f["statut"] == "C" and "Oui annulé" in f["motif"] and "allemand exigé" in f["motif"]
     assert f["raison_decision"] == ["exigence que je n'ai pas"] and f["dossier"] == "2026-10-25 - X"
     with pytest.raises(ActionRefusee):
         appliquer(reg, e, "annuler_go")                       # plus retenue

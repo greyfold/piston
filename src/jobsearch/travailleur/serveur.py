@@ -133,6 +133,8 @@ def _a_lire(connues):
 async def offres(nom: str, request: Request):
     d = await request.json()
     src = _source(nom)
+    if d.get("parametres") is not None and hasattr(src, "selon"):
+        src = src.selon(d["parametres"])          # le profil vient du Mac : la VM ne l'a pas
     kw = {}
     if d.get("connues") is not None and getattr(src, "detail_en_session", False):
         kw["a_lire"] = _a_lire(d["connues"])

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "_macros.html" import entete_reglage, ligne_lien %}
+{% block contenu %}
+{# Ma recherche : ses étapes en lignes de réglage, comme la page Réglages ; chaque ligne ouvre sa page, qui a un
+   retour vers celle-ci. Une étape à remplir porte la pilule « à compléter ». #}
+{% call entete_reglage(reglage) %}Ce que la plateforme sait de toi pour chercher, trier et écrire tes dossiers. Gardé sur ton Mac seulement.{% endcall %}
+{% set ids_manquants = profil_manquants | map('first') | list %}
+<ul class="reglages-liste">
+  {% for x in etapes %}
+  {{ ligne_lien("/profil/" ~ x.id, x.titre, x.id, x.resume, x.id in ids_manquants) }}
+  {% endfor %}
+</ul>
+{% endblock %}

@@ -7,7 +7,9 @@ Trois formes coexistent au registre :
 - un mélange des deux.
 
 On en tire des blocs (intertitre, paragraphe, liste), puis du HTML échappé.
-Rien n'est réécrit : seule la présentation change.
+Rien n'est réécrit au registre : seule la présentation change. Avant la lecture, `nettoyer` retire ce qui
+n'est pas du texte : le Markdown échappé de certaines plateformes (« \\* », « \\[ \\](\\< \\>) »), les
+logos (« ![Entreprise]( ) »), les liens sans adresse et les marqueurs de suivi (« jpid…jm jpit…jm »).
 """
 
 import html
@@ -23,6 +25,35 @@ _ETIQUETTE = re.compile(r"^([^:.;!?]{2,45}?)\s?:\s+(\S.*)$")
 _RUBRIQUE = re.compile(r"(?:(?<=^)|(?<=[.;]\s))([A-ZÀÂÉÈÊÎÔÛÇ][A-ZÀÂÉÈÊÎÔÛÇ'’ /&-]{2,40})\s?:\s")
 # Ni guillemet ni accent grave dans l'URL : ils sortiraient de l'attribut `href` du lien.
 _URL = re.compile(r"https?://[^\s<>()\"'`]+[^\s<>().,;:!?\"'`]")
+
+# Ce que `nettoyer` retire ou rétablit.
+_ECHAPPE = re.compile(r"\\+([\\`*_{}\[\]()#+\-.!|<>~])")          # « \\* », « \\\\- » : Markdown échappé
+_IMAGE = re.compile(r"!\[[^\]\n]*\]\([^)\n]*\)")                    # logo : « ![Entreprise]( ) »
+_LIEN_VIDE = re.compile(r"\[([^\]\n]*)\]\(\s*<?\s*>?\s*(?:\"[^\"\n]*\")?\s*\)")   # « [Postuler](< >) »
+_SUIVI = re.compile(r"\bjpi[a-z][0-9a-z]{1,12}jm\b|#LI-[A-Za-z0-9]+\b")   # suivi : « jpid…jm jpit…jm », « #LI-JF1 »
+_PUCE_EN_LIGNE = re.compile(r"(?<=\S)[ \t]+(?:\\+\*|•)[ \t]+(?=\S)")  # « … texte \\* puce \\* puce » sur une ligne
+_TITRE_EN_LIGNE = re.compile(r"(?<=\S)[ \t]+(#{2,6}[ \t]+)(?=\S)")
+_GRAS_EN_LIGNE = re.compile(r"[ \t]*\\*\*\\*\*([A-ZÀÂÉÈÊÎÔÛÇ][^*\n]{1,60}?)\\*\*\\*\*[ \t]*")  # intertitre gras aplati
+
+
+def nettoyer(texte):
+    """Le texte d'une annonce sans ce qui n'est pas du texte : Markdown échappé rétabli, logos, liens sans
+    adresse (leur libellé reste), marqueurs de suivi ; les puces et intertitres aplatis sur une seule ligne
+    retrouvent chacun la leur. Les espaces superflus laissés par ces retraits disparaissent."""
+    lignes = []
+    for l in (texte or "").split("\n"):
+        # Puces aplaties : seulement les étoiles échappées (« \\* ») ou les « • », deux au moins par ligne ;
+        # une étoile ordinaire dans une phrase (« 5 * 8 heures ») reste du texte.
+        if len(_PUCE_EN_LIGNE.findall(l)) >= 2:
+            l = _PUCE_EN_LIGNE.sub("\n- ", l)
+            l = _GRAS_EN_LIGNE.sub(lambda m: "\n\n**" + m.group(1) + "**\n", l)
+        l = _ECHAPPE.sub(r"\1", l)
+        l = _SUIVI.sub("", _LIEN_VIDE.sub(lambda m: m.group(1).strip(), _IMAGE.sub("", l)))
+        l = _TITRE_EN_LIGNE.sub(lambda m: "\n" + m.group(1), l)
+        lignes.extend(x.rstrip() for x in l.split("\n"))
+    lignes = [re.sub(r"[ \t]+[*•]$", "", re.sub(r"[ \t]{2,}", " ", l)) for l in lignes]
+    lignes = [l for l in lignes if l.strip() not in ("-", "*", "•")]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lignes)).strip()
 
 
 def _intertitre(ligne, suivante):
@@ -57,7 +88,7 @@ def _eclater_resume(par):
 
 
 def blocs(texte):
-    t = html.unescape(texte or "").replace("\r\n", "\n").replace("\xa0", " ")
+    t = nettoyer(html.unescape(texte or "").replace("\r\n", "\n").replace("\xa0", " "))
     # Gras coupé par un retour à la ligne (HTML de jobup) : « **STAT19\n\n** ».
     t = re.sub(r"\*\*([^*\n]+?)\s*\n\s*\n?\s*\*\*", r"**\1**", t)
     lignes = []

@@ -12,8 +12,8 @@ Deux niveaux, calibrés le 26.10 sur les 449 fiches du registre :
   numéro contradictoire, pas deux cantons différents, et pas deux candidatures.
   Fusion automatique à chaque passage.
 - **à vérifier** : même employeur et intitulés qui se recouvrent largement, sans
-  que les textes complets disent le contraire. Montré à la personne (page Sources),
-  jamais fusionné sans lui. Les paires où les deux fiches sont écartées (C) ne
+  que les textes complets disent le contraire. Listé par `jobsearch doublons`,
+  jamais fusionné sans décision explicite. Les paires où les deux fiches sont écartées (C) ne
   sont pas montrées : un doublon écarté ne coûte rien.
 
 La ressemblance des textes ne prouve rien (un employeur met le même

@@ -1,49 +1,47 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone, meta, delais, adequation, etat_vide %}
+{% from "_macros.html" import icone, meta, delais, adequation %}
 {% block titre %}À trancher · Recherche d'emploi{% endblock %}
 {# Tri en mode concentré : à l'ouverture de l'application, s'il y a des annonces à trancher, elles passent avant
-   tout le reste. Pas de barre de menu : une carte à la fois (pile de tri, tri.js), Go ou Pas go en bas à gauche,
-   puis « Passer à la suite » vers le tableau de bord. Sans JavaScript, chaque décision recharge la page. #}
+   tout le reste. Pas de barre de menu : une carte à la fois (pile de tri, tri.js), oui, non ou peut-être en bas.
+   Après la dernière, droit au tableau de bord (« À faire aujourd'hui »), sans écran de fin. Sans JavaScript,
+   chaque décision recharge la page, et /trier vide renvoie au tableau de bord. #}
 {% block barre %}{% endblock %}
 {% block message %}{% endblock %}
 {% block classe_corps %}concentre entretien-fixe{% endblock %}
 {% block contenu %}
-{% set total = a_trancher | length %}
+{% set total = a_trancher | length %}{# jamais 0 : /trier vide renvoie au tableau de bord #}
 <div class="salle-entretien salle-tri" data-tri data-total="{{ total }}">
   <header class="tete-salle">
     <div class="bande-page">
       <a class="retour-salle" href="/?ensuite=1">{{ icone("precedent") }}<span>Tableau de bord</span></a>
       <h1>À trancher</h1>
-      {% if total %}<p class="etape-salle" aria-live="polite"><span data-rang>1</span> sur {{ total }}</p>{% endif %}
+      <p class="etape-salle" aria-live="polite"><span data-rang>1</span> sur {{ total }}</p>
     </div>
-    {% if total %}
     <div class="dedans-salle">
       <div class="progression" role="progressbar" aria-valuemin="0" aria-valuemax="{{ total }}" aria-valuenow="0"
            aria-label="Annonces tranchées" data-progression><i></i></div>
     </div>
-    {% endif %}
   </header>
 
   <div class="corps-salle"><div class="dedans-salle">
-    {% if total %}
     <div class="pile-tri" data-pile>
     {% for f in a_trancher %}
       <article class="carte carte-tri" data-empreinte="{{ f.empreinte }}" aria-labelledby="carte-tri-{{ loop.index }}"{% if not loop.first %} inert{% endif %}>
-        <span class="tampon-tri go" aria-hidden="true">Go</span>
-        <span class="tampon-tri non" aria-hidden="true">Pas go</span>
+        <span class="tampon-tri go" aria-hidden="true">Oui</span>
+        <span class="tampon-tri non" aria-hidden="true">Non</span>
         <div class="tete">
           <div>
             <h2 id="carte-tri-{{ loop.index }}">{{ f.titre }}</h2>
             <p class="entreprise-tri">{{ f.entreprise }}</p>
             <div class="meta">{{ meta(f) }}</div>
           </div>
-          <span class="puce {{ f.statut }}">{{ f.statut }}</span>
+          <span class="puce {{ f.statut }}">{{ f.statut | statut }}</span>
         </div>
         {{ delais(f) }}
         {{ adequation(evals.get(f.empreinte)) }}
         {% if f.angle %}<p class="ligne-carte petit"><b>Angle :</b> {{ f.angle }}</p>{% endif %}
         {% if f.exigences %}<ul class="exig">{% for e in f.exigences[:3] %}<li>{{ e }}</li>{% endfor %}</ul>
-        {% elif f.texte %}<p class="extrait">{{ f.texte[:400] }}</p>{% endif %}
+        {% elif f.texte %}<p class="extrait">{{ (f.texte | nettoyer)[:400] }}</p>{% endif %}
         {% if f.motif and f.statut == 'B' %}<p class="ligne-carte petit muet">{{ f.motif }}</p>{% endif %}
         <div class="pied-carte-tri">
           <details class="raisons">
@@ -60,34 +58,24 @@
       </article>
     {% endfor %}
     </div>
-    {% endif %}
-
-    <div class="fin-tri" data-fin{% if total %} hidden{% endif %}>
-      {% call etat_vide("fin", "Tout est tranché", titre_balise="h2", id="fin-tri-titre",
-           description="Rien n'attend ta décision pour l'instant.") %}
-        <a class="bouton go grand" href="/?ensuite=1">Passer à la suite {{ icone("suivant") }}</a>
-      {% endcall %}
-    </div>
   </div></div>
 
-  {% if total %}
-  <div class="pied-salle" data-pied-tri><div class="dedans-salle">
+  <div class="pied-salle"><div class="dedans-salle">
     <div class="flash{{ ' ko' if msg and not ok }}" role="status" data-message-tri{% if not msg %} hidden{% endif %}>{{ msg or "" }}</div>
     <form id="form-tri" class="boutons-tri" method="post" action="/action" data-form-tri>
       <input type="hidden" name="empreinte" value="{{ a_trancher[0].empreinte }}">
       <input type="hidden" name="retour" value="/trier">
-      <button class="non" name="type" value="pasgo" title="Pas go (flèche gauche)">{{ icone("fermer") }}<span>Pas go</span></button>
+      <button class="non" name="type" value="pasgo" title="Non (flèche gauche)">{{ icone("fermer") }}<span>Non</span></button>
       {% if fonctions.postuler %}
-      <button class="go" name="type" value="go" title="Go (flèche droite)">{{ icone("coche") }}<span>Go</span></button>
+      <button class="go" name="type" value="go" title="Oui (flèche droite)">{{ icone("coche") }}<span>Oui</span></button>
       {% else %}
-      <button class="go" name="type" value="go" disabled aria-describedby="verrou-tri">{{ icone("coche") }}<span>Go</span></button>
+      <button class="go" name="type" value="go" disabled aria-describedby="verrou-tri">{{ icone("coche") }}<span>Oui</span></button>
       {% endif %}
-      <button class="discret" name="type" value="attendre" title="Plus tard (flèche bas)">{{ icone("horloge") }}<span>Plus tard</span></button>
-      <span class="raccourci raccourcis-tri" aria-hidden="true"><kbd>←</kbd> Pas go <kbd>→</kbd> Go <kbd>↓</kbd> Plus tard</span>
+      <button class="discret" name="type" value="attendre" title="Peut-être, à revoir plus tard (flèche bas)">{{ icone("horloge") }}<span>Peut-être</span></button>
+      <span class="raccourci raccourcis-tri" aria-hidden="true"><kbd>←</kbd> Non <kbd>→</kbd> Oui <kbd>↓</kbd> Peut-être</span>
     </form>
     {% if not fonctions.postuler %}<p class="verrou" id="verrou-tri">Pour postuler, il reste : {% for i, libelle, lien in fonctions.manque.postuler %}<a href="{{ lien }}"{% if i == 'ia' %} data-connexion-ia="claude" data-nom="Claude"{% endif %}>{{ libelle[:1] | lower }}{{ libelle[1:] }}</a>{{ ", " if not loop.last }}{% endfor %}.</p>{% endif %}
   </div></div>
-  {% endif %}
 </div>
 <script src="/static/tri.js?v={{ version_css() }}" defer></script>
 {% endblock %}

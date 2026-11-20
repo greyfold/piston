@@ -40,12 +40,12 @@ CATALOGUE = {
     "chrome": {
         "nom": "Chrome", "role": "navigateur", "lieu": "vm",
         "usage": "Formulaires des employeurs préremplis sans envoi, preuves Job-Room.",
-        "activer": "Rien à installer sur ce Mac : Chrome tourne dans la machine virtuelle, avec son serveur MCP. Tu te connectes toi-même aux sites dans sa fenêtre.",
+        "activer": "Rien à installer sur ton Mac : Chrome tourne dans la machine virtuelle, avec son serveur MCP. Tu te connectes toi-même aux sites dans sa fenêtre.",
     },
 }
 
 ROLES = {"courrier": "Courrier", "source": "Source d'annonces", "navigateur": "Navigateur"}
-LIEUX = {"mac": "sur ce Mac", "vm": "machine virtuelle", "compte": "compte Claude"}
+LIEUX = {"mac": "sur ton Mac", "vm": "machine virtuelle", "compte": "compte Claude"}
 
 
 def _defauts():

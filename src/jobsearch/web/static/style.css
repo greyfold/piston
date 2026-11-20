@@ -56,7 +56,12 @@ main { max-width: 1120px; margin: 0 auto; padding: 1.25rem 16px 4rem; }
 .chiffre.chaud b { color: var(--alerte); }
 .chiffre.atteint b { color: var(--vert-fonce); }
 .chiffre b small { font-size: .8rem; font-weight: 500; color: var(--texte-3); }
-.chiffres.rythme { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-top: .75rem; }
+.chiffres.rythme { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem 1.3rem; margin-top: .3rem;
+                   color: var(--texte-2); font-size: .85rem; }
+.chiffres.rythme .chiffre { display: flex; align-items: center; gap: .4rem; background: none; border: 0; padding: 0; }
+.chiffres.rythme .chiffre b { display: inline; font-size: .95rem; }
+.chiffres.rythme .chiffre span { font-size: .85rem; color: var(--texte-2); }
+.chiffres.rythme .jauge { width: 3.5rem; height: 4px; margin-top: 0; flex: none; }
 .jauge { height: 4px; border-radius: 2px; background: var(--surface-2); margin-top: .45rem; overflow: hidden; }
 .jauge i { display: block; height: 100%; background: var(--attention); }
 .chiffre.atteint .jauge i { background: var(--vert); }
@@ -220,6 +225,7 @@ details.annuler summary { cursor: pointer; color: var(--texte-3); font-size: .85
 /* Profil : l'assistant de configuration */
 form.profil { max-width: 760px; }
 form.profil h2 { margin-top: 0; }
+form.profil > .grille-champs:first-child { margin-top: 0; }
 .grille-champs { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .9rem 1rem; margin-top: 1rem; }
 .champ { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
 .champ.large { grid-column: 1 / -1; }
@@ -244,6 +250,24 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px
 .verifs li.ko .marque-verif { color: var(--alerte); }
 .verifs code { overflow-wrap: anywhere; }
 .boutons.pied { margin-top: 1.25rem; justify-content: flex-end; }
+/* Message après une action (Nexus FlashMessage) : flottant en bas à droite, visible où que soit la page ; le
+   succès se referme seul, le refus (.ko) reste jusqu'à sa croix (macro flash_message, base.html, champs.js). */
+.flash-message { position: fixed; z-index: 60; right: 1.5rem; bottom: 1.5rem; max-width: min(26rem, calc(100vw - 2rem)); display: flex;
+  align-items: center; gap: .6rem; padding: .6rem .6rem .6rem .9rem; border-radius: var(--rayon); background: var(--surface);
+  border: 1px solid var(--bord); color: var(--texte); font-size: .9rem; box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+  animation: flash-entree 180ms ease-out; }
+.flash-message > .icone { flex: none; width: 1.15rem; height: 1.15rem; color: var(--vert); }
+.flash-message.ko { border-color: var(--alerte); }
+.flash-message.ko > .icone { color: var(--alerte); }
+.flash-message > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.fermer-flash { flex: none; width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  border-color: transparent; background: transparent; color: var(--texte-3); }
+.fermer-flash:hover { border-color: transparent; background: var(--surface-2); color: var(--texte); }
+.fermer-flash:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
+.fermer-flash .icone { width: 1rem; height: 1rem; }
+@keyframes flash-entree { from { opacity: 0; transform: translateY(.5rem); } }
+@media (prefers-reduced-motion: reduce) { .flash-message { animation: none; } }
+@media (max-width: 640px) { .flash-message { left: 1rem; right: 1rem; bottom: 1rem; max-width: none; } }
 a.bouton { display: inline-block; text-decoration: none; }
 a.bouton.go { background: var(--vert); border-color: var(--vert); color: #fff; }
 a.bouton.go:hover { background: var(--vert-fonce); }
@@ -301,10 +325,10 @@ button.go:disabled { opacity: .5; cursor: not-allowed; }
 
 /* Champs du profil au gabarit Nexus (TextField / SelectField) : même hauteur, même contour,
    liste déroulante sans l'apparence native, chevron dessiné. */
-.champ input[type=text], .champ input[type=date], .champ select { height: 42px; box-sizing: border-box; padding: 0 .85rem; }
+.champ input[type=text], .champ input[type=date], .champ input[type=password], .champ select { height: 42px; box-sizing: border-box; padding: 0 .85rem; }
 .champ input[type=date] { cursor: pointer; }
-.champ input[type=text]:hover, .champ input[type=date]:hover, .champ select:hover, .champ .avec-prefixe:hover { border-color: var(--texte-3); }
-.champ select {
+.champ input[type=text]:hover, .champ input[type=date]:hover, .champ input[type=password]:hover, .champ select:hover, .champ .avec-prefixe:hover { border-color: var(--texte-3); }
+.champ select, .champ .liste-recherche input[type=text] {
   -webkit-appearance: none; appearance: none; cursor: pointer; padding-right: 2.4rem;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2385939a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right .8rem center; background-size: 1rem;
@@ -338,7 +362,7 @@ button.go:disabled { opacity: .5; cursor: not-allowed; }
   width: 1.75rem; height: 1.75rem; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--texte-3); cursor: pointer; }
 .ouvrir-calendrier:hover { color: var(--texte); background: var(--surface-2); }
 .ouvrir-calendrier:focus-visible { outline: 2px solid var(--vert); }
-.ouvrir-calendrier svg { width: 1.15rem; height: 1.15rem; }
+.ouvrir-calendrier .icone { width: 1.15rem; height: 1.15rem; }
 .date-champ.invalide input[type=text] { border-color: var(--alerte); }
 .erreur-champ { margin: .3rem 0 0; font-size: .82rem; color: var(--alerte); }
 .panneau-date { position: fixed; z-index: 50; width: 20rem; box-sizing: border-box; padding: .75rem; border-radius: 8px;
@@ -450,6 +474,7 @@ a.bouton:hover { text-decoration: none; border-color: var(--texte-3); }
 .lignes { display: flex; flex-direction: column; gap: .5rem; margin-top: .4rem; }
 .ligne-entete, .ligne-champs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) 42px; gap: .5rem; align-items: center; }
 .ligne-entete { font-size: .82rem; color: var(--texte-2); }
+.une-colonne .ligne-champs { grid-template-columns: minmax(0, 1fr) 42px; }       /* liste simple : une valeur par champ */
 .trois-colonnes .ligne-entete, .trois-colonnes .ligne-champs {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) 42px; }
 .trois-colonnes.date-fin .ligne-entete, .trois-colonnes.date-fin .ligne-champs {
@@ -458,12 +483,23 @@ a.bouton:hover { text-decoration: none; border-color: var(--texte-3); }
   border-color: transparent; background: transparent; color: var(--texte-3); }
 .retirer-ligne:hover { border-color: transparent; background: var(--surface-2); color: var(--texte); }
 .retirer-ligne:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
+/* Liste déroulante avec recherche (Nexus SelectField, avec une saisie qui filtre) : le <select> du serveur reste
+   le champ envoyé, caché derrière une saisie ; le panneau liste les options qui correspondent (champs.js). */
+.liste-recherche { position: relative; min-width: 0; }
+.champ .liste-recherche input[type=text] { width: 100%; cursor: text; text-overflow: ellipsis; }
+.panneau-liste { position: absolute; z-index: 50; top: calc(100% + .25rem); left: 0; right: 0; max-height: 15rem; overflow-y: auto;
+  box-sizing: border-box; margin: 0; padding: .25rem; list-style: none; border-radius: 8px; background: var(--surface);
+  border: 1px solid var(--bord); box-shadow: 0 10px 30px rgba(0, 0, 0, .25); }
+.panneau-liste li { padding: .45rem .6rem; border-radius: 6px; font-size: .9rem; cursor: pointer; }
+.panneau-liste li.actif { background: var(--surface-2); }
+.panneau-liste li[aria-selected=true] { background: var(--vert-pale); color: var(--vert-fonce); }
+.panneau-liste li.vide { color: var(--texte-2); cursor: default; }
 .ajouter-ligne { align-self: flex-start; display: inline-flex; align-items: center; gap: .35rem; margin-top: .5rem; }
 @media (max-width: 640px) {
   .ligne-entete { display: none; }
   .ligne-champs, .trois-colonnes .ligne-champs, .trois-colonnes.date-fin .ligne-champs {
     grid-template-columns: minmax(0, 1fr) 42px; padding-bottom: .5rem; border-bottom: 1px solid var(--bord); }
-  .ligne-champs input, .ligne-champs select { grid-column: 1; }
+  .ligne-champs > input, .ligne-champs > select, .ligne-champs > .liste-recherche { grid-column: 1; }
   .ligne-champs .retirer-ligne { grid-column: 2; grid-row: 1; }
 }
 .champ-intro { grid-column: 1 / -1; margin: 0; font-size: .85rem; color: var(--texte-2); }
@@ -546,6 +582,11 @@ dialog.modale .etat-tache { margin-top: 1rem; }
 .actions-modale { display: flex; justify-content: flex-end; align-items: center; gap: 1rem; margin-top: 1rem; }
 .pied-modale { display: flex; justify-content: flex-end; margin-top: .75rem; }
 dialog.modale .aide-accueil { margin-top: 1rem; }
+/* Modale d'ajout (Nexus Modal) : un formulaire « Ajouter… » dans une modale plus large (macro modale_ajout). */
+dialog.modale.large { width: min(46rem, calc(100vw - 2rem)); }
+dialog.modale.large .grille-champs { margin-top: .75rem; }
+dialog.modale.large .edition { margin-top: .75rem; }
+.bouton-ajout { display: inline-flex; align-items: center; gap: .35rem; align-self: flex-start; }
 
 /* Une tâche de « Bien démarrer » : un seul écran centré */
 .tache { max-width: 46rem; margin: 0 auto; }
@@ -571,11 +612,6 @@ button.interrupteur:focus-visible { outline: 2px solid var(--vert); outline-offs
 .checklist .libelle.sans-barre { text-decoration: none !important; color: var(--texte) !important; font-weight: 600 !important; }
 
 /* Page Confidentialité : ce que l'IA reçoit */
-.confidentialite { max-width: 960px; }
-.confidentialite .surtitre { display: flex; align-items: center; gap: .4rem; margin: 0 0 .25rem; color: var(--vert-fonce); font-size: .8rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
-.confidentialite .surtitre .icone { width: 1rem; height: 1rem; }
-.confidentialite > h1 { margin-top: 0; max-width: 34ch; line-height: 1.2; }
-.confidentialite > .intro { color: var(--texte-2); max-width: 68ch; line-height: 1.55; margin: .4rem 0 1.25rem; }
 .confidentialite .carte .tete .icone { width: 1.1rem; height: 1.1rem; color: var(--texte-3); flex: none; }
 .confidentialite .cartes.deux + .cartes.deux { margin-top: 1rem; }
 .confidentialite .demo { margin: .6rem 0 0; font-size: .92rem; line-height: 1.5; overflow-wrap: anywhere; }
@@ -629,6 +665,7 @@ body:has(> .menu-lateral) > main { width: 100%; padding-top: 1.75rem; }
 .compte-notifs.alerte { background: var(--alerte); color: #fff; }
 .reglages-contenu { min-width: 0; max-width: 52rem; }
 .reglages-contenu .tache { max-width: none; margin: 0; }
+.reglages-contenu form.profil { max-width: none; }     /* une étape de Ma recherche : la largeur de la liste */
 .reglages-contenu .cartes.deux { grid-template-columns: minmax(0, 1fr); }     /* une seule colonne */
 @media (max-width: 760px) {
   body:has(> .menu-lateral) { display: block; }
@@ -661,27 +698,25 @@ ul.reglages-liste > li + li { border-top: 1px solid var(--bord); }
 .reglage-ligne .description { font-size: .85rem; color: var(--texte-3); }
 .reglage-ligne > .bouton { flex: none; }
 .reglage-ligne > form { flex: none; margin: 0; }          /* un interrupteur à droite */
-/* Ligne qui ouvre une page (page Réglages) : toute la ligne est le lien, icône à gauche, chevron à droite. */
-a.reglage-ligne { transition: background-color 150ms ease; }
-a.reglage-ligne:hover { text-decoration: none; background: var(--surface-2); }
-a.reglage-ligne:focus-visible { outline: 2px solid var(--vert); outline-offset: -2px; }
-a.reglage-ligne > .icone { width: 1.15rem; height: 1.15rem; flex: none; color: var(--texte-2); }
-a.reglage-ligne > .icone:last-child { color: var(--texte-3); }
-@media (prefers-reduced-motion: reduce) { a.reglage-ligne { transition: none; } }
+/* Ligne qui ouvre une page (page Réglages) ou une modale : toute la ligne est l'action, icône à gauche,
+   chevron à droite. */
+a.reglage-ligne, button.reglage-ligne { transition: background-color 150ms ease; }
+button.reglage-ligne { width: 100%; border: 0; border-radius: 0; background: none; padding: .85rem 1.1rem;
+  font: inherit; font-weight: 400; line-height: inherit; text-align: left; }
+a.reglage-ligne:hover, button.reglage-ligne:hover { text-decoration: none; background: var(--surface-2); }
+a.reglage-ligne:focus-visible, button.reglage-ligne:focus-visible { outline: 2px solid var(--vert); outline-offset: -2px; }
+a.reglage-ligne > .icone, button.reglage-ligne > .icone { width: 1.15rem; height: 1.15rem; flex: none; color: var(--texte-2); }
+a.reglage-ligne > .icone:last-child, button.reglage-ligne > .icone:last-child { color: var(--texte-3); }
+@media (prefers-reduced-motion: reduce) { a.reglage-ligne, button.reglage-ligne { transition: none; } }
 .groupe-reglages .section-base { margin-top: 1.75rem; }
 .groupe-reglages .reglages-liste { margin-top: 0; }
 /* Postes proposés par l'IA (Nexus : lignes de réglage) : un bouton à icône par poste, à droite. */
 .reglage-ligne > button { flex: none; }
 .reglage-ligne > button, button.proposer-postes { display: inline-flex; align-items: center; gap: .35rem; }
-.import-parcours { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem 1rem; align-items: center; width: 100%; }
-.import-parcours .texte { grid-column: 1 / -1; }
-.import-parcours input[type=file] { font-size: .85rem; max-width: 100%; }
-.import-parcours .boutons { margin: 0; justify-content: flex-end; }
+dialog.modale .depot { margin-top: 1rem; }
 @media (max-width: 560px) {
   .reglage-ligne { flex-wrap: wrap; }
-  a.reglage-ligne { flex-wrap: nowrap; }            /* une ligne-lien reste sur une ligne : icône, texte, chevron */
-  .import-parcours { grid-template-columns: minmax(0, 1fr); }
-  .import-parcours .boutons { justify-content: flex-start; }
+  a.reglage-ligne, button.reglage-ligne { flex-wrap: nowrap; }   /* une ligne-lien reste sur une ligne : icône, texte, chevron */
 }
 
 /* Ton parcours et ce qui compte : entretiens guidés par l'IA (parcours.html, criteres_entretien.html) */
@@ -701,9 +736,12 @@ a.reglage-ligne > .icone:last-child { color: var(--texte-3); }
 .coller summary, .ajout-base summary { cursor: pointer; color: var(--texte-2); font-size: .92rem; }
 .coller textarea { width: 100%; margin-top: .6rem; }
 
-/* Ton parcours : l'entretien seul, au centre ; la base dans un volet à gauche, à la demande. */
+/* Ton parcours : l'entretien seul, au centre ; la base dans un volet à gauche pendant l'entretien, sur la page ensuite. */
 .parcours-page.centree { max-width: 48rem; margin: 0 auto; }
 .parcours-colonne { max-width: 48rem; }
+/* La base sur la page, une fois l'entretien terminé : seule, sous le titre. */
+.base-page .tete-entretien { align-items: baseline; }
+.base-page .noeud { scroll-margin: 5rem 0; }
 .tete-entretien { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .tete-entretien h2 { margin: 0 0 .35rem; }
 .bouton-volet { flex: none; display: inline-flex; align-items: center; gap: .45rem; padding: .45rem .85rem; border-radius: 999px;
@@ -1017,3 +1055,78 @@ ul.notifications { list-style: none; margin: -.5rem -1.5rem 0; padding: 0; }
 .notification .appuis { margin-top: .3rem; }
 .notification .tableau { margin-top: .5rem; }
 .notification .erreur-etape { color: var(--alerte); }
+
+/* Écran de la machine virtuelle (page Navigateur) : le Chrome de la VM dans un cadre, sur la hauteur de la fenêtre. */
+.navigateur-vm .ecran-vm { width: 100%; height: calc(100vh - 220px); min-height: 520px; border: 1px solid var(--bord);
+  border-radius: var(--rayon); background: var(--surface-2); }
+
+/* Bouton avec icône (Nexus Button) : l'icône Lucide à gauche du libellé, alignée sur la ligne. */
+.avec-icone { display: inline-flex; align-items: center; gap: .4rem; }
+.avec-icone .icone { width: 1rem; height: 1rem; }
+form[data-postuler] { display: inline; margin: 0; }
+
+/* En-tête de page (Nexus PageHeader) : retour, titre et sous-titre à gauche ; à droite les opérations de la page
+   puis le menu d'actions, qui passent sous le titre quand la place manque ; dessous la méta et les délais. */
+.entete-page { margin-bottom: 1rem; }
+.ligne-entete-page { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: .75rem 1.5rem; }
+.titre-entete-page { flex: 1 1 24rem; min-width: 0; }
+.titre-entete-page h1 { overflow-wrap: anywhere; }
+.sous-titre-entete { margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--texte-2); }
+.actions-entete { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; flex: none; }
+.meta-entete { margin: .35rem 0 0; font-size: .85rem; color: var(--texte-3); }
+.entete-page .delais { margin-top: .5rem; }
+.entete-page form.decision { max-width: 52rem; }
+
+/* Menu d'actions (Nexus DropdownMenu) : bouton rond à trois points ; la liste s'ouvre dessous, alignée à droite,
+   en surface flottante. Une action destructrice est en --alerte (macro menu_actions). */
+.menu-actions { position: relative; }
+.menu-actions > summary { list-style: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 999px;
+  border: 1px solid transparent; color: var(--texte-2); cursor: pointer; }
+.menu-actions > summary::-webkit-details-marker { display: none; }
+.menu-actions > summary:hover { background: var(--surface-2); color: var(--texte); }
+.menu-actions[open] > summary { background: var(--surface-2); border-color: var(--bord); color: var(--texte); }
+.menu-actions > summary:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
+.menu-actions > summary .icone { width: 1.15rem; height: 1.15rem; }
+.panneau-menu { position: absolute; right: 0; top: calc(100% + .35rem); z-index: 20; min-width: 15rem; padding: .3rem;
+  background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .12); animation: menu-entree .15s ease-out; }
+.panneau-menu form { margin: 0; }
+.element-menu { display: flex; align-items: center; gap: .55rem; width: 100%; padding: .5rem .6rem; border: 0; border-radius: 8px;
+  background: none; color: var(--texte); font-weight: 500; text-align: left; }
+.element-menu:hover { background: var(--surface-2); }
+.element-menu:focus-visible { outline: 2px solid var(--vert); outline-offset: 0; }
+.element-menu .icone { width: 1rem; height: 1rem; color: var(--texte-3); }
+.element-menu.danger, .element-menu.danger .icone { color: var(--alerte); }
+.element-menu.danger:hover { background: var(--alerte-pale); }
+@keyframes menu-entree { from { opacity: 0; transform: translateY(-.25rem); } }
+@media (prefers-reduced-motion: reduce) { .panneau-menu { animation: none; } }
+/* Sur une carte (Go donné, à envoyer) : le statut et son menu côte à côte, en haut à droite. */
+.statut-carte { display: flex; align-items: center; gap: .35rem; flex: none; }
+
+/* Page d'une annonce : le contenu de l'onglet sous les onglets ; titres de carte, sections de la modale de suivi. */
+.corps-onglet { margin-top: 1rem; }
+.carte .titre-carte { margin: 0; font-size: 1rem; }
+.resume-evaluation { margin: .5rem 0; }
+.detail-criteres { margin-top: .6rem; }
+.detail-criteres .tableau { margin-top: .5rem; }
+.section-suivi + .section-suivi { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--bord); }
+.section-suivi .boutons { margin-top: .4rem; }
+.bandeau .action-bandeau { margin: 0 0 0 auto; }
+
+/* Fichiers à joindre (Nexus Card) : après « Postuler sur le site », les documents du dossier, un par ligne,
+   chacun téléchargeable ; « Tout télécharger » en haut à droite. */
+.fichiers-a-joindre { border-color: var(--vert); }
+.liste-fichiers { list-style: none; margin: .75rem 0 0; padding: 0; }
+.liste-fichiers li { display: flex; align-items: center; gap: .75rem; padding: .55rem 0; border-top: 1px solid var(--bord); }
+.liste-fichiers li > .icone { width: 1.15rem; height: 1.15rem; color: var(--texte-3); }
+.nom-fichier { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .5rem; }
+.nom-fichier .muet { overflow-wrap: anywhere; }
+@media (max-width: 640px) { .liste-fichiers li { flex-wrap: wrap; } .nom-fichier { flex-basis: calc(100% - 2rem); } }
+
+/* Onglet Dossier : les espacements de l'ancienne page du dossier. */
+.bandeau-dossier { margin-top: 0; }
+.intro-documents { margin: -.4rem 0 .6rem; }
+.taux-mots-cles { margin: .45rem 0 .8rem; }
+.consigne-mots-cles { margin: 0 0 .35rem; }
+.aide-mots-cles { margin: .35rem 0 0; }
+.detail-mots-cles { margin-top: .7rem; }

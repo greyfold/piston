@@ -144,3 +144,4 @@ def test_meme_poste_engage(reg):
     assert doublons.meme_poste_engage(reg, reg.get(c)) == []
     doublons.differentes(reg, a, b)                     # la personne a tranché : deux postes
     assert doublons.meme_poste_engage(reg, reg.get(b)) == []
+

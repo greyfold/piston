@@ -2,7 +2,8 @@
 
 Pour chaque annonce à trancher : une note globale sur 100 (profil × annonce ×
 critères), l'adéquation du profil aux exigences en %, l'état de chaque
-critère non négociable, et les signaux d'une entreprise malsaine ou de
+critère non négociable, l'analyse par catégorie (compétences, expérience, formation, langues :
+`adequation.py`), et les signaux d'une entreprise malsaine ou de
 conditions très contraignantes, cités mot pour mot dans l'annonce.
 
 Le profil vient de la base Parcours de l'application (`parcours.py` : postes, projets,
@@ -10,10 +11,16 @@ réalisations, CV d'origine). Il passe en contexte de la tâche, identique pour 
 les annonces d'un passage : Claude Code le garde en cache. Les exigences et les extraits restent dans la langue
 de l'annonce : ce sont les mots-clés du CV et de la lettre.
 
+L'avis — oui, peut-être ou non — se calcule ici, pas par l'IA : sur la moyenne de la note globale et
+de l'adéquation du profil (`avis`). Autour de 50 %, c'est oui ; un peu en dessous, ou quand les deux
+chiffres divergent (le profil couvre bien les exigences mais la note est basse, ou l'inverse), c'est
+peut-être : l'IA donne alors les raisons pour, contre, et ce qui doit faire trancher.
+
 La note est une aide à la décision : elle ne change pas un statut. Une seule exception, la
 pré-sélection : une annonce « nouvelle » dont le métier n'a rien à voir avec les postes visés
-(`perimetre` = hors, jugé par l'IA sur le texte) passe en C, passe 2, en « limite » : elle reste
-visible dans « Écartées limites » et se remet en B d'un clic. Le doute profite à l'annonce.
+(`perimetre` = hors, jugé par l'IA sur le texte), ou dont l'avis est non, passe en C (non), passe 2, en
+« limite » : elle n'est plus proposée, reste consultable dans Offres (filtre « non ») et se remet à
+trancher d'un clic depuis sa fiche. Le doute profite à l'annonce : il donne peut-être, pas non.
 """
 
 import hashlib
@@ -21,14 +28,22 @@ import json
 
 from pydantic import BaseModel, Field, create_model
 
-from . import moteur
+from . import adequation, moteur
 from . import profil as profil_mod
 from .db import maintenant
 
 MODELE = moteur.MODELE
-VERSION = "3"            # à incrémenter quand la consigne change : les notes seront recalculées
+VERSION = "5"            # à incrémenter quand la consigne change : les notes seront recalculées
 PASSE_IA = 2             # la passe du pré-tri tenue par l'IA (0 et 1 : règles de prefilter.py)
 PERIMETRES = ("dans", "limite", "hors")
+
+# L'avis sur une annonce, tiré de la moyenne de la note globale et de l'adéquation du profil.
+SEUIL_OUI = 50           # moyenne à partir de laquelle c'est oui
+SEUIL_PEUT_ETRE = 40     # en dessous : non, sauf si l'un des deux chiffres est haut
+CHIFFRE_HAUT = 60        # un chiffre haut, même seul, laisse l'annonce en peut-être
+CHIFFRE_BAS = 40         # un chiffre bas empêche le oui : il faut trancher avec le détail
+MAX_RAISONS = 3          # raisons pour et contre gardées
+AVIS = {"oui": ("A", "Oui"), "peut-etre": ("B", "Peut-être"), "non": ("C", "Non")}   # classe de .puce, libellé
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS evaluations (
@@ -51,6 +66,7 @@ class Critere(BaseModel):
 class Exigence(BaseModel):
     exigence: str = Field(description="exigence majeure, formulée dans la langue de l'annonce")
     couverture: str = Field(description="oui, partiel ou non")
+    categorie: adequation.Cle = Field(description="la catégorie dont relève l'exigence")
     appui: str = Field(description="preuve du profil (P-xx, poste, certification) ou écart, en français ; vide si rien")
 
 
@@ -76,11 +92,15 @@ class Evaluation(BaseModel):
                                              "dans, à la limite ou hors des postes visés")
     note_globale: int = Field(description="0 à 100 : profil × annonce × critères")
     adequation_profil: int = Field(description="0 à 100 : part des exigences majeures réellement couvertes par le profil")
-    classe_suggeree: str = Field(description="A, B ou C")
+    pour: list[str] = Field(description="au plus 3 raisons concrètes de postuler, en français")
+    contre: list[str] = Field(description="au plus 3 raisons concrètes de ne pas postuler, en français ; vide si aucune")
+    arbitrage: str = Field(description="une phrase en français : ce qui doit faire trancher, surtout quand la note "
+                                       "globale et l'adéquation du profil divergent")
     angle: str = Field(description="l'angle de candidature le plus fort pour cette annonce")
     resume: str = Field(description="deux phrases en français : pourquoi cette note")
     criteres: list[Critere]
     exigences: list[Exigence]
+    categories: list[adequation.Categorie]
     alertes: list[Alerte]
     salaire: Salaire
 
@@ -118,6 +138,8 @@ def consigne():
             profil_mod.nombre_fr(len(criteres)), ", ".join(" ".join(x for x in c if x) for c in criteres))
             if criteres else "chacun des critères non négociables du profil",
         "marche": " en " + region if region else "",
+        "categories": adequation.REGLE,
+        "oui": SEUIL_OUI,
     }
 
 
@@ -127,12 +149,14 @@ Règles :
 - perimetre : d'abord, le métier que l'annonce décrit est-il un des postes visés ? « hors » seulement si c'est une autre profession, sans rapport avec ces postes ni avec le parcours (soins, cuisine, bâtiment, production industrielle, vente… quand aucun poste visé n'en relève), même si l'intitulé emprunte un mot comme « chef », « responsable » ou « manager ». « limite » pour un poste voisin ou une variante plausible. « dans » sinon. Le doute profite à l'annonce : jamais « hors » sur un doute. Dis en une phrase (perimetre_motif) quel métier c'est.
 - Rien d'inventé. Une compétence ou un fait n'est couvert que s'il figure dans le profil ; cite la preuve (P-xx, poste, certification). Sinon c'est un écart, dis-le.
 - Les exigences et les extraits restent dans la langue de l'annonce, mot pour mot : ils serviront de mots-clés au CV et à la lettre. Tes explications sont en français.
-- note_globale (0-100) combine trois choses : l'adéquation du profil, le respect des critères non négociables de %(prenom)s, et l'intérêt du poste au regard de ses critères%(interet)s. Un critère non négociable clairement violé plafonne la note à 40. 80 et plus : à ne pas rater. 60-79 : à regarder. Moins de 60 : probablement non.
+- note_globale (0-100) combine trois choses : l'adéquation du profil, le respect des critères non négociables de %(prenom)s, et l'intérêt du poste au regard de ses critères%(interet)s. Un critère non négociable clairement violé plafonne la note à 40. 80 et plus : à ne pas rater. 50-79 : à regarder. Moins de 40 : probablement non.
 - adequation_profil (0-100) : seulement la couverture des exigences majeures de l'annonce (3 à 6 exigences) par le profil, comme un recruteur la mesurerait.
+%(categories)s
 - criteres : évalue %(criteres)s. « incertain » quand l'annonce ne permet pas de conclure.
 - alertes : seulement des signaux présents dans le texte, cités mot pour mot, qui font penser à une entreprise malsaine ou à des conditions très contraignantes : disponibilité permanente, heures supplémentaires attendues, astreintes, déplacements très fréquents, « résistance au stress » en exigence, poste fourre-tout (trois métiers en un), objectifs irréalistes, turnover ou poste republié, période d'essai ou clause anormale, rémunération floue ou à la commission, culture « famille » ou « hustle ». Aucune alerte si rien de tel n'apparaît : une liste vide est une bonne réponse. N'invente jamais un signal.
 - salaire : fourchette annuelle brute en CHF pour ce poste à 100 %%. Si l'annonce donne un salaire ou une fourchette, reprends-la et cite la phrase exacte (confiance haute) ; une grille publique (canton, ville, administration) annoncée par sa classe se convertit en fourchette, confiance haute. Sinon, estime le marché du poste%(marche)s selon son niveau réel, le secteur, la taille et le type de structure, en t'appuyant sur ce que tu sais des références publiques (enquêtes salariales suisses, grilles publiques) ; dis lesquelles dans le raisonnement et mets la confiance à moyenne ou basse. C'est une estimation du marché pour ce poste, pas une prétention à annoncer : elle ne dépend pas de ce que %(prenom)s demanderait.
-- classe_suggeree : A (correspond, à proposer), B (à voir, un doute réel), C (ne correspond pas). C'est une suggestion, %(prenom)s tranche."""
+- L'avis se tire de la moyenne de note_globale et d'adequation_profil : %(oui)d et plus, oui ; un peu en dessous, ou quand les deux chiffres divergent, peut-être ; nettement en dessous, non. Ne force pas les chiffres pour obtenir un avis : mesure, l'avis suit.
+- pour, contre (3 au plus chacun) : les raisons concrètes de postuler et de ne pas postuler (critères, intérêt du poste, exigences couvertes ou non, conditions). arbitrage : une phrase qui dit ce qui doit faire trancher %(prenom)s. Quand le profil couvre bien les exigences mais que la note globale est basse (un critère violé, un poste peu intéressant), ou l'inverse, dis précisément d'où vient l'écart. C'est une aide, %(prenom)s tranche."""
 
 
 # --- Entrées ----------------------------------------------------------------------
@@ -155,7 +179,7 @@ def _decisions_recentes(reg, n=30):
             "WHERE decision_le IS NOT NULL ORDER BY decision_le DESC LIMIT ?", (n,)):
         raisons = ", ".join(json.loads(r["raison_decision"] or "[]"))
         lignes.append("- %s — %s : %s%s%s" % (r["entreprise"], r["titre"],
-                      {"retenue": "Go", "C": "Pas go", "B": "Attendre"}.get(r["statut"], r["statut"]),
+                      {"retenue": "Oui", "C": "Non", "B": "Peut-être"}.get(r["statut"], r["statut"]),
                       " (%s)" % raisons if raisons else "", " — « %s »" % r["raison_note"] if r["raison_note"] else ""))
     return "\n".join(lignes)
 
@@ -198,6 +222,9 @@ def evaluer(c, f, texte_profil, decisions=""):
     ev = r.objet
     ev.note_globale = max(0, min(100, ev.note_globale))
     ev.adequation_profil = max(0, min(100, ev.adequation_profil))
+    ev.categories = adequation.normaliser(ev.categories)
+    propres = lambda points: [p.strip() for p in points or [] if p and p.strip()][:MAX_RAISONS]
+    ev.pour, ev.contre, ev.arbitrage = propres(ev.pour), propres(ev.contre), (ev.arbitrage or "").strip()
     return ev, dict(r.usage or {}, cout_usd=r.cout_usd)
 
 
@@ -208,20 +235,41 @@ def _schema(reg):
     reg.cx.executescript(SCHEMA)
 
 
+def avis(note_globale, adequation_profil, criteres=()):
+    """Oui, peut-être ou non, tiré des deux chiffres de l'évaluation : {cle, classe, libelle, moyenne,
+    divergence}. Oui : moyenne d'au moins SEUIL_OUI, aucun chiffre bas, aucun critère violé. Peut-être :
+    moyenne d'au moins SEUIL_PEUT_ETRE, ou un chiffre haut (le profil couvre, la note est basse, ou
+    l'inverse) : c'est le détail qui tranche. Non : le reste."""
+    g, p = int(note_globale or 0), int(adequation_profil or 0)
+    moyenne = round((g + p) / 2)
+    viole = any((c.get("etat") if isinstance(c, dict) else getattr(c, "etat", "")) == "ko" for c in criteres or ())
+    if moyenne >= SEUIL_OUI and min(g, p) >= CHIFFRE_BAS and not viole:
+        cle = "oui"
+    elif moyenne >= SEUIL_PEUT_ETRE or max(g, p) >= CHIFFRE_HAUT:
+        cle = "peut-etre"
+    else:
+        cle = "non"
+    classe, libelle = AVIS[cle]
+    return {"cle": cle, "classe": classe, "libelle": libelle, "moyenne": moyenne,
+            "divergence": abs(g - p) >= 20 or (viole and moyenne >= SEUIL_OUI)}
+
+
+def _lue(r):
+    d = dict(r)
+    d["resultat"] = json.loads(d["resultat"])
+    d["avis"] = avis(d["note_globale"], d["adequation_profil"], d["resultat"].get("criteres"))
+    return d
+
+
 def lire(reg, emp):
     _schema(reg)
     r = reg.cx.execute("SELECT * FROM evaluations WHERE empreinte=?", (emp,)).fetchone()
-    if not r:
-        return None
-    d = dict(r)
-    d["resultat"] = json.loads(d["resultat"])
-    return d
+    return _lue(r) if r else None
 
 
 def toutes(reg):
     _schema(reg)
-    return {r["empreinte"]: dict(r, resultat=json.loads(r["resultat"]))
-            for r in reg.cx.execute("SELECT * FROM evaluations")}
+    return {r["empreinte"]: _lue(r) for r in reg.cx.execute("SELECT * FROM evaluations")}
 
 
 def a_evaluer(reg, statuts=("nouvelle", "A", "B", "retenue"), texte_profil=None):
@@ -245,8 +293,9 @@ def enregistrer(reg, f, ev, usage, texte_profil):
         "resultat=excluded.resultat, cout_jetons=excluded.cout_jetons",
         (f["empreinte"], maintenant(), MODELE, VERSION, empreinte_entree(f, texte_profil), ev.note_globale,
          ev.adequation_profil, len(ev.alertes), ev.model_dump_json(), json.dumps(jetons)))
-    reg.noter(f["empreinte"], "évaluation · %d/100 · profil %d %% · %d alerte(s) · périmètre %s"
-              % (ev.note_globale, ev.adequation_profil, len(ev.alertes), ev.perimetre or "?"))
+    a = avis(ev.note_globale, ev.adequation_profil, ev.criteres)
+    reg.noter(f["empreinte"], "évaluation · %d/100 · profil %d %% · avis %s · %d alerte(s) · périmètre %s"
+              % (ev.note_globale, ev.adequation_profil, a["libelle"].lower(), len(ev.alertes), ev.perimetre or "?"))
     ecartee = preselectionner(reg, f, ev)
     reg.commit()
     return ecartee
@@ -256,13 +305,25 @@ def motif_hors_perimetre(ev):
     return "Métier hors des postes visés, selon l'IA : %s" % (ev.perimetre_motif or "autre métier").strip()[:160]
 
 
+def motif_avis_non(ev):
+    a = avis(ev.note_globale, ev.adequation_profil, ev.criteres)
+    return "Avis non : moyenne %d %% (note %d/100, profil %d %%)%s" % (
+        a["moyenne"], ev.note_globale, ev.adequation_profil,
+        " · " + ev.arbitrage.strip()[:120] if (ev.arbitrage or "").strip() else "")
+
+
 def preselectionner(reg, f, ev):
-    """La pré-sélection par l'IA : une annonce « nouvelle » hors du périmètre passe en C (passe 2,
-    limite). Une annonce que la personne a déjà classée (A, B, retenue…) n'est jamais touchée.
-    Renvoie vrai si l'annonce a été écartée."""
-    if ev.perimetre != "hors" or f.get("statut") != "nouvelle":
+    """La pré-sélection par l'IA : une annonce « nouvelle » hors du périmètre, ou dont l'avis est non,
+    passe en C (passe 2, limite) : elle n'est plus proposée et reste dans Offres. Une annonce que la
+    personne a déjà classée (A, B, retenue…) n'est jamais touchée. Renvoie vrai si elle a été écartée."""
+    if f.get("statut") != "nouvelle":
         return False
-    motif = motif_hors_perimetre(ev)
+    if ev.perimetre == "hors":
+        motif = motif_hors_perimetre(ev)
+    elif avis(ev.note_globale, ev.adequation_profil, ev.criteres)["cle"] == "non":
+        motif = motif_avis_non(ev)
+    else:
+        return False
     reg.maj(f["empreinte"], statut="C", passe_ecart=PASSE_IA, motif=motif, limite=True)
     reg.noter(f["empreinte"], "pré-sélection IA · C · passe %d · %s" % (PASSE_IA, motif))
     return True

@@ -127,6 +127,8 @@ class SourceDistante:
 
     def __init__(self, distant, nom, locale, connues=None):
         self.d, self.nom, self.connues = distant, nom, connues
+        # Ce que la source tient du profil (requêtes, lieux…) : le travailleur ne l'a pas.
+        self.parametres = getattr(locale, "parametres", None)
         for drapeau in ("detail_en_session", "selon_fenetre", "page_carriere"):
             if getattr(locale, drapeau, False):
                 setattr(self, drapeau, True)
@@ -139,7 +141,8 @@ class SourceDistante:
         return self._appel("tester", delai=60)["n"]
 
     def offres(self, a_lire=None, jours=None):
-        corps = {"jours": jours, "connues": self.connues() if (a_lire is not None and self.connues) else None}
+        corps = {"jours": jours, "connues": self.connues() if (a_lire is not None and self.connues) else None,
+                 "parametres": self.parametres() if self.parametres else None}
         return [Annonce(**a) for a in self._appel("offres", delai=self.delai, json=corps)]
 
     def detail(self, a):

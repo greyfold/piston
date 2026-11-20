@@ -19,8 +19,8 @@
   {% for c in q.champs %}
   {% set v = deja.champs[c.nom] if deja and deja.champs and c.nom in deja.champs else (defauts[c.defaut] if c.defaut else c.valeur or "") %}
   <div class="champ{{ ' large' if c.long }}"><label for="{{ id }}-{{ c.nom }}">{{ c.libelle }}</label>
-    {% if c.long %}<textarea id="{{ id }}-{{ c.nom }}" name="{{ prefixe }}{{ c.nom }}" rows="2" placeholder="{{ c.exemple }}">{{ v }}</textarea>
-    {% else %}<input type="text" id="{{ id }}-{{ c.nom }}" name="{{ prefixe }}{{ c.nom }}" value="{{ v }}" placeholder="{{ c.exemple }}"
+    {% if c.long %}<textarea id="{{ id }}-{{ c.nom }}" name="{{ prefixe }}{{ c.nom }}" rows="2" placeholder="{{ c.exemple or '' }}"{% if c.requis %} required{% endif %}>{{ v }}</textarea>
+    {% else %}<input type="text" id="{{ id }}-{{ c.nom }}" name="{{ prefixe }}{{ c.nom }}" value="{{ v }}" placeholder="{{ c.exemple or '' }}"{% if c.requis %} required{% endif %}
       {% if c.type == "nombre" %}inputmode="numeric" spellcheck="false"{% endif %}>{% endif %}</div>
   {% endfor %}
 </div>

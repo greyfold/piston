@@ -1,32 +1,22 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone %}
-{% block titre %}{{ etape.titre }} · Ma recherche{% endblock %}
+{% from "_macros.html" import entete_reglage %}
+{% block titre %}{{ etape.titre }} · Ma recherche · Réglages · Recherche d'emploi{% endblock %}
 {% block contenu %}
-<h1>Ma recherche</h1>
-<p class="muet">Ce que la plateforme sait de toi pour chercher, trier et écrire tes dossiers. Gardé sur ton ordinateur seulement.</p>
-{# Les étapes en onglets de page (elles ne sont plus dans le menu latéral) ; un point pour celles à remplir. #}
-{% set ids_manquants = profil_manquants | map('first') | list %}
-<nav class="onglets-annonce" aria-label="Étapes de ta recherche">
-  {% for x in etapes %}<a href="/profil/{{ x.id }}" class="{{ 'actif' if x.id == ident }}"{% if x.id == ident %} aria-current="step"{% endif %}>{{ x.titre }}{% if x.id in ids_manquants %}<span class="a-remplir" title="À remplir"><span class="cache">, à remplir</span></span>{% endif %}</a>{% endfor %}
-</nav>
+{# Une étape de « Ma recherche » : son nom en titre, son retour (base.html) vers la liste des étapes. #}
+{% call entete_reglage({"nom": etape.titre}) %}{{ etape.intro }}{% endcall %}
 
 {% if a_reprendre %}
 <form method="post" action="/profil/{{ ident }}/reprendre" class="bandeau info"><span class="point"></span>
   <span>Ton parcours contient {{ a_reprendre }} absente{{ "s" if not a_reprendre.startswith("1 ") }} de cette liste.
     <button class="lien-neutre">Les ajouter</button></span></form>
 {% endif %}
-<form method="post" action="/profil/{{ ident }}" class="carte profil" autocomplete="on">
-  <div class="titre-etape">
-    <span class="pastille">{{ icone(ident) }}</span>
-    <div><h2>{{ etape.titre }}</h2><p class="muet">{{ etape.intro }}</p></div>
-  </div>
+<form method="post" action="/profil/{{ ident }}" class="carte profil" autocomplete="on" data-garder-position>
   <div class="grille-champs">
   {% include "_champs_profil.html" %}
   </div>
 
   <div class="boutons pied">
-    {% if precedente %}<a class="bouton" href="/profil/{{ precedente }}">Précédent</a>{% endif %}
-    <button class="go">{{ "Enregistrer" if ident == etapes[-1].id else "Enregistrer et continuer" }}</button>
+    <button class="go">Enregistrer</button>
   </div>
 </form>
 {% endblock %}

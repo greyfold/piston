@@ -68,8 +68,19 @@ noVNC. Le **travailleur** (`travailleur/`) y répond sur 127.0.0.1:8776 (jeton) 
   seulement un mot de fonction (« chef », « responsable », « manager »). La passe 2 est l'IA
   (`evaluation.py`) : en notant chaque annonce à trancher, elle dit si le métier est dans, à la limite
   ou hors des postes visés ; « hors » écarte l'annonce en « limite », visible et réversible dans
-  « Écartées limites ». Le doute profite à l'annonce. Si l'IA n'a pas répondu pendant le passage, le
+  « Écartées limites ». Le doute profite à l'annonce.
+- **Oui, peut-être, non** (`evaluation.avis`) : l'avis sur une annonce se calcule sur la moyenne de la
+  note globale et de l'adéquation du profil : oui dès 50 % ; peut-être un peu en dessous, ou quand les
+  deux chiffres divergent (le profil couvre, la note est basse, ou l'inverse) ; non sinon. L'IA donne les
+  raisons pour, contre, et ce qui doit faire trancher. Une annonce nouvelle dont l'avis est non n'est plus
+  proposée : elle reste dans Offres (filtre « Non »), d'où elle se remet à trancher d'un clic. Les
+  statuts A, B, C se lisent oui, peut-être, non ; les boutons du tri sont Oui, Peut-être, Non. Si l'IA n'a pas répondu pendant le passage, le
   bilan le dit et `echeances.py` rattrape les annonces sans note dès qu'elle répond.
+- **Adéquation par catégorie** (`adequation.py`) : dans la même tâche que la note, l'IA analyse
+  l'adéquation au poste en compétences, expérience, formation et langues : une note sur 100 par
+  catégorie, les atouts du profil et les écarts, chaque exigence rangée dans sa catégorie. Une
+  catégorie où l'annonce n'exige rien n'a pas de note. La page de l'annonce le montre ; le dossier
+  de candidature le reçoit avec l'évaluation.
 - **Examen d'une source** (page Sources, ou `jobsearch source examiner <id>`) : l'IA lit sur le web
   les conditions générales et le robots.txt de la source, et cherche une API publique, un serveur MCP
   ou des alertes e-mail. Elle conseille un accès, que Python vérifie (`sources/examen.py`) : sans
@@ -126,6 +137,7 @@ d'exemple (`tests/fixtures/config`, valeurs fictives), jamais sur `config/` ni s
 | `src/jobsearch/echeances.py` | Ce qui est dû maintenant : passage, alerte, surveillance. |
 | `src/jobsearch/moteur/` | Le moteur IA (Claude Code). |
 | `src/jobsearch/sources/` | Les sources ; `catalogue.py` construit la liste du passage. |
+| `src/jobsearch/evaluation.py`, `adequation.py` | La note d'adéquation et son analyse par catégorie. |
 | `src/jobsearch/profil.py` | Le profil, qui prime sur `config/`. |
 | `src/jobsearch/parcours.py` | La base d'expérience et ses entretiens. |
 | `src/jobsearch/vm.py`, `travailleur/` | La machine virtuelle (Lima embarqué), son écran et son travailleur. |

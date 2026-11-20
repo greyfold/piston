@@ -9,10 +9,20 @@ job-room:
   acces: "automatique"
   remarques: "Route du site, POST _search, page et size dans l'adresse."
 jobup:
-  nom: "jobup.ch / jobs.ch"
+  nom: "jobup.ch"
   nature: "Site d'annonces, Suisse romande (même base que jobs.ch)"
   acces: "automatique"
   remarques: "Recherche lieu par lieu (ville ou canton, par son nom)."
+jobs-ch:
+  nom: "jobs.ch"
+  nature: "Site d'annonces, toute la Suisse (même base que jobup.ch)"
+  acces: "automatique"
+  remarques: "Même route et mêmes lieux que jobup.ch ; une offre vue sur les deux ne fait qu'une annonce."
+indeed:
+  nom: "Indeed"
+  nature: "Site d'annonces international"
+  acces: "à brancher"
+  remarques: "Lu par le connecteur Indeed du compte Claude (le site refuse les scripts) : « automatique » dès que le connecteur est actif (page Connecteurs)."
 linkedin:
   nom: "LinkedIn"
   nature: "Réseau social, offres d'emploi"

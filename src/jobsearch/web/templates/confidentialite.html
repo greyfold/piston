@@ -1,18 +1,15 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone %}
-{% block titre %}Tes données et l'IA · Recherche d'emploi{% endblock %}
+{% from "_macros.html" import icone, entete_reglage %}
 {% block contenu %}
 <div class="confidentialite">
-<p class="surtitre">{{ icone("cadenas") }} Confidentialité</p>
-<h1>L'IA écrit tes candidatures sans connaître ton nom</h1>
-<p class="intro">Ton nom, ton adresse, ton téléphone et ton e-mail ne quittent jamais ton ordinateur. L'IA reçoit des balises
-  à leur place ; la plateforme remet tes vraies coordonnées dans le CV et la lettre une fois le texte revenu, ici, sur ton Mac.</p>
+{% call entete_reglage(reglage) %}L'IA écrit tes candidatures sans connaître ton nom. Ton nom, ton adresse, ton téléphone et ton e-mail ne quittent jamais ton Mac. L'IA reçoit des balises
+  à leur place ; la plateforme remet tes vraies coordonnées dans le CV et la lettre une fois le texte revenu, ici, sur ton Mac.{% endcall %}
 
 <h2>La preuve, avec ton profil</h2>
 <div class="cartes deux">
   <div class="carte">
     <div class="tete"><b>Sur ton Mac</b><span class="puce B">ce que tu vois</span></div>
-    <p class="demo">{{ entete or "Complète tes coordonnées dans le Profil pour voir la démonstration." }}</p>
+    <p class="demo">{{ entete or "Complète tes coordonnées dans « Ma recherche » pour voir la démonstration." }}</p>
   </div>
   <div class="carte">
     <div class="tete"><b>Ce que l'IA reçoit</b><span class="puce">balises</span></div>

@@ -41,7 +41,7 @@ def champ(cle, libelle, type="texte", requis=False, aide="", exemple="", choix=N
           en_tete=None, vide="—", virgules=False, large=False, colonnes=None, section=""):
     """Un champ de l'assistant. `choix` : la liste d'une liste déroulante, `en_tete` : les choix
     proposés d'abord, `vide` : le libellé de l'option sans valeur, `prefixe` : le début fixe d'une adresse.
-    Types de liste : « liste » (une par ligne), « liste_choix » (pilules à cocher et un champ pour en ajouter,
+    Types de liste : « liste » (une valeur par champ, « Ajouter » pour en ouvrir un autre), « liste_choix » (pilules à cocher et un champ pour en ajouter,
     séparées par des virgules si `virgules`), « criteres » (les critères structurés, CRITERES), « postes »
     (une ligne par poste : son intitulé et ses autres intitulés, POSTES), « lignes » (une ligne par élément, une
     case par colonne de `colonnes` : [(sous-clé, libellé, exemple)] ; enregistrée « a | b | c », comme « liste »).
@@ -57,6 +57,23 @@ LINKEDIN = "https://www.linkedin.com/in/"
 # choisi n'est pas un certificat (colonne « Attesté par » pour celui qui en a un).
 NIVEAUX_LANGUE = ["Langue maternelle", "Bilingue", "Maîtrise (C2)", "Courant (C1)", "Avancé (B2)",
                   "Intermédiaire (B1)", "Élémentaire (A2)", "Débutant (A1)"]
+
+
+# Langues proposées dans l'onglet « Langues » (noms français, ordre alphabétique) : une liste déroulante avec
+# recherche ; une langue du CV qui n'y est pas reste choisie telle quelle.
+LANGUES_PARLEES = ["Afrikaans", "Albanais", "Allemand", "Amharique", "Anglais", "Arabe", "Arménien", "Azéri",
+                   "Basque", "Bengali", "Biélorusse", "Birman", "Bosniaque", "Breton", "Bulgare", "Cantonais",
+                   "Catalan", "Chinois (mandarin)", "Cinghalais", "Coréen", "Corse", "Créole haïtien", "Croate",
+                   "Danois", "Dari", "Espagnol", "Espéranto", "Estonien", "Finnois", "Français", "Galicien",
+                   "Gallois", "Géorgien", "Grec", "Gujarati", "Haoussa", "Hébreu", "Hindi", "Hongrois", "Igbo",
+                   "Indonésien", "Irlandais", "Islandais", "Italien", "Japonais", "Kazakh", "Khmer", "Kinyarwanda",
+                   "Kirghize", "Kurde", "Langue des signes", "Laotien", "Latin", "Letton", "Lingala", "Lituanien",
+                   "Luxembourgeois", "Macédonien", "Malais", "Malayalam", "Malgache", "Maltais", "Marathi",
+                   "Mongol", "Monténégrin", "Néerlandais", "Népalais", "Norvégien", "Occitan", "Ourdou", "Ouzbek",
+                   "Pachto", "Pendjabi", "Persan", "Peul", "Polonais", "Portugais", "Romanche", "Roumain", "Russe",
+                   "Serbe", "Slovaque", "Slovène", "Somali", "Suédois", "Suisse allemand", "Swahili", "Tadjik",
+                   "Tagalog", "Tamoul", "Tchèque", "Télougou", "Thaï", "Tibétain", "Tigrigna", "Turc", "Turkmène",
+                   "Ukrainien", "Vietnamien", "Wolof", "Yiddish", "Yoruba", "Zoulou"]
 
 
 def niveau_langue(v):
@@ -76,8 +93,9 @@ def niveau_langue(v):
 
 ETAPES = [
     {"id": "identite", "titre": "Identité",
+     "resume": "Nom, adresse, téléphone, e-mail et liens.",
      "intro": "Ce qui figure en tête du CV et des lettres, et sert à pré-remplir les formulaires des employeurs. "
-              "L'IA ne le voit jamais : elle écrit avec des balises, remplacées sur ce Mac.",
+              "L'IA ne le voit jamais : elle écrit avec des balises, remplacées sur ton Mac.",
      "champs": [
          champ("identite.civilite", "Civilité", type="choix", choix=["Madame", "Monsieur", "Mx"],
                vide="Ne pas préciser",
@@ -88,7 +106,7 @@ ETAPES = [
          champ("identite.npa", "NPA"),
          champ("identite.ville", "Localité", requis=True, aide="Aussi la ville en tête des lettres."),
          champ("identite.pays", "Pays", type="choix", choix=list(pays.PAYS_DE_RECHERCHE.values()),
-               aide="Proposé d'après les réglages de région de ton ordinateur."),
+               aide="Proposé d'après les réglages de région de ton Mac."),
          champ("identite.telephone", "Téléphone", type="tel",
                aide="Choisis l'indicatif, puis tape le numéro : il se met en forme tout seul."),
          champ("identite.email", "E-mail", type="email", requis=True),
@@ -100,6 +118,7 @@ ETAPES = [
                aide="Seulement pour les formulaires qui l'exigent ; jamais dans le CV ni les lettres."),
      ]},
     {"id": "recherche", "titre": "Recherche",
+     "resume": "Niveau visé, cantons, postes recherchés et entreprises visées.",
      "intro": "Ce que le passage du matin cherche, et ce que le pré-tri écarte d'office.",
      "champs": [
          champ("recherche.niveau", "Niveau visé", type="choix", choix=NIVEAUX, vide="Non précisé", large=True,
@@ -110,21 +129,23 @@ ETAPES = [
                aide="Un poste par ligne, avec les autres intitulés sous lesquels il est publié. Chaque intitulé est "
                     "cherché sur chaque plateforme ; sur LinkedIn, un poste fait une seule recherche, ses intitulés "
                     "reliés par « OR ». Une annonce dont le titre ne contient aucun de leurs mots est écartée."),
-         champ("recherche.entreprises", "Entreprises visées", type="liste",
-               aide="Une recherche de plus par entreprise nommée."),
+         champ("recherche.entreprises", "Entreprises visées", type="liste", exemple="Nom de l'entreprise",
+               aide="Une entreprise par champ : chacune ajoute une recherche à son nom."),
      ]},
     {"id": "pretri", "titre": "Pré-tri",
+     "resume": "Les annonces et les intitulés écartés d'office, avant toute note.",
      "intro": "Ce que le pré-tri écarte d'office, avant toute note. Une case décochée désactive la règle : "
               "les annonces qu'elle écartait restent à trier.",
      "champs": [
          champ("exclusions.regles", "Annonces écartées d'office", type="regles",
-               aide="« limite » : écartée, mais montrée dans « Écartées limites » pour vérifier le filtre."),
+               aide="« limite » : écartée, à revoir dans Offres (statut C) pour vérifier le filtre."),
          champ("exclusions.mots_titre", "Autres intitulés à écarter", type="liste_choix", virgules=True,
                exemple="ajouter des mots, séparés par des virgules",
                aide="Un intitulé qui contient un de ces mots est écarté comme métier exclu. Décoche un mot pour "
                     "le retirer."),
      ]},
     {"id": "criteres", "titre": "Critères",
+     "resume": "Ce qui est non négociable, ce que tu veux faire et tes angles de candidature.",
      "intro": "Ce que l'IA vérifie en notant chaque annonce ; laisse vide ce qui t'est égal. Une annonce qui viole "
               "clairement un critère est notée 40 au plus. Aucun montant de salaire ici.",
      "champs": [
@@ -136,8 +157,23 @@ ETAPES = [
          champ("evaluation.angles", "Angles de candidature", type="liste_choix", exemple="ajouter un angle",
                aide="Les façons de te présenter : l'IA en propose une par annonce.", section="Pour te présenter"),
      ]},
-    # Certifications et langues : remplies à l'import du CV (`completer_depuis_cv`), corrigées ici.
+    # Formation, certifications et langues : remplies à l'import du CV (`completer_depuis_cv`), corrigées ici.
+    {"id": "formation", "titre": "Formation",
+     "resume": "Tes diplômes, tels qu'ils figurent dans chaque CV.",
+     "intro": "Tes diplômes, remplis à l'import de ton CV, dans Ton parcours. Corrige-les ici : ils font foi "
+              "dans chaque CV.",
+     "champs": [
+         champ("dossier.formations", "Diplômes obtenus", type="lignes",
+               colonnes=[("titre", "Diplôme", "Bachelor en informatique de gestion"),
+                         ("etablissement", "Établissement", "Haute école de gestion"),
+                         ("date", "Obtenu en", "AAAA")],
+               aide="Une ligne par diplôme : son titre, l'établissement qui l'a délivré et l'année où tu l'as "
+                    "obtenu (AAAA, ou MM.AAAA). Laisse l'année vide pour une formation en cours. Ces lignes "
+                    "remplacent la formation du CV maître ; un même diplôme du même établissement n'est gardé "
+                    "qu'une fois."),
+     ]},
     {"id": "certifications", "titre": "Certifications",
+     "resume": "Tes certifications, telles qu'elles figurent dans chaque CV.",
      "intro": "Remplies à l'import de ton CV, dans Ton parcours. Corrige-les ici : elles font foi dans chaque CV.",
      "champs": [
          champ("dossier.certifications", "Certifications obtenues", type="lignes",
@@ -149,11 +185,13 @@ ETAPES = [
                     "n'est gardé qu'une fois."),
      ]},
     {"id": "langues", "titre": "Langues",
+     "resume": "Les langues que tu parles et ton niveau.",
      "intro": "Les langues que tu parles, remplies à l'import de ton CV, dans Ton parcours. Corrige-les ici : "
               "elles font foi dans chaque CV.",
      "champs": [
          champ("dossier.langues", "Langues parlées", type="lignes",
-               colonnes=[("langue", "Langue", "Anglais"), ("niveau", "Niveau", "Choisir un niveau", NIVEAUX_LANGUE),
+               colonnes=[("langue", "Langue", "Choisir une langue", LANGUES_PARLEES, "recherche"),
+                         ("niveau", "Niveau", "Choisir un niveau", NIVEAUX_LANGUE),
                          ("attestation", "Attesté par (facultatif)", "Cambridge C1 Advanced, 2022")],
                aide="Le niveau est ton estimation, sur l'échelle européenne : pas besoin d'un certificat pour le "
                     "choisir. Si un diplôme ou un test l'atteste, indique-le : sans lui, le CV ne parle d'aucun "
@@ -162,6 +200,7 @@ ETAPES = [
     # Le différenciateur vient de l'entretien « Ce qui compte pour toi » ; les règles particulières et le
     # nombre de pages du CV (`dossier.*`) restent lus s'ils sont dans le profil, sans onglet pour les saisir.
     {"id": "objectifs", "titre": "Objectifs de postulation",
+     "resume": "Le rythme à tenir, par semaine ou par mois.",
      "intro": "Le rythme de postulation à tenir, par semaine, par mois, ou les deux : suivi sur le tableau de "
               "bord, avec un rappel le vendredi si l'objectif de la semaine n'est pas atteint. Vide : pas de suivi.",
      "champs": [
@@ -248,15 +287,19 @@ def objectif(p=None):
     return next((o["valeur"] for o in OBJECTIFS if set(o["desactive"]) == off), "fixe")
 
 
-def enregistrer_recherche(valeur_objectif, poste, cantons):
-    """L'écran « Ta recherche » de l'accueil : un intitulé, des cantons, un objectif."""
+def enregistrer_recherche(valeur_objectif, poste, cantons, rythme=None):
+    """L'écran « Ta recherche » de l'accueil : un intitulé, des cantons, un objectif. `rythme` : la
+    réponse à « As-tu un nombre de postulations à atteindre ? », (semaine, mois) si oui, ("", "") si
+    non, None si la question n'a pas été posée (les objectifs restent tels quels)."""
     o = next((x for x in OBJECTIFS if x["valeur"] == valeur_objectif), None)
     poste = re.sub(r"\s+", " ", str(poste or "")).strip()
     cantons = [c for c in dict.fromkeys(str(x).upper() for x in cantons or []) if c in pays.CANTONS]
     erreurs = [m for m, ok in (("l'objectif", o), ("le poste recherché", poste), ("au moins un canton", cantons)) if not ok]
     if erreurs:
         raise ProfilInvalide("à choisir : " + ", ".join(erreurs))
+    nombres = _valeurs_objectifs(*rythme) if rythme is not None else {}    # lève ProfilInvalide sans rien écrire
     p = copy.deepcopy(charger())
+    _poser_objectifs(p, nombres)
     if not existe():
         p[ACCUEIL] = "en_cours"
     # Le poste passe en tête des postes recherchés ; ses mots deviennent ceux du pré-tri (postes()).
@@ -589,18 +632,25 @@ def objectifs_rythme():
 
 def enregistrer_objectifs(semaine, mois):
     """Les objectifs seuls (entretien « Ce qui compte pour toi ») : chacun facultatif, vide = aucun."""
+    valeurs = _valeurs_objectifs(semaine, mois)                 # lève ProfilInvalide sans rien écrire
     p = copy.deepcopy(charger())
+    _poser_objectifs(p, valeurs)
+    ecrire(p)
+    return p
+
+
+def _valeurs_objectifs(semaine, mois):
+    """Les deux objectifs saisis, convertis : {clé: nombre}, 0 pour un champ vide."""
     champs = {c["cle"]: c for e in ETAPES for c in e["champs"] if c["cle"] in OBJECTIFS_RYTHME}
-    valeurs = {}
-    for cle, brut in zip(OBJECTIFS_RYTHME, (semaine, mois)):
-        valeurs[cle] = _convertir(champs[cle], brut)            # lève ProfilInvalide sans rien écrire
+    return {cle: _convertir(champs[cle], brut) for cle, brut in zip(OBJECTIFS_RYTHME, (semaine, mois))}
+
+
+def _poser_objectifs(p, valeurs):
     for cle, v in valeurs.items():
         if _egal_base(cle, v):
             _retirer(p, cle)
         else:
             _poser(p, cle, v)
-    ecrire(p)
-    return p
 
 
 VALEURS_SEULES = {"dossier.differenciateur"}       # ce qu'un entretien pose seul, hors de son étape
@@ -1123,8 +1173,8 @@ def _convertir(c, brut):
                 from .prefilter import plier
                 ligne = plier(ligne).replace("|", " ").strip()
             cle = ligne
-            if c["cle"] in LISTES_CV.values():       # même certification ou langue, autre date ou niveau : la première reste
-                cle = _nom_dans_liste(ligne)
+            if c["cle"] in LISTES_CV.values():       # même diplôme, certification ou langue, autre date ou niveau : la première reste
+                cle = _nom_dans_liste(ligne, c["cle"])
             if ligne and cle not in vus:
                 vus.add(cle)
                 out.append(ligne)
@@ -1188,6 +1238,16 @@ def colonnes_de_ligne(c, ligne):
     return morceaux + [""] * (n - len(morceaux))
 
 
+def choix_de_colonne(col, v):
+    """La valeur d'une case telle que sa liste déroulante la propose : « anglais » → « Anglais » ; une valeur
+    hors liste, ou une colonne sans liste, reste telle quelle."""
+    from .prefilter import plier
+    if len(col) > 3 and v:
+        cle = plier(str(v)).strip()
+        return next((o for o in col[3] if plier(o) == cle), v)
+    return v
+
+
 def _ligne_en_colonnes(c, ligne):
     """Une ligne remise en forme : cases nettoyées, date en MM.AAAA quand elle se lit, cases vides de fin retirées."""
     cases = colonnes_de_ligne(c, ligne)
@@ -1232,22 +1292,27 @@ def lignes_du_formulaire(f, c):
     return lignes
 
 
-# --- Certifications et langues : tirées du CV importé (parcours) ----------------------
+# --- Formation, certifications et langues : tirées du CV importé (parcours) ------------
 
-LISTES_CV = {"certification": "dossier.certifications", "langue": "dossier.langues"}
-NOMS_LISTES_CV = {"certification": ("certification", "certifications"), "langue": ("langue", "langues")}
+LISTES_CV = {"formation": "dossier.formations", "certification": "dossier.certifications", "langue": "dossier.langues"}
+NOMS_LISTES_CV = {"formation": ("formation", "formations"), "certification": ("certification", "certifications"),
+                  "langue": ("langue", "langues")}
 
 
-def _nom_dans_liste(ligne):
-    """Ce qui identifie une ligne « nom | … » : le nom, sans accents, majuscules ni ponctuation."""
+def _nom_dans_liste(ligne, cle=""):
+    """Ce qui identifie une ligne « nom | … » : le nom, sans accents, majuscules ni ponctuation ; pour un
+    diplôme, le nom et l'établissement (le même titre peut s'obtenir dans deux écoles)."""
     from .prefilter import plier
-    return re.sub(r"[^a-z0-9]+", " ", plier(str(ligne).split("|")[0])).strip()
+    n = 2 if cle == LISTES_CV["formation"] else 1
+    return re.sub(r"[^a-z0-9]+", " ", plier(" ".join(str(ligne).split("|")[:n]))).strip()
 
 
 def ligne_du_cv(e):
-    """Un élément du parcours (certification ou langue) → sa ligne dans l'onglet du profil."""
+    """Un élément du parcours (formation, certification ou langue) → sa ligne dans l'onglet du profil."""
     if e["genre"] == "langue":
         morceaux = [e.get("titre"), e.get("detail")]
+    elif e["genre"] == "formation":                  # l'année d'obtention : jamais celle du début
+        morceaux = [e.get("titre"), e.get("organisation"), e.get("fin")]
     else:
         morceaux = [e.get("titre"), e.get("organisation"), e.get("fin") or e.get("debut")]
     while morceaux and not (morceaux[-1] or "").strip():
@@ -1260,20 +1325,21 @@ def _champ_cle(cle):
 
 
 def absents_du_cv(elements, p=None):
-    """{genre: [lignes]} des certifications et langues du parcours qui manquent à leur onglet."""
+    """{genre: [lignes]} des formations, certifications et langues du parcours qui manquent à leur onglet."""
     p = charger() if p is None else p
     out = {}
     for genre, cle in LISTES_CV.items():
-        vus = {_nom_dans_liste(x) for x in lire(p, cle) or []}
+        vus = {_nom_dans_liste(x, cle) for x in lire(p, cle) or []}
         for e in elements:
-            if e["genre"] == genre and (n := _nom_dans_liste(e["titre"])) and n not in vus:
+            if e["genre"] == genre and (e.get("titre") or "").strip() \
+                    and (n := _nom_dans_liste(ligne_du_cv(e), cle)) not in vus:
                 vus.add(n)
                 out.setdefault(genre, []).append(ligne_du_cv(e))
     return out
 
 
 def completer_depuis_cv(elements):
-    """Ajoute à leur onglet les certifications et langues du CV qui n'y sont pas encore. Ce qui y est déjà
+    """Ajoute à leur onglet les formations, certifications et langues du CV qui n'y sont pas encore. Ce qui y est déjà
     reste tel quel : corrigé à la main, il fait foi. Renvoie {genre: nombre ajouté}."""
     p = copy.deepcopy(charger())
     ajouts = absents_du_cv(elements, p)
@@ -1345,7 +1411,7 @@ def enregistrer(ident, formulaire):
                 v = postes_du_formulaire(formulaire, c["cle"])
             elif c["type"] == "lignes":
                 v = _convertir(c, "\n".join(" | ".join(x) for x in lignes_du_formulaire(formulaire, c)))
-            elif c["type"] == "cantons":              # pilules cochées (formulaire web), sinon une par ligne
+            elif c["type"] in ("cantons", "liste"):   # pilules cochées ou un champ par valeur (formulaire web), sinon une par ligne
                 v = _convertir(c, "\n".join(valeurs_formulaire(formulaire, c["cle"])))
             else:
                 v = _convertir(c, formulaire.getlist(c["cle"]) if multiple else formulaire.get(c["cle"], ""))
