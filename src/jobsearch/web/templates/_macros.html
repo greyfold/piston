@@ -229,6 +229,21 @@
 {% endif %}
 {%- endmacro %}
 
+{# Bandeau « même employeur » (Nexus Banner, `.bandeau.info`, icône « info » au lieu du point) : les autres
+   annonces que la personne a acceptées (oui donné, envoyées ou non) chez l'employeur de l'annonce `f`, chacune
+   liée à sa page. `autres` vient de `doublons.acceptees_meme_employeur`. Sur la page d'une annonce et sur ses
+   cartes (tri, « Tes oui »). #}
+{% macro meme_employeur(f, autres) -%}
+{% if autres %}
+{% set n = autres | length %}
+<div class="bandeau info meme-employeur" role="note">{{ icone("info") }}
+  <span>Même employeur : tu as {{ "aussi" if f.statut in ("retenue", "candidature", "entretien", "offre", "refus") else "déjà" }} dit oui à
+    {{ n }} {{ "autre annonce" if n == 1 else "autres annonces" }} de {{ f.entreprise }} :
+    {% for g in autres %}<a href="/annonce/{{ g.empreinte }}">{{ g.titre }}</a> ({{ g.statut | statut }}){{ ", " if not loop.last else "." }}{% endfor %}</span>
+</div>
+{% endif %}
+{%- endmacro %}
+
 {% macro adequation(e, dos=None) -%}
 {% if e %}
 {{ notes(e) }}

@@ -24,7 +24,7 @@ from starlette.concurrency import run_in_threadpool
 import jobsearch
 
 from .. import moteur as moteur_mod
-from .. import actions, adequation, ajout, ce_qui_compte, cles, courrier, dossier, entretiens, evaluation, followups, parcours
+from .. import actions, adequation, ajout, ce_qui_compte, cles, courrier, dossier, doublons, entretiens, evaluation, followups, parcours
 from .. import postes_proposes
 from .. import profil as profil_mod
 from .. import repertoire as repertoire_mod
@@ -373,6 +373,7 @@ def accueil(request: Request, ensuite: str = "", ouverture: str = ""):
                     dossiers=dossiers, courrier_a_trancher=courrier.pour_le_tableau(reg, reg.liste(["candidature", "entretien", "offre"])),
                     courrier_recent=courrier.recents(reg), ouvertes=reg.liste(["candidature", "entretien", "offre"]),
                     retenues=retenues, relances=followups.relances(reg),
+                    meme_employeur=doublons.acceptees_meme_employeur(reg, retenues),
                     jobroom=followups.jobroom(reg),
                     sans_reponse=followups.sans_reponse(reg), stats=reg.stats(),
                     entretiens=entretiens.a_venir(reg),
@@ -397,7 +398,8 @@ def trier(request: Request):
             if request.query_params.get("msg"):
                 suite.update(msg=request.query_params["msg"], ok=request.query_params.get("ok", ""))
             return RedirectResponse("/?" + urlencode(suite), status_code=303)
-        return page(request, "trier.html", a_trancher=a_trancher, evals=evals, concentre=True)
+        return page(request, "trier.html", a_trancher=a_trancher, evals=evals, concentre=True,
+                    meme_employeur=doublons.acceptees_meme_employeur(reg, a_trancher))
     finally:
         reg.fermer()
 
@@ -425,7 +427,8 @@ def annonce(request: Request, emp: str, onglet: str = "adequation", doc: str = "
         return page(request, "annonce.html", f=f, journal=reg.journal(plein), historique=hist,
                     ev=evaluation.lire(reg, plein), dos=dos, postule=postuler_ouvert(reg, plein),
                     jr_limite=jr_limite, envoyee=f["statut"] in ENVOYEES, ent=ent,
-                    evaluation_en_cours=plein in ajout.EN_COURS, onglet=onglet, **contexte)
+                    evaluation_en_cours=plein in ajout.EN_COURS, onglet=onglet,
+                    meme_employeur=doublons.acceptees_meme_employeur(reg, [f]).get(plein, []), **contexte)
     finally:
         reg.fermer()
 

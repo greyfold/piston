@@ -145,3 +145,22 @@ def test_meme_poste_engage(reg):
     doublons.differentes(reg, a, b)                     # la personne a tranché : deux postes
     assert doublons.meme_poste_engage(reg, reg.get(b)) == []
 
+
+def test_acceptees_meme_employeur(reg):
+    """Les autres annonces acceptées (oui donné, envoyées) chez le même employeur, à l'écriture du nom près ;
+    ni les annonces non acceptées, ni les autres employeurs, ni les annonces anonymes."""
+    oui = annonce(reg, entreprise="Exemple SA", titre="Chef de produit", statut="retenue")
+    envoyee = annonce(reg, entreprise="Exemple", titre="Responsable produit", statut="candidature",
+                      postulee_le="2026-11-02")
+    annonce(reg, entreprise="Exemple SA", titre="Analyste", statut="C")                    # dit non : ne compte pas
+    annonce(reg, entreprise="Autre Maison AG", titre="Chef de produit", statut="retenue")
+    nouvelle = annonce(reg, entreprise="Exemple S.A. (via un portail)", titre="Product Owner", statut="nouvelle")
+    seule = annonce(reg, entreprise="Autre Maison AG", titre="Analyste", statut="nouvelle")
+    anonymes = [annonce(reg, entreprise="Entreprise confidentielle", titre=t, statut="retenue") for t in ("Un", "Deux")]
+    fiches = [reg.get(e) for e in (oui, envoyee, nouvelle, seule, *anonymes)]
+    m = doublons.acceptees_meme_employeur(reg, fiches)
+    assert [g["empreinte"] for g in m[nouvelle]] == [envoyee, oui]                 # l'envoyée d'abord
+    assert [g["empreinte"] for g in m[oui]] == [envoyee]
+    assert [g["empreinte"] for g in m[envoyee]] == [oui]
+    assert len(m[seule]) == 1 and m[seule][0]["entreprise"] == "Autre Maison AG"
+    assert not any(e in m for e in anonymes)

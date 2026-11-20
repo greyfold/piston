@@ -98,6 +98,38 @@ def meme_employeur(na, nb):
     return bool((sa and sa in eb) or (sb and sb in ea))
 
 
+# Noms qui ne désignent pas un employeur : deux annonces « Entreprise confidentielle » ne sont pas chez le même.
+_ANONYMES = set("entreprise employeur societe confidentiel confidentielle confidential anonyme anonymous company "
+                "client cliente notre our unser unternehmen nicht genannt non communique communiquee".split())
+
+
+def employeur_identifie(nom):
+    """Vrai si le nom désigne un employeur, et non une annonce anonyme."""
+    cle = cle_entreprise(nom)
+    return bool(cle) and not cle <= _ANONYMES
+
+
+def acceptees_meme_employeur(reg, fiches):
+    """Pour chaque fiche, les autres annonces acceptées chez le même employeur : {empreinte: [fiche]}.
+
+    Acceptées : la personne a dit oui (retenue), envoyées ensuite ou non (candidature, entretien,
+    offre, refus). Même employeur au sens de `meme_employeur` (« Nexthink » et « Nexthink SA »).
+    Une annonce anonyme n'est rapprochée de rien. Sert au bandeau « même employeur » de la page
+    d'une annonce et de ses cartes.
+    """
+    acceptees = [g for g in reg.liste(sorted(ENGAGEES), ordre="postulee_le IS NULL, postulee_le, vue_le")
+                 if employeur_identifie(g.get("entreprise"))]
+    out = {}
+    for f in fiches:
+        if not acceptees or not employeur_identifie(f.get("entreprise")):
+            continue
+        autres = [g for g in acceptees
+                  if g["empreinte"] != f["empreinte"] and meme_employeur(f.get("entreprise"), g.get("entreprise"))]
+        if autres:
+            out[f["empreinte"]] = autres
+    return out
+
+
 def mots_titre(titre):
     """(mots, numéros) d'un intitulé ; les taux et marques de genre sont déjà retirés."""
     mots = normaliser(html.unescape(titre or "")).split()

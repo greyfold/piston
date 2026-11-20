@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone, etat_vide, bouton_action, meta, notes, alertes, delais, adequation, annuler_go, postuler, claude, etat_tache %}
+{% from "_macros.html" import icone, etat_vide, bouton_action, meta, notes, alertes, delais, adequation, annuler_go, postuler, claude, etat_tache, meme_employeur as bandeau_employeur %}
 {% block contenu %}
 {# Par défaut, une section vide ne s'affiche pas. Le courrier des employeurs ne compte qu'une fois une candidature
    envoyée. Rien du tout à faire : un état vide remplace la page (la checklist « Bien démarrer » reste au-dessus). #}
@@ -120,6 +120,7 @@
         {{ {"en_cours": "en préparation", "pret": "dossier prêt", "a_revoir": "à revoir", "echec": "échec", "interrompu": "interrompu"}.get(d.etat) if d else ("dossier prêt" if f.cv_genere else "dossier à faire") }}</span>
       {{ annuler_go(f, raisons, "/#retenues") }}
     </div></div>
+    {{ bandeau_employeur(f, meme_employeur.get(f.empreinte)) }}
     {{ adequation(evals.get(f.empreinte)) }}
     <form method="post" action="/action" class="boutons">
       <input type="hidden" name="empreinte" value="{{ f.empreinte }}"><input type="hidden" name="retour" value="/#retenues">

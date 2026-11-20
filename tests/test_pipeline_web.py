@@ -789,3 +789,26 @@ def test_offres_sans_les_non_et_libelles_oui_peut_etre_non(web, reg):
     page = web.get("/annonce/" + ecartee).text
     assert "Remettre à trancher" in page and "Remettre en B" not in page
 
+
+def test_bandeau_meme_employeur(web, reg):
+    """Plusieurs annonces acceptées chez le même employeur : un bandeau le dit sur la page de l'annonce et sur ses
+    cartes (tri, « Tes oui »), avec un lien vers chacune des autres."""
+    oui = annonce(reg, entreprise="Exemple SA", titre="Chef de produit", statut="retenue", texte=FR)
+    envoyee = annonce(reg, entreprise="Exemple", titre="Responsable produit", statut="candidature", texte=FR)
+    a_trancher = annonce(reg, entreprise="Exemple SA", titre="Product Owner", statut="A", texte=FR)
+    seule = annonce(reg, entreprise="Autre Maison AG", titre="Analyste", statut="retenue", texte=FR)
+
+    page = web.get("/annonce/" + oui).text
+    assert "Même employeur : tu as aussi dit oui à" in page and "1 autre annonce de Exemple SA" in page
+    assert '<a href="/annonce/%s">Responsable produit</a> (envoyée)' % envoyee in page
+    assert 'href="/annonce/%s">Product Owner' % a_trancher not in page        # pas encore acceptée
+    assert "Même employeur" not in web.get("/annonce/" + seule).text
+
+    tri = web.get("/trier").text
+    assert "tu as déjà dit oui à" in tri and "2 autres annonces de Exemple SA" in tri
+    assert '<a href="/annonce/%s">Chef de produit</a> (oui)' % oui in tri
+
+    accueil = web.get("/?ensuite=1").text
+    carte_oui = accueil[accueil.index('href="/annonce/%s">Chef de produit' % oui):]
+    carte_oui = carte_oui[:carte_oui.index("</article>")]
+    assert "Même employeur" in carte_oui and 'href="/annonce/%s"' % envoyee in carte_oui
