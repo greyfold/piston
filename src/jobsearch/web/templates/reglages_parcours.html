@@ -1,39 +1,52 @@
 {% extends "base.html" %}
-{% from "_macros.html" import confirmation %}
-{% block titre %}Ton parcours · Réglages · Recherche d'emploi{% endblock %}
+{% from "_macros.html" import confirmation, entete_reglage, icone %}
 {% block contenu %}
-<h1>Ton parcours</h1>
-<p class="muet">Expériences, formations, projets, réalisations, compétences : à garder dans un fichier
-  ou à reprendre d'un fichier exporté. Les entretiens et le CV d'origine voyagent avec.</p>
+{% call entete_reglage(reglage) %}Expériences, formations, projets, réalisations, compétences : à garder dans un fichier
+  ou à reprendre d'un fichier exporté. Les entretiens et le CV d'origine voyagent avec.{% endcall %}
 
-{# Lignes de réglage : le titre et l'explication à gauche, l'action à droite. #}
+{# Lignes de réglage comme sur la page Réglages : toute la ligne est l'action (icône, texte, chevron).
+   L'import s'ouvre dans une modale : le fichier, puis « Ajouter » ou « Remplacer ». #}
 <ul class="reglages-liste" id="parcours">
-  <li class="reglage-ligne">
+  <li><a class="reglage-ligne" href="/parcours?de=reglages">
+    {{ icone("base") }}
     <span class="texte"><span class="titre">Ta base
         <span class="puce {{ 'B' if parcours_total }}">{{ parcours_total }} élément{{ 's' if parcours_total > 1 }}</span></span>
       <span class="description">{% if parcours_comptes %}{% for g, n in parcours_comptes %}{{ g }} : {{ n }}{{ ' · ' if not loop.last }}{% endfor %}
         {% else %}Vide pour l'instant : un entretien avec l'IA ou ton CV la remplit.{% endif %}</span></span>
-    <a class="bouton petit" href="/parcours">Voir ma base</a>
-  </li>
+    {{ icone("suivant") }}
+  </a></li>
   {% if parcours_total %}
-  <li class="reglage-ligne">
+  <li><a class="reglage-ligne" href="/reglages/parcours/exporter" download>
+    {{ icone("exporter") }}
     <span class="texte"><span class="titre">Exporter</span>
       <span class="description">Un fichier JSON avec tes éléments, tes entretiens et ton CV d'origine.</span></span>
-    <a class="bouton petit" href="/reglages/parcours/exporter" download>Exporter (fichier JSON)</a>
-  </li>
+    {{ icone("suivant") }}
+  </a></li>
   {% endif %}
-  <li class="reglage-ligne">
-    <form method="post" action="/reglages/parcours/importer" enctype="multipart/form-data" class="import-parcours" id="form-import">
-      <span class="texte"><label class="titre" for="fichier-parcours">Importer un fichier exporté</label>
-        <span class="description">Ajouter ses éléments à ta base{% if parcours_total %}, ou remplacer ta base par son contenu{% endif %}.</span></span>
-      <input id="fichier-parcours" type="file" name="fichier" accept=".json,application/json" required>
-      <div class="boutons">
-        {% if parcours_total %}<button type="button" class="petit non" data-confirmer-modale="confirmer-remplacer">Remplacer ma base</button>{% endif %}
-        <button name="mode" value="ajouter" class="petit">Ajouter à ma base</button>
-      </div>
-    </form>
-  </li>
+  <li><button type="button" class="reglage-ligne" data-ouvrir-modale="importer-parcours" aria-haspopup="dialog" aria-controls="importer-parcours">
+    {{ icone("importer") }}
+    <span class="texte"><span class="titre">Importer un fichier exporté</span>
+      <span class="description">Ajouter ses éléments à ta base{% if parcours_total %}, ou remplacer ta base par son contenu{% endif %}.</span></span>
+    {{ icone("suivant") }}
+  </button></li>
 </ul>
+
+<dialog class="modale large" id="importer-parcours" aria-labelledby="importer-parcours-titre" aria-describedby="importer-parcours-texte">
+  <div class="modale-tete"><h2 id="importer-parcours-titre">Importer un fichier exporté</h2>
+    <p class="petit muet" id="importer-parcours-texte">Le fichier JSON qu'« Exporter » a produit, ici ou sur un autre ordinateur.</p></div>
+  <form method="post" action="/reglages/parcours/importer" enctype="multipart/form-data" id="form-import">
+    <label class="depot">
+      <input type="file" name="fichier" accept=".json,application/json" required data-fichier>
+      {{ icone("dossier") }}
+      <span><b data-nom-fichier>Choisir le fichier</b><span class="muet petit">Fichier JSON exporté par la plateforme</span></span>
+    </label>
+    <div class="actions-modale">
+      <button type="button" class="lien-neutre" data-fermer-modale>Annuler</button>
+      {% if parcours_total %}<button type="button" class="non" data-confirmer-modale="confirmer-remplacer">Remplacer ma base</button>{% endif %}
+      <button class="go" name="mode" value="ajouter">Ajouter à ma base</button>
+    </div>
+  </form>
+</dialog>
 {% if parcours_total %}
 {{ confirmation("confirmer-remplacer", "Remplacer ta base ?",
      "Ses %d élément%s et leurs entretiens seront effacés, puis remplacés par le contenu du fichier. Si rien ne peut en être repris, ta base reste telle quelle." % (parcours_total, "s" if parcours_total > 1 else ""),

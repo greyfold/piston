@@ -8,9 +8,10 @@ de file d'attente à rapprocher au passage suivant.
 import datetime as dt
 import json
 import os
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import markdown as md
 from fastapi import FastAPI, Form, Request
@@ -23,13 +24,13 @@ from starlette.concurrency import run_in_threadpool
 import jobsearch
 
 from .. import moteur as moteur_mod
-from .. import actions, adequation, ajout, ce_qui_compte, cles, courrier, dossier, doublons, entretiens, evaluation, followups, parcours
+from .. import actions, adequation, ajout, ce_qui_compte, cles, courrier, dossier, entretiens, evaluation, followups, parcours
 from .. import postes_proposes
 from .. import profil as profil_mod
 from .. import repertoire as repertoire_mod
-from ..formatage import annonce_html
+from ..formatage import annonce_html, nettoyer
 from ..config import DATA, criteres, reglages
-from ..db import ENVOYEES, PIPELINE, STATUTS, Registre
+from ..db import ECARTEES, ENVOYEES, LIBELLES_STATUT, PIPELINE, STATUTS, Registre
 from .auth import COOKIE, autorise, depuis_le_mac, jeton, jeton_valide, meme_origine
 
 ICI = Path(__file__).parent
@@ -136,8 +137,8 @@ def texte_html(t):
     return Markup(md.markdown(t or "", extensions=["sane_lists", "tables", _SansHtmlBrut()]))
 
 
-tpl.env.filters.update(date_fr=date_fr, jour_fr=jour_fr, il_y_a=il_y_a, texte_html=texte_html, annonce_html=annonce_html,
-                       jours_restants=jours_restants)
+tpl.env.filters.update(date_fr=date_fr, jour_fr=jour_fr, il_y_a=il_y_a, texte_html=texte_html, annonce_html=annonce_html, nettoyer=nettoyer,
+                       jours_restants=jours_restants, statut=lambda s: LIBELLES_STATUT.get(s, s))
 tpl.env.globals.update(TYPES=actions.TYPES, STATUTS=STATUTS, libelle_dossier=dossier.libelle,
                        categories_adequation=adequation.lire, libelles_categories=adequation.LIBELLES)
 # La feuille de style porte sa date dans son adresse : un navigateur (ou la vue web de
@@ -192,6 +193,8 @@ def page(request, nom, **ctx):
     ctx.setdefault("ok", request.query_params.get("ok") == "1")
     ctx["nav"] = request.url.path
     ctx["dans_reglages"] = any(ctx["nav"] == r or ctx["nav"].startswith(r + "/") for r in REGLAGES)
+    ctx["reglage"] = next((r for r in PAGES_REGLAGES if ctx["nav"] == r["href"] or ctx["nav"].startswith(r["href"] + "/")), None)
+    ctx["groupes_reglages"] = GROUPES_REGLAGES
     ctx["raisons"] = criteres().get("raisons") or {}
     ctx["aujourdhui"] = dt.date.today().isoformat()
     ctx["profil_manquants"] = profil_mod.manquants()
@@ -323,8 +326,10 @@ def _notifications(request):
 # --- Pages --------------------------------------------------------------------
 
 
-# Le tri passé pour cette ouverture de l'application : un cookie de session, perdu quand elle se ferme.
-# Tant qu'il manque et qu'une annonce attend une décision, l'accueil ouvre d'abord le tri (/trier).
+# Le tri passé pour cette ouverture de la fenêtre : un cookie de session. Tant qu'il manque et qu'une annonce
+# attend une décision, l'accueil ouvre d'abord le tri (/trier). L'application charge `/?ouverture=1` à chaque
+# ouverture de sa fenêtre : le tri repasse alors devant, même si la vue web a gardé le cookie (l'application
+# reste dans la barre des menus, fenêtre fermée).
 COOKIE_TRI = "tri_passe"
 
 
@@ -335,7 +340,7 @@ def a_trancher_par_urgence(reg, evals):
 
 
 @app.get("/", response_class=HTMLResponse)
-def accueil(request: Request, ensuite: str = ""):
+def accueil(request: Request, ensuite: str = "", ouverture: str = ""):
     if profil_mod.en_accueil():                    # premier lancement : les avantages, puis l'assistant
         return RedirectResponse("/bienvenue", status_code=303)
     reg = _reg()
@@ -345,14 +350,11 @@ def accueil(request: Request, ensuite: str = ""):
         a_trancher = a_trancher_par_urgence(reg, evals)
         # À l'ouverture, ce qui est à trancher passe avant tout le reste. « Tableau de bord » (ensuite=1)
         # ou un message de retour d'action laissent le tableau de bord s'afficher.
-        if a_trancher and not ensuite and not request.cookies.get(COOKIE_TRI) and "msg" not in request.query_params:
+        tri_passe = request.cookies.get(COOKIE_TRI) and not ouverture
+        if a_trancher and not ensuite and not tri_passe and "msg" not in request.query_params:
             return RedirectResponse("/trier", status_code=303)
-        limite = (dt.date.today() - dt.timedelta(days=14)).isoformat()
-        limites = [f for f in reg.liste(["C"]) if f.get("limite") and (f.get("vue_le") or "") >= limite]
         dossiers = {f["empreinte"]: infos_dossier(reg, f) for f in reg.liste(["retenue"])}
         from .. import agent_claude
-        taches = {f["empreinte"]: agent_claude.vue(agent_claude.derniere(reg, "formulaire", f["empreinte"]))
-                  for f in reg.liste(["retenue"])}
         tache_jobroom = agent_claude.vue(agent_claude.derniere(reg, "jobroom"))
         retenues = sorted(reg.liste(["retenue"]), key=lambda f: priorite(f, note(f)))
         p = profil_mod.charger()
@@ -367,11 +369,11 @@ def accueil(request: Request, ensuite: str = ""):
         ia_deconnectee = bool(claude.get("installe")) and not claude.get("connecte") and not premiers
         reponse = page(request, "accueil.html", a_trancher=a_trancher, evals=evals,
                     premiers_pas=premiers, ia_deconnectee=ia_deconnectee,
-                    taches=taches, tache_jobroom=tache_jobroom, etats_taches=agent_claude.ETATS,
+                    tache_jobroom=tache_jobroom, etats_taches=agent_claude.ETATS,
                     dossiers=dossiers, courrier_a_trancher=courrier.pour_le_tableau(reg, reg.liste(["candidature", "entretien", "offre"])),
                     courrier_recent=courrier.recents(reg), ouvertes=reg.liste(["candidature", "entretien", "offre"]),
                     retenues=retenues, relances=followups.relances(reg),
-                    jobroom=followups.jobroom(reg), limites=limites,
+                    jobroom=followups.jobroom(reg),
                     sans_reponse=followups.sans_reponse(reg), stats=reg.stats(),
                     entretiens=entretiens.a_venir(reg),
                     rythme=followups.rythme(reg))
@@ -384,17 +386,28 @@ def accueil(request: Request, ensuite: str = ""):
 
 @app.get("/trier", response_class=HTMLResponse)
 def trier(request: Request):
-    """Le tri en mode concentré : une annonce à la fois, Go ou Pas go, jusqu'à la dernière."""
+    """Le tri en mode concentré : une annonce à la fois, oui, non ou peut-être, jusqu'à la dernière. Plus rien à
+    trancher : droit au tableau de bord (« À faire aujourd'hui »), avec le message de la dernière décision."""
     reg = _reg()
     try:
         evals = evaluation.toutes(reg)
-        return page(request, "trier.html", a_trancher=a_trancher_par_urgence(reg, evals), evals=evals, concentre=True)
+        a_trancher = a_trancher_par_urgence(reg, evals)
+        if not a_trancher:
+            suite = {"ensuite": "1"}
+            if request.query_params.get("msg"):
+                suite.update(msg=request.query_params["msg"], ok=request.query_params.get("ok", ""))
+            return RedirectResponse("/?" + urlencode(suite), status_code=303)
+        return page(request, "trier.html", a_trancher=a_trancher, evals=evals, concentre=True)
     finally:
         reg.fermer()
 
 
+# Les onglets de la page d'une annonce, dans l'ordre ; « dossier » et « entretien » seulement s'ils existent.
+ONGLETS_ANNONCE = ("adequation", "dossier", "sources", "journal", "entretien")
+
+
 @app.get("/annonce/{emp}", response_class=HTMLResponse)
-def annonce(request: Request, emp: str, onglet: str = "annonce"):
+def annonce(request: Request, emp: str, onglet: str = "adequation", doc: str = ""):
     reg = _reg()
     try:
         plein = reg.resoudre(emp) or emp
@@ -405,13 +418,54 @@ def annonce(request: Request, emp: str, onglet: str = "annonce"):
             "SELECT * FROM actions WHERE empreinte=? ORDER BY id DESC LIMIT 20", (plein,))]
         jr_limite = followups.echeance_jobroom(f["postulee_le"]) if f.get("postulee_le") else None
         ent = entretiens.lire(plein)
+        dos = infos_dossier(reg, f)
+        if onglet not in ONGLETS_ANNONCE or (onglet == "dossier" and not dos) or (onglet == "entretien" and not ent):
+            onglet = "adequation"
+        contexte = contexte_dossier(reg, f, dos, doc) if onglet == "dossier" else {}
         return page(request, "annonce.html", f=f, journal=reg.journal(plein), historique=hist,
-                    ev=evaluation.lire(reg, plein), dos=infos_dossier(reg, f),
+                    ev=evaluation.lire(reg, plein), dos=dos, postule=postuler_ouvert(reg, plein),
                     jr_limite=jr_limite, envoyee=f["statut"] in ENVOYEES, ent=ent,
-                    evaluation_en_cours=plein in ajout.EN_COURS,
-                    onglet="entretien" if ent and onglet == "entretien" else "annonce")
+                    evaluation_en_cours=plein in ajout.EN_COURS, onglet=onglet, **contexte)
     finally:
         reg.fermer()
+
+
+def postuler_ouvert(reg, emp):
+    """« Postuler sur le site » déjà cliqué pour cette annonce (trace de l'action `postuler`)."""
+    return reg.cx.execute("SELECT 1 FROM actions WHERE empreinte=? AND type='postuler' AND resultat='ok' LIMIT 1",
+                          (emp,)).fetchone() is not None
+
+
+def fichiers_dossier(d):
+    """Les documents à joindre (Word et PDF) du dossier, par nom."""
+    chemin = Path(d["chemin"])
+    if not chemin.is_dir():
+        return []
+    return sorted(p.name for p in chemin.iterdir() if p.suffix in (".docx", ".pdf") and not p.name.startswith(("~", ".")))
+
+
+def contexte_dossier(reg, f, d, choix=""):
+    """Ce que l'onglet Dossier montre : documents (et celui en aperçu), mots-clés, contrôles, pièces."""
+    from ..lettre import date_cible
+    emp = f["empreinte"]
+    chemin = Path(d["chemin"])
+    dossier.mettre_a_date(reg, emp)
+    pieces = [(nom, (chemin / nom).read_text(encoding="utf-8"))
+              for nom in ("Analyse.md", "CV.md", "Lettre.md", "Envoi.md") if (chemin / nom).exists()]
+    fichiers = fichiers_dossier(d)
+    # Document affiché : celui demandé, sinon le CV (PDF de préférence, plus fidèle).
+    if choix not in fichiers:
+        cvs = [n for n in fichiers if "-CV-" in n]
+        choix = next((n for n in cvs if n.endswith(".pdf")), cvs[0] if cvs else (fichiers[0] if fichiers else None))
+    motscles = None
+    if (chemin / "motscles.json").exists():
+        motscles = json.loads((chemin / "motscles.json").read_text(encoding="utf-8"))
+    elif (chemin / "CV.md").exists() and (chemin / "Annonce.md").exists():
+        from ..motscles import analyser         # mesure absente : faite à la volée, rien n'est écrit
+        motscles = analyser((chemin / "CV.md").read_text(encoding="utf-8"),
+                            (chemin / "Annonce.md").read_text(encoding="utf-8"), f.get("entreprise"))
+    return {"pieces": pieces, "fichiers": fichiers, "apercu": choix, "motscles": motscles,
+            "date_lettre": date_cible(f)}
 
 
 @app.post("/annonce/{emp}/original")
@@ -466,40 +520,42 @@ def infos_dossier(reg, f):
     return dossier.etat(reg, f["empreinte"])
 
 
-@app.get("/dossier/{emp}", response_class=HTMLResponse)
+def adresse_dossier(emp, **params):
+    """Le dossier se lit dans l'onglet Dossier de l'annonce."""
+    q = urlencode({"onglet": "dossier", **{k: v for k, v in params.items() if v not in (None, "")}})
+    return "/annonce/%s?%s" % (quote(emp), q)
+
+
+@app.get("/dossier/{emp}")
 def dossier_page(request: Request, emp: str):
+    """Ancienne page du dossier : il est maintenant l'onglet Dossier de l'annonce."""
+    q = request.query_params
+    return RedirectResponse(adresse_dossier(emp, doc=q.get("doc"), msg=q.get("msg"), ok=q.get("ok")), status_code=303)
+
+
+@app.get("/dossier/{emp}/tout.zip")
+def dossier_tout(emp: str):
+    """Tous les documents à joindre (Word et PDF) en une archive, la lettre à la bonne date."""
+    import io
+    import zipfile
     reg = _reg()
     try:
         f = reg.get(emp)
         d = infos_dossier(reg, f) if f else None
-        if not f or not d:
-            return HTMLResponse("Dossier introuvable.", status_code=404)
-        chemin = Path(d["chemin"])
-        from ..lettre import date_cible
-        dossier.mettre_a_date(reg, emp)
-        date_lettre = date_cible(f)
-        pieces = []
-        for nom in ("Analyse.md", "CV.md", "Lettre.md", "Envoi.md"):
-            if (chemin / nom).exists():
-                pieces.append((nom, (chemin / nom).read_text(encoding="utf-8")))
-        fichiers = sorted(p.name for p in chemin.iterdir()
-                          if p.suffix in (".docx", ".pdf") and not p.name.startswith(("~", "."))) if chemin.exists() else []
-        # Document affiché : celui demandé, sinon le CV (PDF de préférence, plus fidèle).
-        choix = request.query_params.get("doc")
-        if choix not in fichiers:
-            cvs = [n for n in fichiers if "-CV-" in n]
-            choix = next((n for n in cvs if n.endswith(".pdf")), cvs[0] if cvs else (fichiers[0] if fichiers else None))
-        motscles = None
-        if (chemin / "motscles.json").exists():
-            motscles = json.loads((chemin / "motscles.json").read_text(encoding="utf-8"))
-        elif (chemin / "CV.md").exists() and (chemin / "Annonce.md").exists():
-            from ..motscles import analyser         # mesure absente : faite à la volée, rien n'est écrit
-            motscles = analyser((chemin / "CV.md").read_text(encoding="utf-8"),
-                                (chemin / "Annonce.md").read_text(encoding="utf-8"), f.get("entreprise"))
-        return page(request, "dossier.html", f=f, d=d, pieces=pieces, fichiers=fichiers, apercu=choix,
-                    motscles=motscles, date_lettre=date_lettre, envoyee=f["statut"] in ENVOYEES)
+        noms = fichiers_dossier(d) if d else []
     finally:
         reg.fermer()
+    if not noms:
+        return HTMLResponse("Aucun document dans ce dossier.", status_code=404)
+    tampon = io.BytesIO()
+    with zipfile.ZipFile(tampon, "w", zipfile.ZIP_DEFLATED) as z:
+        for nom in noms:
+            chemin = _document(f, d, nom)
+            if chemin:
+                z.write(chemin, nom)
+    nom_zip = "Dossier-%s.zip" % re.sub(r"[^\w-]+", "-", f.get("entreprise") or "candidature").strip("-")
+    return Response(tampon.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition": 'attachment; filename="%s"' % nom_zip})
 
 
 @app.get("/dossier/{emp}/fichier/{nom}")
@@ -583,7 +639,7 @@ def _dossier_mots_cles(request, emp: str, form):
     else:
         dossier.reviser_en_tache(emp, termes, form.get("precision") or "")
         msg, ok = "CV en révision avec %d mot(s)-clé(s) (une à deux minutes)." % len(termes), True
-    return RedirectResponse("/dossier/%s?msg=%s&ok=%d#mots-cles" % (emp, quote(msg), int(ok)), status_code=303)
+    return RedirectResponse(adresse_dossier(emp, msg=msg, ok=int(ok)) + "#mots-cles", status_code=303)
 
 
 @app.post("/annonce/{emp}/preremplir")
@@ -654,7 +710,7 @@ def dossier_refaire(emp: str):
         msg, ok = "Dossier relancé (quelques minutes, notification à la fin).", True
     except evaluation.EvaluationImpossible as e:
         msg, ok = "Dossier impossible : %s" % e, False
-    return RedirectResponse("/dossier/%s?msg=%s&ok=%d" % (emp, quote(msg), int(ok)), status_code=303)
+    return RedirectResponse(adresse_dossier(emp, msg=msg, ok=int(ok)), status_code=303)
 
 
 @app.get("/dossier/{emp}/etat")
@@ -702,15 +758,24 @@ def pipeline(request: Request):
 def registre(request: Request, statut: str = "", q: str = "", source: str = ""):
     reg = _reg()
     try:
-        fiches = reg.liste([statut] if statut in STATUTS else None)
+        # Par défaut, les annonces écartées (non, doublons, expirées) restent hors de la vue : le filtre
+        # « Statut » les montre. Une recherche les inclut, pour retrouver n'importe quelle annonce.
+        if statut in STATUTS:
+            fiches = reg.liste([statut])
+        elif statut == "tous" or q:
+            fiches = reg.liste(None)
+        else:
+            fiches = reg.liste([s for s in STATUTS if s not in ECARTEES])
         if q:
             from ..prefilter import plier
             n = plier(q)
             fiches = [f for f in fiches if n in plier(f.get("entreprise")) or n in plier(f.get("titre"))]
         if source:
             fiches = [f for f in fiches if source in (f.get("sources") or [])]
+        stats = reg.stats()
         return page(request, "registre.html", fiches=fiches[:400], total=len(fiches),
-                    statut=statut, q=q, source=source, stats=reg.stats())
+                    statut=statut, q=q, source=source, stats=stats,
+                    ecartees=sum(stats["par_statut"].get(s, 0) for s in ECARTEES))
     finally:
         reg.fermer()
 
@@ -740,32 +805,74 @@ def offres_ajouter_enregistrer(request: Request, url: str = Form(""), texte: str
     return RedirectResponse("/annonce/%s?msg=%s&ok=1#evaluation" % (r["empreinte"], quote(msg)), status_code=303)
 
 
+def _sources_lignes(reg):
+    """Les sources du répertoire, puis celles vues seulement dans le registre, avec l'état de leur route
+    et ce qu'elles ont donné (une annonce vue par deux sources compte pour les deux)."""
+    repertoire = repertoire_mod.lister(reg)
+    etats = {r["id"]: dict(r) for r in reg.cx.execute("SELECT * FROM sources")}
+    compte = {}
+    for f in reg.toutes():
+        for s in f.get("sources") or []:
+            c = compte.setdefault(s, {"vues": 0, "ab": 0, "go": 0, "envoyees": 0,
+                                      "entretiens": 0, "refus": 0})
+            c["vues"] += 1
+            st = f["statut"]
+            c["ab"] += st in ("A", "B")
+            c["go"] += st in ("retenue", "candidature", "entretien", "offre", "refus")
+            c["envoyees"] += st in ENVOYEES
+            c["entretiens"] += st in ("entretien", "offre")
+            c["refus"] += st == "refus"
+    lignes = [{"id": sid, **(repertoire.get(sid) or {"nom": sid, "acces": "non répertoriée"}),
+               "etat": etats.get(sid), "n": compte.get(sid, {})}
+              for sid in list(repertoire) + [s for s in compte if s not in repertoire]]
+    for s in lignes:
+        s["statut"] = _statut_source(s)
+    return lignes
+
+
+def _statut_source(s):
+    """(classe de .puce, libellé) : l'état d'une source, selon la convention des réglages — en service,
+    éteinte par choix ou hors passage (neutre), à faire (nouvelle), bloquée (retard)."""
+    from ..sources import examen
+    etat = s.get("etat") or {}
+    if s["id"] in examen.EN_COURS:
+        return "nouvelle", "examen en cours"
+    if s.get("branchee") and not s.get("actif"):
+        return "", "désactivée"
+    if s["acces"] == "automatique":
+        if not etat:
+            return "", "pas encore interrogée"
+        return ("B", "en service") if etat.get("dernier_test_ok") else ("retard", etat.get("etat") or "en panne")
+    if s["acces"] == "à brancher":
+        return "nouvelle", "à brancher"
+    if s["acces"] == "interdit à la plateforme":
+        return "", "interdite"
+    return "", "hors passage"
+
+
 @app.get("/sources", response_class=HTMLResponse)
 def sources(request: Request, essai=None):
+    """La liste des sources, une ligne chacune ; le détail et les réglages d'une source ont leur page."""
+    from ..sources import examen
     reg = _reg()
     try:
-        repertoire = repertoire_mod.lister(reg)
-        etats = {r["id"]: dict(r) for r in reg.cx.execute("SELECT * FROM sources")}
-        compte = {}
-        for f in reg.toutes():
-            for s in f.get("sources") or []:
-                c = compte.setdefault(s, {"vues": 0, "ab": 0, "go": 0, "envoyees": 0,
-                                          "entretiens": 0, "refus": 0})
-                c["vues"] += 1
-                st = f["statut"]
-                c["ab"] += st in ("A", "B")
-                c["go"] += st in ("retenue", "candidature", "entretien", "offre", "refus")
-                c["envoyees"] += st in ENVOYEES
-                c["entretiens"] += st in ("entretien", "offre")
-                c["refus"] += st == "refus"
-        lignes = []
-        for sid in list(repertoire) + [s for s in compte if s not in repertoire]:
-            lignes.append({"id": sid, **(repertoire.get(sid) or {"nom": sid, "acces": "non répertoriée"}),
-                           "etat": etats.get(sid), "n": compte.get(sid, {})})
-        from ..sources import examen
-        return page(request, "sources.html", lignes=lignes, acces=repertoire_mod.ACCES, essai=essai,
-                    examens=examen.lire_tous(reg), examens_en_cours=examen.EN_COURS,
-                    a_verifier=doublons.detecter(reg)["a_verifier"], fusions=doublons.recentes(reg))
+        return page(request, "sources.html", lignes=_sources_lignes(reg), acces=repertoire_mod.ACCES, essai=essai,
+                    examens_en_cours=examen.EN_COURS)
+    finally:
+        reg.fermer()
+
+
+@app.get("/sources/{sid}", response_class=HTMLResponse)
+def source_detail(request: Request, sid: str):
+    """Une source : accès, état de la route, ce qu'elle a donné, examen par l'IA, et ses actions."""
+    from ..sources import examen
+    reg = _reg()
+    try:
+        s = next((l for l in _sources_lignes(reg) if l["id"] == sid), None)
+        if s is None:
+            return _retour("/sources", "Source inconnue.", False)
+        return page(request, "source.html", s=s, ex=examen.lire_tous(reg).get(sid),
+                    en_cours=sid in examen.EN_COURS, retour_cadre={"href": "/sources", "nom": "Sources"})
     finally:
         reg.fermer()
 
@@ -793,8 +900,8 @@ def sources_brancher(url: str = Form(""), entreprise: str = Form(""), rendu: str
         if conn["type"] == "page-ia" and rendu == "1":
             conn["rendu"] = True                     # liste construite en JavaScript (constaté à l'essai)
         sid = ajoutees.brancher(reg, entreprise, url.strip(), conn)
-        return _retour("/sources", "Page carrière de %s branchée (%s) : interrogée dès le prochain passage."
-                       % (entreprise.strip(), sid), True)
+        return _retour("/sources/%s" % sid, "Page carrière de %s branchée : interrogée dès le prochain passage."
+                       % entreprise.strip(), True)
     except (repertoire_mod.SourceRefusee, ValueError, KeyError) as e:
         return _retour("/sources", "Refusé : %s" % e, False)
     finally:
@@ -809,31 +916,8 @@ def sources_activer(sid: str, action: str):
     reg = _reg()
     try:
         ajoutees.activer(reg, sid, action == "activer")
-        return _retour("/sources", "Source %s." % ("réactivée" if action == "activer" else "désactivée"), True)
+        return _retour("/sources/%s" % sid, "Source %s." % ("réactivée" if action == "activer" else "désactivée"), True)
     except repertoire_mod.SourceRefusee as e:
-        return _retour("/sources", "Refusé : %s" % e, False)
-    finally:
-        reg.fermer()
-
-
-@app.post("/doublons/{action}")
-def doublons_action(action: str, a: str = Form(""), b: str = Form("")):
-    reg = _reg()
-    try:
-        if action == "fusionner":
-            p, s = doublons.ordonner(reg.get(a) or {"empreinte": a}, reg.get(b) or {"empreinte": b})
-            doublons.fusionner(reg, p["empreinte"], s["empreinte"], "même offre (confirmée à la main)")
-            msg = "Fusionnées : la fiche %s — %s reste, l'autre devient doublon." % (
-                reg.get(p["empreinte"])["entreprise"], reg.get(p["empreinte"])["titre"])
-        elif action == "differentes":
-            doublons.differentes(reg, a, b)
-            msg = "Deux offres distinctes : la paire ne sera plus proposée."
-        elif action == "separer":
-            msg = "Séparée : la fiche reprend le statut « %s »." % doublons.separer(reg, a)
-        else:
-            return _retour("/sources", "Action inconnue.", False)
-        return RedirectResponse("/sources?msg=%s&ok=1#doublons" % quote(msg), status_code=303)
-    except ValueError as e:
         return _retour("/sources", "Refusé : %s" % e, False)
     finally:
         reg.fermer()
@@ -854,8 +938,8 @@ def sources_ajouter(nom: str = Form(""), url: str = Form(""), nature: str = Form
         if examiner:
             from ..sources import examen
             examen.examiner_en_tache(sid)
-            return _retour("/sources#source-%s" % sid, "Source ajoutée : %s. L'IA examine ses conditions." % nom.strip(), True)
-        return _retour("/sources", "Source ajoutée : %s" % nom.strip(), True)
+            return _retour("/sources/%s" % sid, "Source ajoutée : %s. L'IA examine ses conditions." % nom.strip(), True)
+        return _retour("/sources/%s" % sid, "Source ajoutée : %s" % nom.strip(), True)
     except repertoire_mod.SourceRefusee as e:
         return _retour("/sources", "Refusé : %s" % e, False)
     finally:
@@ -874,7 +958,7 @@ def sources_examiner(id: str = Form("")):
     if not source:
         return _retour("/sources", "Source inconnue.", False)
     examen.examiner_en_tache(id)
-    return _retour("/sources#source-%s" % id, "L'IA examine %s : le résultat s'affichera sur sa ligne." % source["nom"], True)
+    return _retour("/sources/%s" % id, "L'IA examine %s : le résultat s'affichera ici." % source["nom"], True)
 
 
 @app.post("/sources/appliquer")
@@ -883,7 +967,7 @@ def sources_appliquer(id: str = Form(""), acces: str = Form("")):
     reg = _reg()
     try:
         repertoire_mod.changer_acces(reg, id, acces)
-        return _retour("/sources#source-%s" % id, "Accès noté : « %s »." % acces, True)
+        return _retour("/sources/%s" % id, "Accès noté : « %s »." % acces, True)
     except repertoire_mod.SourceRefusee as e:
         return _retour("/sources", "Refusé : %s" % e, False)
     finally:
@@ -959,7 +1043,7 @@ def connecteurs_page(request: Request):
     a_faire = _a_configurer()
     return page(request, "connecteurs.html", connecteurs=connecteurs.liste(), roles=connecteurs.ROLES,
                 moteur=etat_claude(), distant=travailleur.distant(), a_configurer=a_faire,
-                etats={c["id"]: c for c in a_faire}, comptes_mail="\n".join(profil_mod.comptes_courrier()))
+                etats={c["id"]: c for c in a_faire}, comptes_mail=profil_mod.comptes_courrier())
 
 
 @app.post("/connecteurs/apple-mail/comptes")
@@ -970,7 +1054,7 @@ async def connecteurs_comptes_mail(request: Request):
 
 def _connecteurs_comptes_mail(request, form):
     """Les comptes de Mail où chercher les réponses des employeurs."""
-    comptes = profil_mod.poser_comptes_courrier(form.get("comptes", ""))
+    comptes = profil_mod.poser_comptes_courrier("\n".join(form.getlist("comptes")))
     msg = "Apple Mail : %s." % ("comptes enregistrés" if comptes else "aucun compte choisi")
     return RedirectResponse("/connecteurs?msg=%s&ok=1#apple-mail" % quote(msg), status_code=303)
 
@@ -1075,7 +1159,28 @@ def confidentialite_page(request: Request):
 
 # Pages de réglage : listées par la page Réglages, hors du menu latéral (elles gardent leur adresse) ;
 # chacune a un retour vers /reglages, et le lien « Réglages » du menu reste actif.
-REGLAGES = ("/reglages", "/profil", "/fonctions", "/sources", "/ia", "/connecteurs", "/confidentialite", "/sante")
+# Une seule liste (adresse, nom, icône, description) : la page Réglages en fait ses lignes, et chaque page de
+# réglage en tire son titre d'onglet et son h1 (macro entete_reglage), pour que le nom ne diverge plus.
+GROUPES_REGLAGES = (
+    ("Toi", (
+        ("/profil", "Ma recherche", "identite", "Identité, poste recherché, pré-tri, critères, formation, langues et objectifs."),
+        ("/reglages/parcours", "Ton parcours", "base", "Expériences, formations et compétences ; export et import d'un fichier."),
+    )),
+    ("Recherche et IA", (
+        ("/sources", "Sources", "globe", "Les sites et pages carrière interrogés à chaque passage."),
+        ("/ia", "Fournisseur d'IA", "ia", "L'IA qui note les annonces et écrit tes dossiers."),
+        ("/connecteurs", "Connecteurs", "prise", "Ce que la plateforme peut lire pour toi : courrier, sites d'emploi, navigateur."),
+        ("/confidentialite", "Confidentialité", "cadenas", "Ce que l'IA voit de toi, et ce qui lui est masqué."),
+    )),
+    ("Application", (
+        ("/fonctions", "Fonctions", "objectifs", "Ce que la plateforme fait pour toi, et ce qui ouvre chaque fonction."),
+        ("/sante", "Système", "systeme", "Les 30 derniers matins, les sauvegardes et les clés d'accès."),
+    )),
+)
+# Textes écrits ici, sans rien de saisi : Markup, pour que l'apostrophe sorte telle quelle comme dans un gabarit.
+GROUPES_REGLAGES = tuple((t, tuple((h, Markup(n), i, Markup(d)) for h, n, i, d in lignes)) for t, lignes in GROUPES_REGLAGES)
+PAGES_REGLAGES = tuple({"href": h, "nom": n, "icone": i, "description": d} for _, lignes in GROUPES_REGLAGES for h, n, i, d in lignes)
+REGLAGES = ("/reglages",) + tuple(r["href"] for r in PAGES_REGLAGES)
 
 
 @app.get("/reglages", response_class=HTMLResponse)
@@ -1149,7 +1254,7 @@ def cles_action(request: Request, nom: str, action: str, cle: str = Form("")):
     # Une clé ne se saisit que sur le Mac : depuis le téléphone, elle traverserait le
     # réseau local en clair (le tableau de bord n'est pas en HTTPS).
     if not depuis_le_mac(request):
-        return RedirectResponse("/sante?msg=%s&ok=0#cles" % quote("Les clés se saisissent sur le Mac uniquement."),
+        return RedirectResponse("/sante?msg=%s&ok=0#cles" % quote("Les clés se saisissent sur ton Mac uniquement."),
                                 status_code=303)
     try:
         if action == "enregistrer":
@@ -1274,6 +1379,7 @@ def _page_profil(request, ident, saisi=None, **ctx):
         n = len(profil_mod.absents_du_cv(_elements_cv(genre), p).get(genre, []))
         ctx["a_reprendre"] = "%d %s" % (n, profil_mod.NOMS_LISTES_CV[genre][n > 1]) if n else ""
     ctx.setdefault("criteres_def", profil_mod.CRITERES)
+    ctx.setdefault("retour_cadre", {"href": "/profil", "nom": "Ma recherche"})     # le retour mène à la liste des étapes
     return page(request, "profil.html", etapes=profil_mod.etapes(), etape=e, ident=ident, champs=champs,
                 regles=profil_mod.regles_au_choix(),
                 manquants=profil_mod.manquants(p), **ctx)
@@ -1537,16 +1643,29 @@ def _refus_ia(e):
     return JSONResponse({"ok": False, "erreur": str(e)}, status_code=200)
 
 
+def _venu_de(request):
+    """D'où l'on est arrivé sur Ton parcours (`?de=`), parmi les pages connues : le lien de retour y ramène."""
+    de = request.query_params.get("de", "")
+    return de if de in RETOURS_PARCOURS else ""
+
+
+# Le retour en haut de Ton parcours nomme la page d'où l'on vient ; sans indication, le tableau de bord.
+RETOURS_PARCOURS = {"": {"href": "/#premiers-pas", "nom": "Tableau de bord"},
+                    "reglages": {"href": "/reglages/parcours", "nom": "Réglages"}}
+
+
 @app.get("/parcours", response_class=HTMLResponse)
 def page_parcours(request: Request):
     reg = parcours.ouvrir()
     try:
         rang, total = _rang_tache("dossier")
+        de = _venu_de(request)
         return page(request, "parcours.html", arbre=parcours.arbre(reg), entretien=parcours.etat_entretien(reg),
                     nb_elements=len(parcours.elements(reg)),
                     vide=parcours.vide(reg), cv=parcours.documents(reg), genres=parcours.GENRES,
                     cadres=parcours.CADRES, ia=ia_connectee(), rang=rang, total=total,
-                    t=profil_mod.TACHES["dossier"])
+                    t=profil_mod.TACHES["dossier"], de=de, retour=RETOURS_PARCOURS[de],
+                    suite="?de=" + de if de else "")
     finally:
         reg.cx.close()
 
@@ -1590,7 +1709,7 @@ def parcours_repondre(reponse: str = Form("")):
         reg.cx.close()
 
 
-def _sur_parcours(action, msg=None, ancre="#base"):
+def _sur_parcours(request, action, msg=None, ancre="#base"):
     """Une action sur le parcours, puis retour à la page : #base revient à la base (sur la page, ou dans son
     volet pendant l'entretien), #element-N à l'élément qu'on vient de corriger ou d'ajouter, #entretien à
     l'entretien. `ancre` peut être une fonction du résultat de l'action (l'identifiant d'un ajout)."""
@@ -1598,17 +1717,24 @@ def _sur_parcours(action, msg=None, ancre="#base"):
     try:
         resultat = action(reg)
     except parcours.ParcoursInvalide as e:
-        return RedirectResponse("/parcours?msg=%s" % quote("À corriger : %s." % e), status_code=303)
+        return RedirectResponse(_adresse_parcours(request, msg="À corriger : %s." % e), status_code=303)
     finally:
         reg.cx.close()
     if callable(ancre):
         ancre = ancre(resultat)
-    return RedirectResponse("/parcours" + ("?msg=%s&ok=1" % quote(msg) if msg else "") + ancre, status_code=303)
+    return RedirectResponse(_adresse_parcours(request, msg=msg, ok=bool(msg)) + ancre, status_code=303)
+
+
+def _adresse_parcours(request, msg=None, ok=False):
+    """/parcours, en gardant la page d'où l'on vient (`de`) pour le lien de retour."""
+    de = _venu_de(request)
+    q = (["de=" + de] if de else []) + (["msg=" + quote(msg)] if msg else []) + (["ok=1"] if ok else [])
+    return "/parcours" + ("?" + "&".join(q) if q else "")
 
 
 @app.post("/parcours/passer")
-def parcours_passer():
-    return _sur_parcours(parcours.passer, ancre="#entretien")
+def parcours_passer(request: Request):
+    return _sur_parcours(request, parcours.passer, ancre="#entretien")
 
 
 @app.post("/parcours/ajouter")
@@ -1618,11 +1744,40 @@ async def parcours_ajouter(request: Request):
 
 
 def _parcours_ajouter(request, f):
+    """L'ajout fait dans la salle (/parcours/ajout). Un poste ou un engagement enchaîne sur son entretien ; le
+    reste revient à la base, sur l'élément ajouté. Un refus ramène à la question, avec le genre choisi."""
+    genre = f.get("genre", "")
     parent = int(f["parent"]) if (f.get("parent") or "").isdigit() else None
     champs = {k: f.get(k, "") for k in parcours.CHAMPS if k != "titre"}
-    return _sur_parcours(lambda reg: parcours.ajouter(reg, f.get("genre", ""), f.get("titre", ""), parent=parent,
-                                                       origine="saisie", citation=f.get("titre", ""), **champs),
-                         "Ajouté.", ancre=lambda i: "#element-%d" % i)
+    reg = parcours.ouvrir()
+    try:
+        ident = parcours.ajouter_en_entretien(reg, genre, f.get("titre", ""), parent=parent, **champs)
+    except parcours.ParcoursInvalide as e:
+        de = _venu_de(request)
+        q = ["genre=" + quote(genre)] + (["de=" + de] if de else []) + ["msg=" + quote("À corriger : %s." % e)]
+        return RedirectResponse("/parcours/ajout?" + "&".join(q) + "#entretien", status_code=303)
+    finally:
+        reg.cx.close()
+    if genre in parcours.CADRES:
+        return RedirectResponse(_adresse_parcours(request) + "#entretien", status_code=303)
+    return RedirectResponse(_adresse_parcours(request, msg="Ajouté à ta base.", ok=True) + "#element-%d" % ident,
+                            status_code=303)
+
+
+@app.get("/parcours/ajout", response_class=HTMLResponse)
+def page_parcours_ajout(request: Request):
+    """Ajouter un élément dans la salle de l'entretien : le genre à cliquer, puis ses champs, dans le fil."""
+    reg = parcours.ouvrir()
+    try:
+        genre = request.query_params.get("genre", "")
+        genre = genre if genre in parcours.GENRES else ""
+        de = _venu_de(request)
+        return page(request, "parcours_ajout.html", genre=genre, genres=parcours.GENRES, cadres=parcours.CADRES,
+                    sous=parcours.SOUS, champs=parcours.champs_ajout(genre), arbre=parcours.arbre(reg),
+                    question=parcours.QUESTION_AJOUT, question_champs=parcours.QUESTIONS_CHAMPS.get(genre, ""),
+                    de=de, suite="?de=" + de if de else "")
+    finally:
+        reg.cx.close()
 
 
 @app.post("/parcours/{ident}/modifier")
@@ -1632,25 +1787,25 @@ async def parcours_modifier(request: Request, ident: int):
 
 
 def _parcours_modifier(request, ident: int, f):
-    return _sur_parcours(lambda reg: parcours.modifier(reg, ident, **{k: f[k] for k in parcours.CHAMPS if k in f}),
+    return _sur_parcours(request, lambda reg: parcours.modifier(reg, ident, **{k: f[k] for k in parcours.CHAMPS if k in f}),
                          "Enregistré.", ancre="#element-%d" % ident)
 
 
 @app.post("/parcours/{ident}/retirer")
-def parcours_retirer(ident: int):
-    return _sur_parcours(lambda reg: parcours.retirer(reg, ident), "Retiré.")
+def parcours_retirer(request: Request, ident: int):
+    return _sur_parcours(request, lambda reg: parcours.retirer(reg, ident), "Retiré.")
 
 
 @app.post("/parcours/{ident}/reprendre")
-def parcours_reprendre(ident: int):
-    return _sur_parcours(lambda reg: parcours.reprendre(reg, ident), ancre="#entretien")
+def parcours_reprendre(request: Request, ident: int):
+    return _sur_parcours(request, lambda reg: parcours.reprendre(reg, ident), ancre="#entretien")
 
 
 @app.post("/parcours/vider")
-def parcours_vider(confirmer: str = Form("")):
+def parcours_vider(request: Request, confirmer: str = Form("")):
     if confirmer != "oui":
-        return RedirectResponse("/parcours", status_code=303)
-    return _sur_parcours(parcours.vider, "Parcours vidé : tu peux importer un CV.", ancre="")
+        return RedirectResponse(_adresse_parcours(request), status_code=303)
+    return _sur_parcours(request, parcours.vider, "Parcours vidé : tu peux importer un CV.", ancre="")
 
 
 def _defauts_criteres(p):
@@ -1806,11 +1961,10 @@ def _premiers_pas_enregistrer(request, tache: str, form):
 
 
 
-@app.get("/profil")
+@app.get("/profil", response_class=HTMLResponse)
 def profil_debut(request: Request):
-    manque = profil_mod.manquants()
-    suite = "?" + request.url.query if request.url.query else ""        # le message suit
-    return RedirectResponse("/profil/%s%s" % (manque[0][0] if manque else "identite", suite), status_code=303)
+    """Ma recherche : la liste de ses étapes, chacune ouvrant sa page (comme la page Réglages)."""
+    return page(request, "profil_etapes.html", etapes=profil_mod.etapes())
 
 
 @app.get("/profil/{ident}", response_class=HTMLResponse)
@@ -1901,6 +2055,9 @@ def _action(request, form):
     reg = _reg()
     try:
         msg, ok = actions.appliquer(reg, emp, type_, donnees), True
+        if type_ == "postuler":
+            msg = ("Formulaire officiel ouvert dans ton navigateur : télécharge les fichiers du dossier, "
+                   "relis-les, joins-les, puis « Marquer envoyée » ici.")
         if type_ == "candidature":
             dossier.mettre_a_date(reg, emp)        # la lettre prend la date d'envoi, et la garde
             from .. import agent_claude

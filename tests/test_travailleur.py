@@ -112,6 +112,22 @@ def test_source_confiee_ne_lit_que_les_nouvelles(distant, monkeypatch, reg):
     assert empreinte("Connue SA", "Head of Product") in cl.connues(reg, "indeed")["empreintes"]
 
 
+def test_parametres_de_recherche_envoyes_au_travailleur(distant, monkeypatch):
+    """La VM n'a pas le profil : le Mac envoie les paramètres de recherche avec la demande."""
+    recus = []
+
+    class AvecParametres(FausseIndeed):
+        def parametres(self):
+            return {"requetes": ["Product Owner"], "cantons": ["VD"], "lieux": ["Lausanne"]}
+
+        def selon(self, p):
+            recus.append(p)
+            return self
+    monkeypatch.setattr(serveur, "_sources", lambda: {"indeed": AvecParametres()})
+    distant.source("indeed", AvecParametres()).offres()
+    assert recus == [{"requetes": ["Product Owner"], "cantons": ["VD"], "lieux": ["Lausanne"]}]
+
+
 def test_source_non_confiee_et_panne(distant, monkeypatch):
     monkeypatch.setattr(serveur, "_sources", lambda: {})
     with pytest.raises(RouteCassee, match="404|non confiée"):

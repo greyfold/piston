@@ -19,8 +19,19 @@ def _lire(chemin):
 
 
 def test_consigne_de_notation_inchangee():
-    assert evaluation.consigne() == AVANT["evaluation"]
-    assert evaluation.modele().model_json_schema() == AVANT["schema"]
+    # 20.11 : la classe A/B/C cède la place à l'avis oui / peut-être / non, tiré de la moyenne (oui dès
+    # 50 %), et aux raisons pour, contre et à l'arbitrage. Le reste de la consigne ne bouge pas.
+    avant, _ = AVANT["evaluation"].replace("60-79 : à regarder. Moins de 60", "50-79 : à regarder. Moins de 40") \
+        .split("\n- classe_suggeree")
+    consigne = evaluation.consigne()
+    assert consigne.startswith(avant + "\n- L'avis se tire de la moyenne de note_globale et d'adequation_profil : 50 et plus, oui")
+    assert "arbitrage" in consigne and consigne.endswith("Camille tranche.")
+    schema, attendu = evaluation.modele().model_json_schema(), json.loads(json.dumps(AVANT["schema"]))
+    del attendu["properties"]["classe_suggeree"]
+    nouveaux = {k: schema["properties"].pop(k) for k in ("pour", "contre", "arbitrage")}
+    assert schema["properties"] == attendu["properties"] and schema["$defs"] == attendu["$defs"]
+    assert nouveaux["pour"]["type"] == "array" and nouveaux["arbitrage"]["type"] == "string"
+    assert set(schema["required"]) == set(attendu["required"]) - {"classe_suggeree"} | set(nouveaux)
 
 
 def test_consigne_du_dossier_ne_change_qu_aux_endroits_voulus():
@@ -353,9 +364,11 @@ def test_premier_lancement_ouvre_l_assistant(web, profil_de_test, tmp_path, monk
     profil.oublier()
     r = web.get("/", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/bienvenue"      # les avantages, puis l'assistant
-    assert web.get("/profil", follow_redirects=False).headers["location"] == "/profil/identite"
+    liste = web.get("/profil", follow_redirects=False)                          # la liste des étapes
+    assert liste.status_code == 200 and 'class="reglage-ligne" href="/profil/identite"' in liste.text
+    assert "à compléter" in liste.text
     page = web.get("/profil/identite").text
-    assert 'aria-current="step"' in page and "Prénom" in page
+    assert "<h1>Identité</h1>" in page and "Prénom" in page
 
 
 def test_etapes_enregistrees_dans_l_ordre(web, profil_de_test):
@@ -453,7 +466,7 @@ def test_certifications_et_langues_en_colonnes(web, profil_de_test):
     assert profil.lire(profil.charger(), "dossier.certifications") == [
         "SAFe Product Owner | Scaled Agile, Inc | 09.2024", "Scrum Master | Scrum / Alliance | 2021"]
     page = web.get("/profil/certifications").text
-    assert "<h1>Ma recherche</h1>" in page and "<h1>Profil</h1>" not in page
+    assert "<h1>Certifications</h1>" in page and 'class="retour" href="/profil"' in page
     assert 'name="dossier.certifications.organisme" value="Scaled Agile, Inc"' in page
     assert 'name="dossier.certifications.date" value="09.2024"' in page and "trois-colonnes" in page
     assert "Ajouter une certification" in page
@@ -583,3 +596,4 @@ def test_liste_simple_rendue_en_champs(profil_de_test, web):
     page = web.get("/profil/recherche").text
     assert page.count('name="recherche.entreprises"') == len(config.criteres()["sourcing"]["entreprises"]) + 1
     assert "<textarea" not in page and "Ajouter une entreprise" in page
+

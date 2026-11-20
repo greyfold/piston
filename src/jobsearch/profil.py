@@ -93,8 +93,9 @@ def niveau_langue(v):
 
 ETAPES = [
     {"id": "identite", "titre": "Identité",
+     "resume": "Nom, adresse, téléphone, e-mail et liens.",
      "intro": "Ce qui figure en tête du CV et des lettres, et sert à pré-remplir les formulaires des employeurs. "
-              "L'IA ne le voit jamais : elle écrit avec des balises, remplacées sur ce Mac.",
+              "L'IA ne le voit jamais : elle écrit avec des balises, remplacées sur ton Mac.",
      "champs": [
          champ("identite.civilite", "Civilité", type="choix", choix=["Madame", "Monsieur", "Mx"],
                vide="Ne pas préciser",
@@ -105,7 +106,7 @@ ETAPES = [
          champ("identite.npa", "NPA"),
          champ("identite.ville", "Localité", requis=True, aide="Aussi la ville en tête des lettres."),
          champ("identite.pays", "Pays", type="choix", choix=list(pays.PAYS_DE_RECHERCHE.values()),
-               aide="Proposé d'après les réglages de région de ton ordinateur."),
+               aide="Proposé d'après les réglages de région de ton Mac."),
          champ("identite.telephone", "Téléphone", type="tel",
                aide="Choisis l'indicatif, puis tape le numéro : il se met en forme tout seul."),
          champ("identite.email", "E-mail", type="email", requis=True),
@@ -117,6 +118,7 @@ ETAPES = [
                aide="Seulement pour les formulaires qui l'exigent ; jamais dans le CV ni les lettres."),
      ]},
     {"id": "recherche", "titre": "Recherche",
+     "resume": "Niveau visé, cantons, postes recherchés et entreprises visées.",
      "intro": "Ce que le passage du matin cherche, et ce que le pré-tri écarte d'office.",
      "champs": [
          champ("recherche.niveau", "Niveau visé", type="choix", choix=NIVEAUX, vide="Non précisé", large=True,
@@ -131,17 +133,19 @@ ETAPES = [
                aide="Une entreprise par champ : chacune ajoute une recherche à son nom."),
      ]},
     {"id": "pretri", "titre": "Pré-tri",
+     "resume": "Les annonces et les intitulés écartés d'office, avant toute note.",
      "intro": "Ce que le pré-tri écarte d'office, avant toute note. Une case décochée désactive la règle : "
               "les annonces qu'elle écartait restent à trier.",
      "champs": [
          champ("exclusions.regles", "Annonces écartées d'office", type="regles",
-               aide="« limite » : écartée, mais montrée dans « Écartées limites » pour vérifier le filtre."),
+               aide="« limite » : écartée, à revoir dans Offres (statut C) pour vérifier le filtre."),
          champ("exclusions.mots_titre", "Autres intitulés à écarter", type="liste_choix", virgules=True,
                exemple="ajouter des mots, séparés par des virgules",
                aide="Un intitulé qui contient un de ces mots est écarté comme métier exclu. Décoche un mot pour "
                     "le retirer."),
      ]},
     {"id": "criteres", "titre": "Critères",
+     "resume": "Ce qui est non négociable, ce que tu veux faire et tes angles de candidature.",
      "intro": "Ce que l'IA vérifie en notant chaque annonce ; laisse vide ce qui t'est égal. Une annonce qui viole "
               "clairement un critère est notée 40 au plus. Aucun montant de salaire ici.",
      "champs": [
@@ -155,6 +159,7 @@ ETAPES = [
      ]},
     # Formation, certifications et langues : remplies à l'import du CV (`completer_depuis_cv`), corrigées ici.
     {"id": "formation", "titre": "Formation",
+     "resume": "Tes diplômes, tels qu'ils figurent dans chaque CV.",
      "intro": "Tes diplômes, remplis à l'import de ton CV, dans Ton parcours. Corrige-les ici : ils font foi "
               "dans chaque CV.",
      "champs": [
@@ -168,6 +173,7 @@ ETAPES = [
                     "qu'une fois."),
      ]},
     {"id": "certifications", "titre": "Certifications",
+     "resume": "Tes certifications, telles qu'elles figurent dans chaque CV.",
      "intro": "Remplies à l'import de ton CV, dans Ton parcours. Corrige-les ici : elles font foi dans chaque CV.",
      "champs": [
          champ("dossier.certifications", "Certifications obtenues", type="lignes",
@@ -179,6 +185,7 @@ ETAPES = [
                     "n'est gardé qu'une fois."),
      ]},
     {"id": "langues", "titre": "Langues",
+     "resume": "Les langues que tu parles et ton niveau.",
      "intro": "Les langues que tu parles, remplies à l'import de ton CV, dans Ton parcours. Corrige-les ici : "
               "elles font foi dans chaque CV.",
      "champs": [
@@ -193,6 +200,7 @@ ETAPES = [
     # Le différenciateur vient de l'entretien « Ce qui compte pour toi » ; les règles particulières et le
     # nombre de pages du CV (`dossier.*`) restent lus s'ils sont dans le profil, sans onglet pour les saisir.
     {"id": "objectifs", "titre": "Objectifs de postulation",
+     "resume": "Le rythme à tenir, par semaine ou par mois.",
      "intro": "Le rythme de postulation à tenir, par semaine, par mois, ou les deux : suivi sur le tableau de "
               "bord, avec un rappel le vendredi si l'objectif de la semaine n'est pas atteint. Vide : pas de suivi.",
      "champs": [

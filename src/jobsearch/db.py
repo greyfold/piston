@@ -16,6 +16,12 @@ STATUTS = ["nouvelle", "A", "B", "C", "retenue", "candidature",
            "entretien", "offre", "refus", "expiree", "doublon"]
 PIPELINE = ["retenue", "candidature", "entretien", "offre"]
 ENVOYEES = ["candidature", "entretien", "offre", "refus"]
+# Ce que la personne lit pour un statut : oui, peut-être ou non plutôt que A, B, C. A (ancienne classe
+# « à proposer ») et retenue (oui donné) se lisent tous deux oui.
+LIBELLES_STATUT = {"nouvelle": "à trancher", "A": "oui", "B": "peut-être", "C": "non", "retenue": "oui",
+                   "candidature": "envoyée", "expiree": "expirée"}
+# Écartées : hors de la vue par défaut d'Offres, consultables par son filtre.
+ECARTEES = ["C", "doublon", "expiree"]
 
 # Colonnes texte ou nombre ; LISTES sont stockées en JSON.
 COLONNES = [

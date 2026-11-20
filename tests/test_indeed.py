@@ -263,3 +263,19 @@ def test_recherches_par_paquets_et_limite_en_cours_de_route(monkeypatch):
     offres = src.offres(a_lire=lambda a: False)
     # Deux paquets passés, le troisième casse : on garde ce qui a été trouvé.
     assert len(offres) == 9 and offres[0].requetes == ["indeed:A", "indeed:B"]
+
+
+def test_sans_poste_vise_rien_a_chercher():
+    """Sans requête, aucune session ouverte : un réglage à faire, pas une panne (avant : IndexError)."""
+    src = indeed.Indeed({"lieux": ["Lausanne"]}, [], ["VD"], ouvrir=lambda: pytest.fail("session ouverte"))
+    with pytest.raises(ConfigurationRequise, match="aucun poste visé"):
+        src.offres()
+
+
+def test_parametres_du_mac_repris_par_le_travailleur():
+    """La VM n'a pas le profil : la source du travailleur reprend requêtes, cantons et lieux du Mac."""
+    mac = indeed.Indeed({"lieux": ["Lausanne", "Sion"]}, ["Product Owner"], ["VD", "VS"])
+    vm = indeed.Indeed({"modele": "haiku"}, [], [])
+    copie = vm.selon(mac.parametres())
+    assert copie.recherches() == [("Product Owner", "Lausanne"), ("Product Owner", "Sion")]
+    assert copie.cantons == {"VD", "VS"} and copie.r["modele"] == "haiku" and vm.requetes == []

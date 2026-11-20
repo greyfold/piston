@@ -6,7 +6,6 @@
 {# Mode concentré, comme « Ton parcours » : pas de barre de menu, le questionnaire prend toute la fenêtre ; les
    réponses rapides et les messages s'affichent dans le fil, sous la question. #}
 {% block barre %}{% endblock %}
-{% block message %}{% endblock %}
 {% block classe_corps %}concentre entretien-fixe{% endblock %}
 {% block contenu %}
 {# Ce qui compte pour toi : un questionnaire fixe, sans IA (ce_qui_compte.py). Une question à la fois dans le fil,
@@ -100,7 +99,6 @@
         </section>
         {% endif %}
       </div>
-      {% if msg and not ok %}<div class="flash ko" role="status">{{ msg }}</div>{% endif %}
       <div class="actions-succes">
         <button type="button" class="lien-neutre" data-ouvrir-volet="volet-proposition" aria-haspopup="dialog" aria-controls="volet-proposition">Ajuster dans le détail</button>
         {% if prop.lignes %}<a class="bouton go grand" href="/#premiers-pas">Retour au tableau de bord {{ icone("suivant") }}</a>
@@ -122,7 +120,6 @@
           {% if q.aide %}<span class="aide-question">{{ q.aide }}</span>{% endif %}</li>
         {# Les réponses rapides, dans le fil, sous la question : à cliquer, ou à écrire dans les champs. #}
         <li class="message reponses-rapides">
-          {% if msg %}<div class="flash {{ '' if ok else 'ko' }}" role="status">{{ msg }}</div>{% endif %}
           <form method="post" action="/criteres/repondre" class="reponse-guidee"
                 {% if q.choix and not q.multiple and not q.champs %}data-auto{% endif %}
                 {% if preparer and (q.contexte or q.champs | selectattr("contexte") | list) %}data-attend-contexte{% endif %}>
@@ -190,7 +187,7 @@
 
       <h3 class="section-base">Tri du matin</h3>
       <p class="champ-intro">Annonces écartées d'office. Une pilule décochée désactive la règle : les annonces qu'elle
-        écartait restent à trier. « limite » : écartée, mais montrée dans « Écartées limites ».</p>
+        écartait restent à trier. « limite » : écartée, à revoir dans Offres (statut non).</p>
       {% for groupe, liste in regles %}
       {% set opts = [] %}{% for id, libelle, limite in liste %}{% set _ = opts.append((id, libelle ~ (" · limite" if limite else ""))) %}{% endfor %}
       {{ champ_puces("exclusions.regles", groupe, opts, valeurs.regles, "p-regles-" ~ loop.index,

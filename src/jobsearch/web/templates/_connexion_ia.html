@@ -1,6 +1,7 @@
 {# Connexion à l'IA dans une modale (Nexus Modal) : s'ouvre depuis un bouton [data-connexion-ia],
    depuis l'adresse (?connexion=claude) ou depuis l'app Mac (window.ouvrirConnexionIA), et se ferme
    seule une fois connecté. Le tableau de bord pilote la connexion (jobsearch connexion). #}
+{% from "_macros.html" import icone %}
 <dialog class="modale" id="modale-ia" aria-labelledby="modale-ia-titre">
   <div class="modale-tete">
     <h2 id="modale-ia-titre">Se connecter avec <span data-nom-fournisseur>Claude</span></h2>
@@ -32,7 +33,7 @@
 
   <div data-pour="connecte">
     <div class="etat-tache ok">
-      <svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+      {{ icone("fin") }}
       <div><p class="fort">Connecté à <span data-nom-fournisseur>Claude</span></p><p>Cette fenêtre se ferme.</p></div></div>
   </div>
 

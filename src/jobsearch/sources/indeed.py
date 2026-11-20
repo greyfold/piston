@@ -18,6 +18,7 @@ intitulé. Indeed rend aussi des annonces de plusieurs mois : on garde celles
 publiées depuis `anciennete_max_jours`.
 """
 
+import copy
 import datetime as dt
 import re
 import time
@@ -149,6 +150,20 @@ class Indeed:
             raise RouteCassee("indeed : Claude Code n'est pas connecté (« Se connecter à Claude… » dans le menu de l'application)")
         return 1
 
+    def parametres(self):
+        """Ce que la recherche tient du profil : requêtes, cantons, lieux. Le Mac l'envoie au
+        travailleur, car la machine virtuelle n'a pas le profil (elle ne voit que partage-vm/)."""
+        from ..profil import identite
+        return {"requetes": list(self.requetes), "cantons": sorted(self.cantons),
+                "lieux": list(self.r.get("lieux") or [identite().get("ville") or ""])}
+
+    def selon(self, p):
+        """La même source, avec les paramètres reçus du Mac (voir `parametres`)."""
+        s = copy.copy(self)
+        s.requetes, s.cantons = list(p.get("requetes") or []), set(p.get("cantons") or [])
+        s.r = dict(self.r, lieux=[l for l in p.get("lieux") or [] if l])
+        return s
+
     def recherches(self):
         from ..profil import identite
         lieux = self.r.get("lieux") or [identite().get("ville") or ""]     # sans lieu : la ville du profil
@@ -217,6 +232,9 @@ class Indeed:
         ont suffi à déclencher la limite d'Indeed (premier essai réel, 26.10)."""
         debut = time.monotonic()
         lignes = ["- search: %s ; location: %s" % rl for rl in self.recherches()]
+        if not lignes:
+            # Sans poste visé, rien à chercher (et pas de session à ouvrir pour rien).
+            raise ConfigurationRequise("Indeed n'a rien à chercher : aucun poste visé dans ton profil")
         taille = max(1, int(self.r.get("recherches_par_tour", 10)))
         paquets = ["\n".join(lignes[i:i + taille]) for i in range(0, len(lignes), taille)]
         s, recherches = self._ouvrir_et_chercher(paquets[0], delai)

@@ -102,12 +102,12 @@ def test_page_sources_examen(web, reg, monkeypatch):
     monkeypatch.setattr(examen, "examiner_en_tache", lances.append)
     r = web.post("/sources/ajouter", data={"nom": "Exemple Emplois", "url": "https://www.exemple-emplois.ch",
                                            "examiner": "1"}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"].endswith("#source-exemple-emplois")
+    assert r.status_code == 303 and r.headers["location"].startswith("/sources/exemple-emplois?")
     assert lances == ["exemple-emplois"]
     assert "Faire examiner la source par l'IA" in web.get("/sources").text
 
     examen.noter(reg, "exemple-emplois", resultat=examen.verifier(un_examen()))
-    page = web.get("/sources").text
+    page = web.get("/sources/exemple-emplois").text
     assert "Accès automatisé interdit" in page and "Examen de l'IA" in page and "Réexaminer" in page
     assert "https://www.exemple-emplois.ch/cgu" in page
     assert "Noter l'accès « alertes e-mail »" in page
@@ -115,7 +115,7 @@ def test_page_sources_examen(web, reg, monkeypatch):
     r = web.post("/sources/appliquer", data={"id": "exemple-emplois", "acces": "alertes e-mail"}, follow_redirects=False)
     assert "ok=1" in r.headers["location"]
     assert repertoire.lister(reg)["exemple-emplois"]["acces"] == "alertes e-mail"
-    assert "Noter l'accès" not in web.get("/sources").text
+    assert "Noter l'accès" not in web.get("/sources/exemple-emplois").text
 
     web.post("/sources/examiner", data={"id": "jobup"}, follow_redirects=False)
     assert lances[-1] == "jobup"
@@ -126,7 +126,35 @@ def test_page_sources_examen(web, reg, monkeypatch):
 def test_page_sources_examen_en_cours_et_echec(web, reg, monkeypatch):
     sid = repertoire.ajouter(reg, "Exemple Emplois", "https://www.exemple-emplois.ch")
     monkeypatch.setattr(examen, "EN_COURS", {sid})
-    assert "L'IA examine les conditions" in web.get("/sources").text
+    assert "L'IA examine les conditions" in web.get("/sources/%s" % sid).text
+    assert "examen en cours" in web.get("/sources").text
     monkeypatch.setattr(examen, "EN_COURS", set())
     examen.noter(reg, sid, erreur="limite d'usage atteinte")
-    assert "Examen impossible : limite d&#39;usage atteinte" in web.get("/sources").text
+    assert "Examen impossible : limite d&#39;usage atteinte" in web.get("/sources/%s" % sid).text
+
+
+def test_liste_des_sources_et_page_d_une_source(web, reg):
+    """La liste n'a qu'une ligne par source ; le détail et les réglages sont sur la page de la source."""
+    sid = repertoire.ajouter(reg, "Exemple Emplois", "https://www.exemple-emplois.ch", remarques="à voir")
+    liste = web.get("/sources").text
+    assert 'class="reglage-ligne" href="/sources/%s"' % sid in liste and "à voir" not in liste
+    page = web.get("/sources/%s" % sid).text
+    assert 'class="retour" href="/sources"' in page and 'class="retour" href="/reglages"' not in page
+    assert "<h1>Exemple Emplois</h1>" in page and "à voir" in page and "Retirer cette source" in page
+    assert "ok=0" in web.get("/sources/nulle-part", follow_redirects=False).headers["location"]
+
+
+def test_sources_par_defaut_et_leur_statut(web, reg, monkeypatch):
+    """Job-Room, jobup, jobs.ch et Indeed sont là dès l'installation, chacun avec son statut."""
+    from pathlib import Path
+    from jobsearch import config
+    monkeypatch.setattr(config, "CONFIG", Path(__file__).resolve().parents[1] / "config")    # le vrai socle
+    liste = web.get("/sources").text
+    for sid in ("job-room", "jobup", "jobs-ch", "indeed"):
+        assert 'href="/sources/%s"' % sid in liste
+    assert "non répertoriée" not in liste
+    assert '<span class="puce ">pas encore interrogée</span>' in liste          # Job-Room avant tout passage
+    assert '<span class="puce nouvelle">à brancher</span>' in liste             # Indeed, connecteur inactif
+    reg.cx.execute("INSERT INTO sources (id, etat, dernier_test_le, dernier_test_ok) VALUES ('jobup', 'en service', '2026-11-16', 1)")
+    reg.cx.commit()
+    assert '<span class="puce B">en service</span>' in web.get("/sources").text

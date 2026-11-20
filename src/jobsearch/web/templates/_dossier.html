@@ -1,20 +1,17 @@
-{% extends "base.html" %}
-{% block titre %}Dossier · {{ f.entreprise }}{% endblock %}
-{% block contenu %}
-<p class="petit"><a href="/annonce/{{ f.empreinte }}">← Annonce</a></p>
-<h1>Dossier · {{ f.titre }}</h1>
-<div><b>{{ f.entreprise }}</b></div>
-<div class="bandeau {{ 'ok' if d.etat == 'pret' else 'alerte' if d.etat in ('echec', 'interrompu') else 'attention' }}" style="margin-top:1rem">
+{# Onglet Dossier de l'annonce (annonce.html) : état du dossier, documents avec aperçu, mots-clés, contrôles et
+   pièces. Reçoit f, dos, fichiers, apercu, motscles, date_lettre, pieces, envoyee. #}
+{% set base_dossier = "/annonce/" ~ f.empreinte ~ "?onglet=dossier" %}
+<div class="bandeau {{ 'ok' if dos.etat == 'pret' else 'alerte' if dos.etat in ('echec', 'interrompu') else 'attention' }} bandeau-dossier">
   <span class="point"></span>
-  {% if d.etat == "en_cours" %}<span data-suivi-dossier="{{ f.empreinte }}">{{ libelle_dossier(d) }}</span>
-  {% else %}<span>{{ {"interrompu": "Interrompu : la tâche s'est arrêtée (tableau de bord redémarré ?). Refaire le dossier.", "pret": "Prêt : relire, puis envoyer par le lien officiel.", "a_revoir": "À revoir avant envoi : voir les contrôles.", "echec": "Échec : " ~ (d.erreur or "")}.get(d.etat) }}
-  {% if d.couverture is not none %} · couverture des mots-clés {{ d.couverture }} %{% endif %}</span>{% endif %}
-  {% if d.etat != "en_cours" %}<form method="post" action="/dossier/{{ f.empreinte }}/refaire" style="margin-left:auto"><button class="discret">Refaire</button></form>{% endif %}
+  {% if dos.etat == "en_cours" %}<span data-suivi-dossier="{{ f.empreinte }}">{{ libelle_dossier(dos) }}</span>
+  {% else %}<span>{{ {"interrompu": "Interrompu : la tâche s'est arrêtée (tableau de bord redémarré ?). Refaire le dossier.", "pret": "Prêt : relis-le, puis postule sur le site.", "a_revoir": "À revoir avant envoi : voir les contrôles.", "echec": "Échec : " ~ (dos.erreur or "")}.get(dos.etat) }}
+  {% if dos.couverture is not none %} · couverture des mots-clés {{ dos.couverture }} %{% endif %}</span>{% endif %}
+  {% if dos.etat != "en_cours" %}<form method="post" action="/dossier/{{ f.empreinte }}/refaire" class="action-bandeau"><button class="discret">Refaire</button></form>{% endif %}
 </div>
 
 {% if fichiers %}
 <h2>Documents</h2>
-<p class="petit" style="margin:-.4rem 0 .6rem">
+<p class="petit intro-documents">
   Lettre datée du <b>{{ date_lettre | date_fr }}</b>
   {% if envoyee %}<span class="muet">· date d'envoi, figée</span>
   {% else %}<span class="muet">· date du jour, mise à jour jusqu'à l'envoi puis figée par « Marquer envoyée »</span>{% endif %}
@@ -22,7 +19,7 @@
 <div class="docs">
   <nav class="onglets-docs" aria-label="Documents">
     {% for n in fichiers %}
-    <a href="/dossier/{{ f.empreinte }}?doc={{ n | urlencode }}#apercu" class="{{ 'actif' if n == apercu }}">
+    <a href="{{ base_dossier }}&doc={{ n | urlencode }}#apercu" class="{{ 'actif' if n == apercu }}">
       {{ "CV" if "-CV-" in n else "Lettre" if ("Letter" in n or "Lettre" in n) else n }}
       <span class="format">{{ n.rsplit(".", 1)[1] | upper }}</span></a>
     {% endfor %}
@@ -32,14 +29,8 @@
     <iframe src="/dossier/{{ f.empreinte }}/apercu/{{ apercu | urlencode }}" title="Aperçu de {{ apercu }}" loading="lazy"></iframe>
   </div>
   <div class="boutons">
-    <a class="bouton" href="/dossier/{{ f.empreinte }}/fichier/{{ apercu | urlencode }}">⬇ Télécharger {{ apercu }}</a>
-    <a class="bouton discret" href="/dossier/{{ f.empreinte }}/apercu/{{ apercu | urlencode }}" target="_blank" rel="noopener">Plein écran ↗</a>
-    {% if f.url_postuler %}<a class="bouton" href="{{ f.url_postuler }}" target="_blank" rel="noopener noreferrer">Formulaire officiel ↗</a>{% endif %}
-    {% if f.url_postuler or f.url %}
-    <form method="post" action="/annonce/{{ f.empreinte }}/preremplir" style="display:inline">
-      <input type="hidden" name="cible" value="employeur"><input type="hidden" name="retour" value="/dossier/{{ f.empreinte }}">
-      <button class="go">Pré-remplir le formulaire</button></form>
-    {% endif %}
+    <a class="bouton avec-icone" href="/dossier/{{ f.empreinte }}/fichier/{{ apercu | urlencode }}">{{ icone("exporter") }}<span>Télécharger {{ apercu }}</span></a>
+    <a class="bouton discret avec-icone" href="/dossier/{{ f.empreinte }}/apercu/{{ apercu | urlencode }}" target="_blank" rel="noopener">{{ icone("externe") }}<span>Plein écran</span></a>
   </div>
   {% if apercu.endswith(".docx") %}<p class="petit muet">Aperçu du contenu et de la structure du Word ; la mise en page exacte se voit dans le PDF (produit dès que LibreOffice est installé).</p>{% endif %}
   {% endif %}
@@ -52,12 +43,12 @@
   <div class="jauge" role="img" aria-label="Couverture {{ motscles.taux }} %">
     <div class="jauge-barre {{ 'ok' if motscles.taux >= 80 else 'moyen' if motscles.taux >= 60 else 'bas' }}" style="width: {{ motscles.taux }}%"></div>
   </div>
-  <p style="margin:.45rem 0 .8rem"><b>{{ motscles.taux }} %</b> des mots-clés de l'annonce figurent dans le CV
+  <p class="taux-mots-cles"><b>{{ motscles.taux }} %</b> des mots-clés de l'annonce figurent dans le CV
     ({{ motscles.presents | length }} sur {{ motscles.presents | length + motscles.absents | length }} ; seuil de la méthode : 80 %).</p>
 
   {% if motscles.absents %}
   <form method="post" action="/dossier/{{ f.empreinte }}/mots-cles">
-    <p class="petit" style="margin:0 0 .35rem"><b>Manquants</b> : coche ceux qui sont vrais pour toi. Les autres sont des écarts, à traiter dans la lettre.</p>
+    <p class="petit consigne-mots-cles"><b>Manquants</b> : coche ceux qui sont vrais pour toi. Les autres sont des écarts, à traiter dans la lettre.</p>
     <div class="tags mots">
       {% for t, n in motscles.absents %}<label{% if f.langue %} lang="{{ f.langue }}"{% endif %}><input type="checkbox" name="termes" value="{{ t }}">{{ t }} <small>×{{ n }}</small></label>{% endfor %}
     </div>
@@ -65,11 +56,11 @@
       <input class="note" type="text" name="precision" placeholder="Précision facultative (ex. : « machine learning » vu en formation, pas en poste)" aria-label="Précision">
       <button class="go">Intégrer au CV</button>
     </div>
-    <p class="petit muet" style="margin:.35rem 0 0">Le CV est réécrit pour placer ces termes là où ils sont justes, sans rien inventer d'autre ; la version précédente est gardée.</p>
+    <p class="petit muet aide-mots-cles">Le CV est réécrit pour placer ces termes là où ils sont justes, sans rien inventer d'autre ; la version précédente est gardée.</p>
   </form>
   {% endif %}
 
-  <details class="petit" style="margin-top:.7rem"><summary>Présents ({{ motscles.presents | length }})</summary>
+  <details class="petit detail-mots-cles"><summary>Présents ({{ motscles.presents | length }})</summary>
     <div class="tags mots">{% for t, n in motscles.presents %}<span class="present"{% if f.langue %} lang="{{ f.langue }}"{% endif %}>{{ t }} <small>×{{ n }}</small></span>{% endfor %}</div>
   </details>
   {% if motscles.format %}
@@ -80,10 +71,10 @@
 </div>
 {% endif %}
 
-{% if d.controles %}
+{% if dos.controles %}
 <h2>Contrôles</h2>
 <div class="tableau"><table><tbody>
-{% for c in d.controles %}<tr><td><span class="puce {{ 'B' if c.ok else 'retard' }}">{{ "ok" if c.ok else "à voir" }}</span></td><td class="petit">{{ c.cq }}</td><td class="petit muet">{{ c.detail }}</td></tr>{% endfor %}
+{% for c in dos.controles %}<tr><td><span class="puce {{ 'B' if c.ok else 'retard' }}">{{ "ok" if c.ok else "à voir" }}</span></td><td class="petit">{{ c.cq }}</td><td class="petit muet">{{ c.detail }}</td></tr>{% endfor %}
 </tbody></table></div>
 {% endif %}
 
@@ -91,4 +82,3 @@
 <h2>{{ nom }}</h2>
 <div class="texte-annonce"{% if f.langue and nom in ("CV.md", "Lettre.md") %} lang="{{ f.langue }}"{% endif %}>{{ texte | texte_html }}</div>
 {% endfor %}
-{% endblock %}

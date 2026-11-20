@@ -14,8 +14,8 @@ from .db import ENVOYEES, aujourdhui, maintenant, plus_jours
 RELANCE_1, RELANCE_2 = 10, 21
 
 TYPES = {
-    "go": "Go", "attendre": "Attendre", "pasgo": "Pas go", "remettre_b": "Remettre en B",
-    "annuler_go": "Go annulé",
+    "go": "Oui", "attendre": "Peut-être", "pasgo": "Non", "remettre_b": "Remise à trancher",
+    "annuler_go": "Oui annulé", "postuler": "Formulaire officiel ouvert",
     "candidature": "Marquer envoyée", "entretien": "Entretien", "offre": "Offre",
     "refus": "Refus", "sans_suite": "Classée sans suite", "note": "Note", "echeance": "Échéance", "relance_faite": "Relance faite",
     "accuse": "Accusé de réception", "reponse": "Réponse reçue",
@@ -78,7 +78,7 @@ def _appliquer(reg, emp, t, d):
         raise ActionRefusee("décision de tri « %s » sur une annonce déjà en « %s » : refusée, "
                             "la candidature est conservée" % (TYPES[t], ancien))
     if t == "go" and _NEGATIF.search(note):
-        raise ActionRefusee("Go avec une note qui dit « pas go » : action contradictoire, "
+        raise ActionRefusee("Oui avec une note qui dit « pas go » : action contradictoire, "
                             "rien n'est changé. Choisis le bon bouton.")
     if t == "go" and ancien == "retenue":
         return "Déjà retenue : rien à changer."
@@ -88,10 +88,10 @@ def _appliquer(reg, emp, t, d):
     if t in ("go", "candidature", "jobroom_saisie"):
         from .doublons import decrire, meme_poste_engage
         meme = meme_poste_engage(reg, f)
-    issue = ("Si c'est bien un autre poste, marque la paire « différentes » (doublons, page Sources, "
-             "ou `jobsearch doublons differentes`) ; si c'est le même, fusionne les deux fiches.")
+    issue = ("Si c'est bien un autre poste, marque la paire « différentes » "
+             "(`jobsearch doublons differentes`) ; si c'est le même, fusionne les deux fiches.")
     if t == "go" and meme:
-        raise ActionRefusee("même poste déjà engagé : %s. Go refusé. %s"
+        raise ActionRefusee("même poste déjà engagé : %s. Oui refusé. %s"
                             % ("; ".join(decrire(g) for g, _ in meme), issue))
     if t == "jobroom_saisie" and any(g.get("jobroom_saisie_le") for g, _ in meme):
         raise ActionRefusee("preuve Job-Room déjà saisie pour le même poste : %s. Une seconde ligne "
@@ -110,17 +110,24 @@ def _appliquer(reg, emp, t, d):
         ch.update(statut="B", motif=d.get("motif") or f.get("motif"))
     elif t == "pasgo":
         ch.update(statut="C", passe_ecart=3, prochaine_action=None, echeance=None, relance_le=None,
-                  motif=d.get("motif") or ("Pas go : " + ", ".join(raisons) if raisons
+                  motif=d.get("motif") or ("Non : " + ", ".join(raisons) if raisons
                                            else "Écartée depuis le tableau de bord"))
     elif t == "annuler_go":
         # La personne renonce à une candidature retenue : écartée, avec sa raison. Le dossier reste.
         if ancien != "retenue":
-            raise ActionRefusee("seule une candidature retenue (Go) peut être annulée")
+            raise ActionRefusee("seule une candidature retenue (oui) peut être annulée")
         ch.update(statut="C", passe_ecart=3, prochaine_action=None, echeance=None, relance_le=None,
-                  motif="Go annulé" + (" : " + ", ".join(raisons) if raisons else "") + (" · " + note if note else ""))
+                  motif="Oui annulé" + (" : " + ", ".join(raisons) if raisons else "") + (" · " + note if note else ""))
+    elif t == "postuler":
+        # « Postuler sur le site » : le formulaire officiel s'ouvre dans le navigateur. Rien ne change au
+        # registre ; la trace (table `actions`) fait apparaître les fichiers du dossier dans l'annonce.
+        if ancien != "retenue":
+            raise ActionRefusee("on postule sur le site après un oui")
+        if not (f.get("url_postuler") or f.get("url")):
+            raise ActionRefusee("aucun lien vers le formulaire officiel")
     elif t == "remettre_b":
         ch.update(statut="B", limite=False,
-                  motif="Remise en B depuis le tableau de bord (était : %s)" % (f.get("motif") or ancien))
+                  motif="Remise à trancher depuis le tableau de bord (était : %s)" % (f.get("motif") or ancien))
     elif t == "candidature":
         date = _date(d.get("date"))
         ch.update(statut="candidature", postulee_le=date,

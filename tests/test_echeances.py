@@ -130,7 +130,7 @@ def test_la_configuration_livree_ne_contient_rien_de_personnel():
     assert not [r for r in c["regles"] if r["motif"].startswith("Métier exclu")]
     canton = next(r for r in c["regles"] if r["id"] == "canton")
     assert canton["regex"] == "(?!)"                    # sans cantons choisis, la règle n'écarte rien
-    assert set(lire("sources.yaml")) == {"job-room", "jobup", "linkedin", "mails"}
+    assert set(lire("sources.yaml")) == {"job-room", "jobup", "jobs-ch", "indeed", "linkedin", "mails"}
     for f in (RACINE / "config").iterdir():
         assert "jeremy" not in f.read_text(encoding="utf-8").lower(), f.name
 

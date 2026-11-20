@@ -5,6 +5,7 @@ from io import BytesIO
 
 import pytest
 from fastapi.testclient import TestClient
+from markupsafe import escape
 
 from jobsearch import evaluation, moteur, parcours, profil
 from jobsearch.parcours import (Ajout, ElementCV, ImportCV, Precision, Tour)
@@ -106,6 +107,58 @@ def test_entretien_poste_par_poste(base):
     assert parcours.etat_entretien(base)["echanges"][-1]["question"].startswith("Qu'aimerais-tu ajouter")
 
 
+def test_ajout_dans_la_salle_puis_entretien(base, monkeypatch):
+    """Ajouter un élément se fait dans la salle de l'entretien : le genre à cliquer, puis ses champs dans le fil.
+    Un poste enchaîne sur son entretien, devant celui qui était en cours, l'ajout gardé comme premier échange."""
+    from jobsearch.web import app as appmod
+    monkeypatch.setattr(appmod, "ia_connectee", lambda: True)
+    web = TestClient(appmod.app)
+    parcours.importer_cv(base, CV, c=moteur.FauxMoteur([_import()]))
+    en_cours = parcours.etat_entretien(base)["element"]                    # le poste du CV, question posée
+
+    page = web.get("/parcours/ajout").text
+    assert escape(parcours.QUESTION_AJOUT) in page and 'name="genre" value="poste"' in page and "data-auto" in page
+    page = web.get("/parcours/ajout?genre=poste").text
+    assert 'name="titre"' in page and "required" in page and 'name="organisation"' in page and 'name="parent"' not in page
+    assert escape(parcours.QUESTIONS_CHAMPS["poste"]) in page
+    assert 'name="parent"' in web.get("/parcours/ajout?genre=realisation").text
+    assert 'name="parent"' not in web.get("/parcours/ajout?genre=inconnu").text           # genre inconnu : la 1re question
+
+    r = web.post("/parcours/ajouter", data={"genre": "poste", "titre": ""}, follow_redirects=False)  # refusé
+    assert r.headers["location"].startswith("/parcours/ajout?genre=poste&msg=")
+    r = web.post("/parcours/ajouter?de=reglages", data={"genre": "poste", "titre": "Designer", "organisation": "Exemple SA",
+                                                        "debut": "01.2015", "fin": "02.2019"}, follow_redirects=False)
+    assert r.headers["location"] == "/parcours?de=reglages#entretien"
+    etat = parcours.etat_entretien(base)
+    assert etat["element"]["titre"] == "Designer" and etat["element"]["origine"] == "saisie"
+    ajout, depart = etat["echanges"]
+    assert ajout["question"] == parcours.QUESTION_AJOUT and ajout["reponse"] == "Poste · Designer · Exemple SA · 01.2015 – 02.2019"
+    assert depart["question"].startswith("Parle-moi de ton poste « Designer » chez Exemple SA") and depart["reponse"] is None
+    page = web.get("/parcours").text
+    assert "Poste · Designer · Exemple SA" in page and "Parle-moi de ton poste « Designer »" in page
+
+    # Le nouveau poste fait, l'entretien revient au poste qui était en cours.
+    parcours.repondre(base, "Rien de plus.", c=moteur.FauxMoteur([Tour(question="", suffisant=True)]))
+    assert parcours.etat_entretien(base)["element"]["id"] == en_cours["id"]
+    # Un ajout qui n'est pas une expérience revient à la base, sur l'élément.
+    r = web.post("/parcours/ajouter", data={"genre": "langue", "titre": "Allemand", "detail": "B2"}, follow_redirects=False)
+    allemand = next(e for e in parcours.elements(base) if e["titre"] == "Allemand")
+    assert r.headers["location"].endswith("#element-%d" % allemand["id"]) and allemand["detail"] == "B2"
+    assert not parcours._echanges(base, parcours.SUJET_PARCOURS, allemand["id"])
+
+
+def test_reprendre_passe_devant(base):
+    """Rouvrir un élément le met en tête de l'entretien, même si un autre attendait."""
+    parcours.importer_cv(base, CV, c=moteur.FauxMoteur([_import()]))
+    premier = parcours.etat_entretien(base)["element"]
+    parcours.passer(base)
+    second = parcours.ajouter(base, "poste", "Designer", debut="2010", fin="2012")
+    assert parcours.etat_entretien(base)["element"]["id"] == second
+    parcours.reprendre(base, premier["id"])
+    etat = parcours.etat_entretien(base)
+    assert etat["element"]["id"] == premier["id"] and etat["echanges"][-1]["question"].startswith("Parle-moi")
+
+
 def test_formation_une_ligne_sans_detail(base):
     """Les formations sont à part des expériences : une ligne (intitulé, école, dates), rien dessous."""
     imp = _import()
@@ -197,17 +250,29 @@ def test_pages_et_routes(base, monkeypatch):
     # avec de quoi corriger chaque élément et en ajouter. Une seule fois dans les deux cas.
     page = web.get("/parcours").text
     assert 'id="volet-base"' in page and 'class="base-page"' not in page
-    assert page.count('action="/parcours/ajouter"') == 1 and page.count('id="element-%d"' % ident) == 1
+    assert page.count('href="/parcours/ajout') == 1 and page.count('id="element-%d"' % ident) == 1
     for c in parcours.cadres(base):
         base.cx.execute("UPDATE parcours SET approfondi=1 WHERE id=?", (c["id"],))
     base.commit()
     page = web.get("/parcours").text
-    assert "Entretien terminé" in page and 'class="base-page"' in page and 'id="volet-base"' not in page
-    assert page.count('action="/parcours/ajouter"') == 1 and 'action="/parcours/%d/modifier"' % ident in page
+    assert 'class="base-page"' in page and 'id="volet-base"' not in page
+    assert "Entretien terminé" not in page and "Ton CV d'abord" not in page   # base remplie : la base, sans explication
+    assert page.count('href="/parcours/ajout') == 1 and 'action="/parcours/%d/modifier"' % ident in page
     r = web.post("/parcours/ajouter", data={"genre": "competence", "titre": "Facilitation"}, follow_redirects=False)
     ajoute = next(e["id"] for e in parcours.elements(base) if e["titre"] == "Facilitation")
     assert r.headers["location"].endswith("#element-%d" % ajoute)
-    assert 'id="element-%d"' % ajoute in web.get("/parcours").text
+    page = web.get("/parcours").text
+    assert 'id="element-%d"' % ajoute in page
+    # Le lien de retour nomme la page d'où l'on vient : le tableau de bord, ou les réglages (« Voir ma base »),
+    # et cette origine suit les corrections.
+    assert 'class="retour" href="/#premiers-pas"' in page and 'class="retour" href="/reglages/parcours"' not in page
+    assert 'href="/parcours?de=reglages"' in web.get("/reglages/parcours").text
+    page = web.get("/parcours?de=reglages").text
+    assert 'class="retour" href="/reglages/parcours"' in page and 'href="/#premiers-pas"' not in page
+    assert 'action="/parcours/%d/modifier?de=reglages"' % ajoute in page and "/parcours/ajout?de=reglages" in page
+    r = web.post("/parcours/%d/modifier?de=reglages" % ajoute, data={"titre": "Animation"}, follow_redirects=False)
+    assert r.headers["location"].startswith("/parcours?de=reglages&msg=")
+    assert "de=ailleurs" not in web.get("/parcours?de=ailleurs").text          # origine inconnue : ignorée
     web.post("/parcours/%d/retirer" % ident)
     assert parcours.element(base, ident) is None
     web.post("/parcours/vider", data={})                                       # sans confirmation : rien
@@ -408,7 +473,7 @@ def test_onglet_reprend_le_parcours_deja_importe(base, monkeypatch):
     profil.enregistrer("langues", {"dossier.langues": ""})
     page = web.get("/profil/langues").text
     assert "Ton parcours contient 1 langue absente de cette liste." in page
-    assert "Récapitulatif" not in page and 'href="/profil/certifications"' in page
+    assert "Récapitulatif" not in page and 'href="/profil/certifications"' in web.get("/profil").text
     r = web.post("/profil/langues/reprendre", follow_redirects=False)
     assert r.status_code == 303 and "1%20langue%20ajout" in r.headers["location"]
     assert profil.lire(profil.charger(), "dossier.langues") == ["Anglais | courant"]

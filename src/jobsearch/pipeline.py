@@ -304,7 +304,7 @@ class Passage:
 
         with self.etape("doublons") as n:
             # La même offre sous deux fiches (noms d'employeur écrits autrement selon la
-            # plateforme) : fusion des doublons sûrs, les autres attendent la personne (page Sources).
+            # plateforme) : fusion des doublons sûrs, les autres restent en attente (`jobsearch doublons`).
             res = doublons.traiter(self.reg)
             n["fusionnees"], n["a_verifier"] = len(res["fusionnees"]), len(res["a_verifier"])
             nouvelles = [e for e in nouvelles if e not in res["fusionnees"]]
@@ -442,11 +442,10 @@ class Passage:
             lignes.append("%d annonce(s) d'avant, écartée(s) par le pré-tri resserré." % pt["reprises"])
         if ev.get("evaluees"):
             lignes.append("IA : %d annonce(s) notée(s), %d écartée(s) comme hors des postes visés "
-                          "(à revoir dans « Écartées limites »)." % (ev["evaluees"], ev.get("ecartees", 0)))
+                          "(à revoir dans Offres, statut C)." % (ev["evaluees"], ev.get("ecartees", 0)))
         dbl = c("doublons")
-        if dbl.get("fusionnees") or dbl.get("a_verifier"):
-            lignes.append("Doublons entre plateformes : %d fusionnés, %d à vérifier."
-                          % (dbl.get("fusionnees", 0), dbl.get("a_verifier", 0)))
+        if dbl.get("fusionnees"):
+            lignes.append("Doublons entre plateformes : %d fusionnés." % dbl["fusionnees"])
         if profil.option("jobroom"):
             lignes.append("%d relances dues, %d preuves Job-Room à saisir%s."
                           % (ech.get("relances_dues", 0), ech.get("jobroom_a_saisir", 0),

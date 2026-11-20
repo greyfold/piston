@@ -16,8 +16,9 @@
 <form class="filtres" method="get">
   <input type="text" name="q" value="{{ q }}" placeholder="Entreprise ou intitulé" aria-label="Recherche">
   <select name="statut" aria-label="Statut">
-    <option value="">Tous les statuts</option>
-    {% for s in STATUTS %}{% if s in stats.par_statut %}<option value="{{ s }}" {{ 'selected' if s == statut }}>{{ s }} ({{ stats.par_statut[s] }})</option>{% endif %}{% endfor %}
+    <option value="">À suivre (sans les non)</option>
+    <option value="tous" {{ 'selected' if statut == 'tous' }}>Tous les statuts</option>
+    {% for s in STATUTS %}{% if s in stats.par_statut %}<option value="{{ s }}" {{ 'selected' if s == statut }}>{{ s | statut | capitalize }} ({{ stats.par_statut[s] }})</option>{% endif %}{% endfor %}
   </select>
   <select name="source" aria-label="Source">
     <option value="">Toutes les sources</option>
@@ -25,13 +26,19 @@
   </select>
   <button>Filtrer</button>
 </form>
-{% if not fiches %}
+{% if not fiches and not statut and not q and not source %}
+{% call etat_vide("recherche", "Aucune annonce à suivre", titre_balise="h2",
+     description="Les annonces écartées (non, doublons, expirées) ne s'affichent pas ici ; elles restent consultables.") %}
+    <a class="bouton go" href="?statut=C">Voir les non</a>
+{% endcall %}
+{% elif not fiches %}
 {% call etat_vide("recherche", ("Aucun résultat pour « %s »" % q) if q else "Aucune annonce avec ces filtres",
      titre_balise="h2", description="Essaie un autre mot, ou retire un filtre.") %}
-    <a class="bouton go" href="/offres">Tout afficher</a>
+    <a class="bouton go" href="/offres?statut=tous">Tout afficher</a>
 {% endcall %}
 {% else %}
-<p class="petit muet">{{ total }} résultat{{ 's' if total != 1 }}{% if total > 400 %} (400 affichés){% endif %}.</p>
+<p class="petit muet">{{ total }} résultat{{ 's' if total != 1 }}{% if total > 400 %} (400 affichés){% endif %}.
+  {%- if not statut and not q and ecartees %} {% if ecartees > 1 %}{{ ecartees }} annonces écartées ne sont pas affichées{% else %}1 annonce écartée n'est pas affichée{% endif %} (non, doublons, expirées) : <a href="?statut=C">voir les non</a>.{% endif %}</p>
 <div class="tableau"><table>
   <thead><tr><th>Annonce</th><th>Source</th><th>Statut</th><th>Motif</th><th>Vue le</th></tr></thead>
   <tbody>
@@ -39,7 +46,7 @@
     <tr>
       <td><a href="/annonce/{{ f.empreinte }}">{{ f.titre }}</a><div class="muet petit">{{ f.entreprise }} · {{ f.lieu }}</div></td>
       <td class="petit">{% for s in f.sources or [] %}<a href="?source={{ s | urlencode }}">{{ s }}</a>{{ ", " if not loop.last }}{% else %}<span class="muet">?</span>{% endfor %}{% if f.url %} <a href="{{ f.url }}" target="_blank" rel="noopener noreferrer" aria-label="Voir l'annonce en ligne">↗</a>{% endif %}</td>
-      <td><span class="puce {{ f.statut }}">{{ f.statut }}</span></td>
+      <td><span class="puce {{ f.statut }}">{{ f.statut | statut }}</span></td>
       <td class="petit">{{ (f.motif or f.angle or "")[:140] }}</td>
       <td class="petit">{{ f.vue_le | date_fr(True) }}</td>
     </tr>

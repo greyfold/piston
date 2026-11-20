@@ -4,8 +4,8 @@
 # reste « nouvelle » et passe par Camille, puis par le tri IA (phase 2).
 #
 # Les motifs sont des expressions régulières Python, appliquées sans accents
-# et en minuscules. « limite: true » = écartée, mais montrée dans « Écartées
-# limites » sur le tableau de bord pour recalibrer le filtre (constat F-19).
+# et en minuscules. « limite: true » = écartée, à revoir dans Offres
+# (statut C) pour recalibrer le filtre (constat F-19).
 # Aucun montant de salaire dans ce fichier.
 
 sourcing:

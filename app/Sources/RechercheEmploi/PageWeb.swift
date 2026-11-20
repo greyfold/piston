@@ -22,8 +22,11 @@ struct PageWeb: NSViewRepresentable {
         vue.navigationDelegate = context.coordinator
         vue.uiDelegate = context.coordinator
         vue.allowsBackForwardNavigationGestures = true
-        // Le tableau de bord exige son jeton : posé en cookie avant le premier chargement.
-        let requete = URLRequest(url: url)
+        // Le tableau de bord exige son jeton : posé en cookie avant le premier chargement. `ouverture=1` :
+        // la fenêtre s'ouvre, ce qui reste à trancher passe d'abord (le tri), même si la vue a gardé son cookie.
+        var adresse = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        adresse?.queryItems = [URLQueryItem(name: "ouverture", value: "1")]
+        let requete = URLRequest(url: adresse?.url ?? url)
         if let jeton = etat.jeton, let hote = url.host {
             PageWeb.poserJeton(jeton, hote: hote, dans: config.websiteDataStore.httpCookieStore) {
                 vue.load(requete)

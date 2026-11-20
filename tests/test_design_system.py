@@ -54,9 +54,8 @@ COULEUR = r"#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\("
 
 # Attributs style="…" dans les gabarits : la mise en forme passe par une classe de style.css.
 BASE_STYLE_EN_LIGNE = {
-    "_macros.html": 6, "accueil.html": 7, "ajout.html": 2, "annonce.html": 11,
-    "connexion.html": 2, "dossier.html": 8, "ia.html": 2,
-    "registre.html": 2, "sante.html": 3, "sources.html": 16,
+    "_macros.html": 5, "accueil.html": 6, "ajout.html": 2,
+    "connexion.html": 2, "registre.html": 2,
 }
 
 
@@ -70,13 +69,12 @@ def test_pas_de_nouvel_attribut_style():
 
 
 def test_pas_de_bloc_style_dans_les_gabarits():
-    _comparer(_compter(_gabarits(), r"<style\b"), {"navigateur.html": 1},
+    _comparer(_compter(_gabarits(), r"<style\b"), {},
               "bloc <style>", "Tout le CSS va dans static/style.css.")
 
 
 def test_pas_de_couleur_en_dur_dans_les_gabarits_ni_le_js():
-    # navigateur.html : var(--bord, #ddd) et le fond noir de l'écran de la VM, dans son bloc <style>.
-    _comparer(_compter(_gabarits() + _scripts(), COULEUR), {"navigateur.html": 2},
+    _comparer(_compter(_gabarits() + _scripts(), COULEUR), {},
               "couleur en dur", "Utiliser une classe de style.css, qui prend un jeton var(--…).")
 
 
@@ -139,7 +137,7 @@ def test_un_seul_fichier_css_et_pas_de_ressource_externe():
 
 def test_icones_par_la_macro():
     # SVG écrits à la main hors de la macro icone() : chevrons et coches dessinés avant le jeu Lucide.
-    base_svg = {"_champs_profil.html": 2, "_connexion_ia.html": 1, "accueil.html": 1, "bienvenue.html": 1}
+    base_svg = {"accueil.html": 1, "bienvenue.html": 1}
     gabarits = [f for f in _gabarits() if f.name != "_macros.html"]
     _comparer(_compter(gabarits, r"<svg\b"), base_svg, "<svg> écrit à la main",
               "Utiliser icone(nom) ; une icône manquante s'ajoute à ICONES dans _macros.html.")
@@ -174,10 +172,41 @@ def test_tailles_de_texte_sur_l_echelle():
 def test_pas_de_confirm_du_navigateur():
     # Dette : confirmations déjà là avant la macro confirmation() (Nexus Modal).
     _comparer(_compter(_gabarits() + _scripts(), r"\bconfirm\("),
-              {"parcours.html": 1, "sante.html": 1, "sources.html": 1, "entretien.js": 1},
+              {"parcours.html": 1, "entretien.js": 1},
               "confirm() du navigateur", "Utiliser la macro confirmation() de _macros.html.")
 
 
 def test_une_seule_etiquette_ia():
     anciennes = [c for c in (".tag-ia", ".puce.ia") if c in CSS]
     assert not anciennes, f"Étiquette IA en double : {anciennes}. Utiliser .badge-ia."
+
+
+def test_message_apres_action_un_seul_composant():
+    """FlashMessage : rendu par base.html seulement ; aucun gabarit ne refait le message `msg` à sa façon."""
+    import pathlib, re
+    gabarits = pathlib.Path(__file__).parents[1] / "src/jobsearch/web/templates"
+    base = (gabarits / "base.html").read_text()
+    assert "{{ flash_message(msg, ok) }}" in base
+    for f in gabarits.glob("*.html"):
+        texte = f.read_text()
+        if f.name == "trier.html":              # ligne d'état du tri, réécrite par tri.js à chaque décision
+            continue
+        assert "block message" not in texte or f.name == "base.html", f.name
+        assert not re.search(r'class="flash[^"]*"[^>]*>\s*\{\{\s*msg', texte), f.name
+        assert "flash_message(" not in texte or f.name in ("base.html", "_macros.html"), f.name
+
+
+def test_ajout_en_modale_jamais_en_accordeon():
+    """Une fonction d'ajout (« Ajouter… », « Noter… ») s'ouvre dans une modale (macro modale_ajout), jamais
+    dans un accordéon : aucun <summary> ne commence par un de ces verbes, et aucun formulaire d'ajout
+    (action en /ajouter) ne vit dans un <details>."""
+    ecarts = []
+    for f in _gabarits():
+        texte = f.read_text(encoding="utf-8")
+        for s in re.findall(r"<summary[^>]*>(.*?)</summary>", texte, flags=re.S):
+            if re.match(r"\s*(?:<[^>]+>\s*)*(?:Ajouter|Noter)\b", s):
+                ecarts.append(f"{f.name} : accordéon « {re.sub(r'<[^>]+>', '', s).strip()} »")
+        for bloc in re.findall(r"<details\b.*?</details>", texte, flags=re.S):
+            if re.search(r'action="[^"]*/ajouter"', bloc):
+                ecarts.append(f"{f.name} : formulaire d'ajout dans un <details>")
+    assert not ecarts, "Ajout en accordéon (utiliser bouton_ajout + modale_ajout) : " + " ; ".join(ecarts)

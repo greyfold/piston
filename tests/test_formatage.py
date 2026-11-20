@@ -1,4 +1,4 @@
-from jobsearch.formatage import annonce_html, blocs
+from jobsearch.formatage import annonce_html, blocs, nettoyer
 from jobsearch.sources.base import html_vers_texte
 
 
@@ -78,3 +78,24 @@ def test_etiquette_en_gras_et_titre_repete_retire():
 def test_gras_coupe_par_un_retour_a_la_ligne():
     h = str(annonce_html("**STAT19\n\n**\n\nService de statistique (STAT)\nLe STAT constitue le pôle cantonal en matière de science des données."))
     assert "**" not in h and "STAT19" in h
+
+
+def test_nettoyer_le_markdown_echappe_les_logos_et_le_suivi():
+    """Constat du 20.11 : des textes Job-Room finissent par « jpid…jm jpit…jm jpiy…jm », avec du Markdown
+    échappé aplati sur une ligne (« \\* », « \\[ \\](\\< \\>) », logos « ![Entreprise]( ) »)."""
+    t = ("**Délai de postulation : 3 décembre 2026**\n\njpidc0c4873jm jpit1147jm jpiy26jm")
+    assert nettoyer(t) == "**Délai de postulation : 3 décembre 2026**"
+    t = ("Profil \\* Formation supérieure \\* Sept ans d'expérience \\*\\*Ce que nous offrons\\*\\* "
+         "\\* Cinq semaines de vacances \\* Une LPP avantageuse \\#LI\\-JF1 !\\[Exemple SA\\]( ) "
+         "\\* Exemple SA Route de France 16 \\* \\[ \\](\\< \\>) \\[Postuler\\](\\< \\>) jpid1cca9d5jm jpit1147jm")
+    propre = nettoyer(t)
+    assert "jpi" not in propre and "\\" not in propre and "![" not in propre and "#LI" not in propre
+    assert "- Formation supérieure" in propre and "\n**Ce que nous offrons**\n" in propre
+    assert propre.endswith("Postuler")
+    html = str(annonce_html(t))
+    assert "<h3>Ce que nous offrons</h3>" in html and "<li>Cinq semaines de vacances</li>" in html
+
+
+def test_nettoyer_garde_le_texte_ordinaire():
+    t = "Le poste * clé de l'équipe, 5 * 8 heures.\n\nUne [page](https://exemple.ch) reste un lien."
+    assert nettoyer(t) == t

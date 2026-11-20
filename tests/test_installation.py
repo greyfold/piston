@@ -12,7 +12,7 @@ PERSONNELS = {
                       "sourcing.entreprises": [], "sourcing.linkedin_requetes": [],
                       "sourcing.linkedin_lieu": "", "familles_cibles": ""},
 }
-SOURCES_DE_BASE = {"job-room", "jobup", "linkedin", "mails"}
+SOURCES_DE_BASE = {"job-room", "jobup", "jobs-ch", "indeed", "linkedin", "mails"}
 
 
 @pytest.fixture
@@ -337,11 +337,11 @@ def test_bien_demarrer_disparait_une_fois_tout_fait_et_etat_vide(neuve, monkeypa
     assert 'id="ia-deconnectee"' not in page
     assert "Aucun poste identifié pour le moment" in page and 'href="/offres">Voir les offres' in page
     # Rien à faire : l'état vide remplace la page ; aucune section vide, pas de courrier sans candidature.
-    for titre in ("À faire aujourd'hui", "À trancher", "Go donné", "Courrier des employeurs", "Relances dues",
+    for titre in ("À faire aujourd'hui", "À trancher", "Tes oui, à envoyer", "Courrier des employeurs", "Relances dues",
                   "Écartées limites", 'class="chiffres"'):
         assert titre not in page
     annonce(reg, statut="A")
     reg.commit()
     page = web.get("/").text
     assert "À trancher" in page and "Aucun poste identifié" not in page
-    assert "Go donné" not in page and "Courrier des employeurs" not in page and "Relances dues" not in page
+    assert "Tes oui, à envoyer" not in page and "Courrier des employeurs" not in page and "Relances dues" not in page

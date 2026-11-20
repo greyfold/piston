@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone, etat_vide, bouton_action, meta, notes, alertes, delais, adequation, annuler_go, preremplir, claude, etat_tache %}
+{% from "_macros.html" import icone, etat_vide, bouton_action, meta, notes, alertes, delais, adequation, annuler_go, postuler, claude, etat_tache %}
 {% block contenu %}
 {# Par défaut, une section vide ne s'affiche pas. Le courrier des employeurs ne compte qu'une fois une candidature
    envoyée. Rien du tout à faire : un état vide remplace la page (la checklist « Bien démarrer » reste au-dessus). #}
@@ -7,7 +7,7 @@
 {% set jobroom_utile = fonctions.jobroom and (jobroom.a_saisir or jobroom.refus_a_reporter or jobroom.a_verifier
                                               or (tache_jobroom and tache_jobroom.active)) %}
 {% set rien = not (a_trancher or retenues or entretiens or courrier_utile or jobroom_utile or relances.dues
-                   or relances.a_classer or limites) %}
+                   or relances.a_classer) %}
 {# L'IA n'est plus connectée : un bandeau (Nexus Banner) qui ouvre la modale de connexion, jamais la checklist de retour. #}
 {% if ia_deconnectee %}<div class="bandeau attention" id="ia-deconnectee"><span class="point"></span><span>Ton IA n'est plus connectée : sans elle, les annonces ne sont pas notées et aucun dossier n'est préparé. <a href="/ia" data-connexion-ia="claude" data-nom="Claude">Se connecter à Claude</a>.</span></div>{% endif %}
 {% if rythme.alerte and not rien %}<div class="bandeau alerte"><span class="point"></span><span>{{ rythme.semaine.n }} postulation{{ 's' if rythme.semaine.n > 1 }} cette semaine, l'objectif est {{ rythme.semaine.min }} : il en manque {{ rythme.semaine.manque }} d'ici dimanche.</span></div>{% endif %}
@@ -43,12 +43,13 @@
 {% endcall %}
 {% else %}
 <h1>À faire aujourd'hui</h1>
-{% if rythme.actif %}{# option « Objectifs », et au moins un objectif : seules les périodes qui en ont un #}
+{% if rythme.actif %}{# option « Objectifs », et au moins un objectif : une ligne discrète, seules les périodes qui en ont un #}
 <div class="chiffres rythme">
-{% for nom, lib in [("semaine", "postulations cette semaine"), ("mois", "postulations ce mois")] if rythme[nom].actif %}{% set p = rythme[nom] %}
+  <span>Postulations</span>
+{% for nom, lib in [("semaine", "cette semaine"), ("mois", "ce mois")] if rythme[nom].actif %}{% set p = rythme[nom] %}
   <div class="chiffre {{ 'atteint' if p.atteint else ('chaud' if nom == 'semaine' and rythme.alerte) }}">
     <b>{{ p.n }} <small>/ {{ p.min }}</small></b>
-    <span>{{ lib }} · {{ "objectif atteint" if p.atteint else "il en manque %d" % p.manque }}</span>
+    <span>{{ lib }}</span><span class="cache">{{ "objectif atteint" if p.atteint else "il en manque %d" % p.manque }}</span>
     <div class="jauge" aria-hidden="true"><i style="width:{{ [100 * p.n // p.min, 100] | min if p.min else 100 }}%"></i></div>
   </div>
 {% endfor %}
@@ -56,10 +57,9 @@
 {% endif %}
 <div class="chiffres">
   <div class="chiffre"><b>{{ a_trancher | length }}</b><span>à trancher</span></div>
-  <div class="chiffre"><b>{{ retenues | length }}</b><span>Go, à envoyer</span></div>
+  <div class="chiffre"><b>{{ retenues | length }}</b><span>oui, à envoyer</span></div>
   <div class="chiffre {{ 'chaud' if relances.dues }}"><b>{{ relances.dues | length }}</b><span>relances dues</span></div>
   {% if fonctions.jobroom %}<div class="chiffre {{ 'chaud' if jobroom.a_saisir and jobroom.a_saisir[0]._jours_restants <= 5 }}"><b>{{ jobroom.a_saisir | length }}</b><span>preuves Job-Room</span></div>{% endif %}
-  <div class="chiffre"><b>{{ '%.1f' % stats.ratio_a if stats.ratio_a is not none else '–' }} %</b><span>ratio d'A (cible 5–15)</span></div>
 </div>
 
 {% if entretiens %}
@@ -89,7 +89,7 @@
   <div class="tete">
     <div>
       <h3>{{ a_trancher | length }} annonce{{ 's attendent' if a_trancher | length > 1 else ' attend' }} ta décision</h3>
-      <div class="meta">Une à la fois : Go, Pas go ou plus tard.</div>
+      <div class="meta">Une à la fois : oui, non ou peut-être, avec les raisons de l'IA.</div>
     </div>
     <a class="bouton go" href="/trier">Trancher maintenant</a>
   </div>
@@ -98,7 +98,7 @@
 {% endif %}
 
 {% if retenues %}
-<h2 id="retenues">Go donné, à envoyer <span class="compte">{{ retenues | length }}</span></h2>
+<h2 id="retenues">Tes oui, à envoyer <span class="compte">{{ retenues | length }}</span></h2>
 <div class="cartes deux">
 {% for f in retenues %}
   <article class="carte">
@@ -109,14 +109,17 @@
       {% set d = dossiers.get(f.empreinte) %}
       <div class="meta">
         {% if d and d.etat == "en_cours" %}<span data-suivi-dossier="{{ f.empreinte }}">{{ libelle_dossier(d) }}</span>
-        {% elif d and d.etat == "interrompu" %}{{ libelle_dossier(d) }} · <a href="/dossier/{{ f.empreinte }}">le refaire</a>
-        {% elif d and d.etat in ("pret", "a_revoir") %}<a href="/dossier/{{ f.empreinte }}">Ouvrir le dossier →</a>{% if d.couverture is not none %} · couverture {{ d.couverture }} %{% endif %}
-        {% elif d and d.etat == "echec" %}Dossier en échec : {{ (d.erreur or "")[:120] }} · <a href="/dossier/{{ f.empreinte }}">détails</a>
+        {% elif d and d.etat == "interrompu" %}{{ libelle_dossier(d) }} · <a href="/annonce/{{ f.empreinte }}?onglet=dossier">le refaire</a>
+        {% elif d and d.etat in ("pret", "a_revoir") %}<a href="/annonce/{{ f.empreinte }}?onglet=dossier">Ouvrir le dossier →</a>{% if d.couverture is not none %} · couverture {{ d.couverture }} %{% endif %}
+        {% elif d and d.etat == "echec" %}Dossier en échec : {{ (d.erreur or "")[:120] }} · <a href="/annonce/{{ f.empreinte }}?onglet=dossier">détails</a>
         {% else %}Dossier pas encore produit{% endif %}
       </div>
     </div>
-    <span class="puce {{ 'retard' if d and d.etat in ('echec', 'a_revoir', 'interrompu') else 'retenue' }}">
-      {{ {"en_cours": "en préparation", "pret": "dossier prêt", "a_revoir": "à revoir", "echec": "échec", "interrompu": "interrompu"}.get(d.etat) if d else ("dossier prêt" if f.cv_genere else "dossier à faire") }}</span></div>
+    <div class="statut-carte">
+      <span class="puce {{ 'retard' if d and d.etat in ('echec', 'a_revoir', 'interrompu') else 'retenue' }}">
+        {{ {"en_cours": "en préparation", "pret": "dossier prêt", "a_revoir": "à revoir", "echec": "échec", "interrompu": "interrompu"}.get(d.etat) if d else ("dossier prêt" if f.cv_genere else "dossier à faire") }}</span>
+      {{ annuler_go(f, raisons, "/#retenues") }}
+    </div></div>
     {{ adequation(evals.get(f.empreinte)) }}
     <form method="post" action="/action" class="boutons">
       <input type="hidden" name="empreinte" value="{{ f.empreinte }}"><input type="hidden" name="retour" value="/#retenues">
@@ -125,12 +128,7 @@
       <input type="text" name="canal" placeholder="Canal (portail, e-mail…)" aria-label="Canal">
       <button class="go">Marquer envoyée</button>
     </form>
-    <div class="boutons">
-      {% if d and d.etat in ("pret", "a_revoir") and (f.url_postuler or f.url) %}{{ claude(f, "formulaire", "Remplir avec Claude", "/#retenues", "go", taches.get(f.empreinte)) }}{% endif %}
-      {{ etat_tache(taches.get(f.empreinte), etats_taches) }}
-      {% if f.url_postuler or f.url %}<a class="petit" href="{{ f.url_postuler or f.url }}" target="_blank" rel="noopener noreferrer">Ouvrir le formulaire officiel ↗</a>{% endif %}
-    </div>
-    {{ annuler_go(f, raisons, "/#retenues") }}
+    {% if d and d.etat in ("pret", "a_revoir") %}<div class="boutons">{{ postuler(f, classe="") }}</div>{% endif %}
   </article>
 {% endfor %}
 </div>
@@ -235,18 +233,6 @@
 {% if relances.dues | length > 25 %}<p class="petit muet">… et {{ relances.dues | length - 25 }} autres dans <a href="/candidatures">Candidatures</a>.</p>{% endif %}
 {% endif %}
 {% if relances.a_classer %}<p class="petit muet">{{ relances.a_classer | length }} candidatures ont eu leurs deux relances sans réponse : à classer (refus ou sans suite) depuis <a href="/candidatures#sans-suite">Candidatures</a>.</p>{% endif %}
-{% endif %}
-
-{% if limites %}
-<h2 id="limites">Écartées limites <span class="compte">{{ limites | length }} sur 14 jours</span></h2>
-<p class="petit muet" style="margin-top:-.4rem">Écartées par une règle de montage (régie, CDD de moins de deux ans). À parcourir pour savoir si le filtre est trop dur.</p>
-<div class="tableau"><table><tbody>
-{% for f in limites %}
-  <tr><td><a href="/annonce/{{ f.empreinte }}">{{ f.titre }}</a><div class="muet petit">{{ f.entreprise }} · {{ f.lieu }}</div></td>
-      <td class="petit">{{ f.motif }}</td>
-      <td>{{ bouton_action(f, "remettre_b", "Remettre en B", "/#limites") }}</td></tr>
-{% endfor %}
-</tbody></table></div>
 {% endif %}
 {% endif %}{# rien à faire #}
 {% endblock %}

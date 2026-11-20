@@ -68,7 +68,13 @@ noVNC. Le **travailleur** (`travailleur/`) y répond sur 127.0.0.1:8776 (jeton) 
   seulement un mot de fonction (« chef », « responsable », « manager »). La passe 2 est l'IA
   (`evaluation.py`) : en notant chaque annonce à trancher, elle dit si le métier est dans, à la limite
   ou hors des postes visés ; « hors » écarte l'annonce en « limite », visible et réversible dans
-  « Écartées limites ». Le doute profite à l'annonce. Si l'IA n'a pas répondu pendant le passage, le
+  « Écartées limites ». Le doute profite à l'annonce.
+- **Oui, peut-être, non** (`evaluation.avis`) : l'avis sur une annonce se calcule sur la moyenne de la
+  note globale et de l'adéquation du profil : oui dès 50 % ; peut-être un peu en dessous, ou quand les
+  deux chiffres divergent (le profil couvre, la note est basse, ou l'inverse) ; non sinon. L'IA donne les
+  raisons pour, contre, et ce qui doit faire trancher. Une annonce nouvelle dont l'avis est non n'est plus
+  proposée : elle reste dans Offres (filtre « Non »), d'où elle se remet à trancher d'un clic. Les
+  statuts A, B, C se lisent oui, peut-être, non ; les boutons du tri sont Oui, Peut-être, Non. Si l'IA n'a pas répondu pendant le passage, le
   bilan le dit et `echeances.py` rattrape les annonces sans note dès qu'elle répond.
 - **Adéquation par catégorie** (`adequation.py`) : dans la même tâche que la note, l'IA analyse
   l'adéquation au poste en compétences, expérience, formation et langues : une note sur 100 par

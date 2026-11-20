@@ -1,5 +1,5 @@
 {# Les champs d'une étape du profil : assistant (profil.html) et tâches de la checklist (premiers_pas.html). #}
-{% from "_macros.html" import champ_puces, champ_lignes %}
+{% from "_macros.html" import champ_puces, champ_lignes, icone %}
 {% from "_questions_criteres.html" import champs_criteres %}
 {% set autocomplete = {"identite.prenom": "given-name", "identite.nom": "family-name", "identite.adresse": "street-address",
    "identite.npa": "postal-code", "identite.ville": "address-level2", "identite.pays": "country-name",
@@ -74,7 +74,7 @@
         <div class="indicatif">
           <span class="iso" aria-hidden="true">{{ tel_pays }}</span>
           <span class="code" aria-hidden="true">+{{ indicatifs[tel_pays] }}</span>
-          <svg class="chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m6 8 4 4 4-4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          {{ icone("chevron", "chevron") }}
           <select id="{{ c.cle }}-pays" name="{{ c.cle }}_pays" aria-label="Indicatif du pays">
             {% for code, ind in indicatifs | dictsort %}<option value="{{ code }}" data-indicatif="{{ ind }}"{% if code == tel_pays %} selected{% endif %}>{{ code }} (+{{ ind }})</option>{% endfor %}
           </select>
@@ -91,7 +91,7 @@
             value="{{ c.valeur | date_suisse }}" placeholder="JJ.MM.AAAA"
             aria-describedby="{{ c.cle }}-aide {{ c.cle }}-erreur">
           <button type="button" class="ouvrir-calendrier" aria-label="Choisir la date" aria-haspopup="dialog" aria-expanded="false">
-            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="3" y="4.5" width="14" height="12.5" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3 8.5h14M7 2.75v3.5M13 2.75v3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            {{ icone("calendrier") }}
           </button>
         </div>
         <input type="hidden" name="{{ c.cle }}" value="{{ c.valeur }}">

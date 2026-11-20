@@ -159,7 +159,7 @@ def cmd_doublons(a):
         else:
             res = doublons.detecter(reg)
             for titre, paires in (("Sûrs (fusionnés au prochain passage)", res["surs"]),
-                                  ("À vérifier (page Sources)", res["a_verifier"])):
+                                  ("À vérifier", res["a_verifier"])):
                 print("\n%s — %d" % (titre, len(paires)))
                 for p, s, raison in paires:
                     print("  %s %-11s %s — %s [%s]" % (p["empreinte"][:8], p["statut"], p["entreprise"], p["titre"], ", ".join(p["sources"])))

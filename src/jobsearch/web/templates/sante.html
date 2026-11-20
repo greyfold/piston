@@ -1,9 +1,7 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone %}
-{% block titre %}Santé · Recherche d'emploi{% endblock %}
+{% from "_macros.html" import confirmation, entete_reglage %}
 {% block contenu %}
-<h1>Santé du système</h1>
-<p class="muet">Chaque passage s'affiche dans les <button type="button" class="lien-neutre" data-ouvrir-notifications aria-haspopup="dialog" aria-controls="notifications">notifications</button>, avec le détail de ses étapes.</p>
+{% call entete_reglage(reglage) %}Chaque passage s'affiche dans les <button type="button" class="lien-neutre" data-ouvrir-notifications aria-haspopup="dialog" aria-controls="notifications">notifications</button>, avec le détail de ses étapes.{% endcall %}
 
 <h2>30 derniers matins</h2>
 <div class="calendrier" aria-label="Jours avec un passage">
@@ -23,17 +21,27 @@
 {% for c in cles %}
   <div class="carte">
     <div class="tete"><b>{{ c.nom }}</b>
-      {% if c.presente %}<span class="puce B">enregistrée · …{{ c.fin }}</span>{% else %}<span class="puce retard">absente</span>{% endif %}</div>
+      {% if c.presente %}<span class="puce B">enregistrée · …{{ c.fin }}</span>{% else %}<span class="puce">absente</span>{% endif %}</div>
     <div class="meta">{{ c.usage }}</div>
     {% if depuis_le_mac %}
-    <form method="post" action="/cles/{{ c.id }}/enregistrer" class="boutons" autocomplete="off">
-      <input type="password" name="cle" placeholder="{{ c.prefixe }}…" aria-label="Clé {{ c.nom }}" autocomplete="off" spellcheck="false" required style="flex:1 1 220px">
-      <button class="go">{{ "Remplacer" if c.presente else "Enregistrer" }}</button>
+    <form method="post" action="/cles/{{ c.id }}/enregistrer" class="ligne-carte" autocomplete="off">
+      <div class="champ">
+        <label for="cle-{{ c.id }}">{{ "Nouvelle clé" if c.presente else "Clé" }}</label>
+        <input type="password" id="cle-{{ c.id }}" name="cle" placeholder="{{ c.prefixe }}…" autocomplete="off" spellcheck="false" required aria-describedby="cle-{{ c.id }}-aide">
+        <div class="aide" id="cle-{{ c.id }}-aide">Où la trouver : {{ c.ou }}</div>
+      </div>
+      <div class="boutons">
+        <button class="go">{{ "Remplacer" if c.presente else "Enregistrer" }}</button>
+        {% if c.presente %}<button type="button" class="lien-danger" form="retirer-cle-{{ c.id }}" data-confirmer-modale="confirmer-retirer-cle-{{ c.id }}">Retirer</button>{% endif %}
+      </div>
     </form>
-    <div class="petit muet" style="margin-top:.35rem">Où la trouver : {{ c.ou }}</div>
-    {% if c.presente %}<form method="post" action="/cles/{{ c.id }}/retirer" onsubmit="return confirm('Retirer cette clé du trousseau ?')"><button class="discret petit">Retirer</button></form>{% endif %}
+    {% if c.presente %}
+    <form method="post" action="/cles/{{ c.id }}/retirer" id="retirer-cle-{{ c.id }}"></form>
+    {{ confirmation("confirmer-retirer-cle-" ~ c.id, "Retirer cette clé ?", "La clé " ~ c.nom ~ " sera effacée du trousseau macOS.",
+         "Retirer la clé", "retirer-cle-" ~ c.id, "confirme", "1") }}
+    {% endif %}
     {% else %}
-    <div class="petit muet" style="margin-top:.35rem">À saisir depuis le Mac (pas depuis le téléphone : le réseau local n'est pas chiffré).</div>
+    <div class="petit muet ligne-carte">À saisir depuis ton Mac (pas depuis le téléphone : le réseau local n'est pas chiffré).</div>
     {% endif %}
   </div>
 {% endfor %}

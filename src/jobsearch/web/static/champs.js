@@ -525,6 +525,46 @@
   function el(tag, classe) { var e = document.createElement(tag); if (classe) e.className = classe; return e; }
   function option(v, t, choisi) { var o = document.createElement("option"); o.value = v; o.textContent = t; o.selected = choisi; return o; }
 
+  /* ------------------------------------- Position gardée après un enregistrement */
+
+  // Un formulaire [data-garder-position] qui revient sur sa page : elle se rouvre là où on l'a quittée.
+  (function () {
+    var cle = "position:" + location.pathname, y = null;
+    try { y = sessionStorage.getItem(cle); sessionStorage.removeItem(cle); } catch (e) {}
+    if (y !== null) window.scrollTo(0, parseInt(y, 10) || 0);
+    document.addEventListener("submit", function (e) {
+      if (!e.target.matches("form[data-garder-position]")) return;
+      try { sessionStorage.setItem(cle, String(window.scrollY)); } catch (err) {}
+    });
+  })();
+
+  /* ----------------------------------------------- Message après une action */
+
+  // FlashMessage : un succès se referme seul après quelques secondes (pas tant qu'on le survole ou qu'il a le
+  // focus) ; un refus reste jusqu'à sa croix.
+  document.querySelectorAll("[data-flash-message]").forEach(function (flash) {
+    var minuteur, seul = !flash.classList.contains("ko");
+    var fermer = function () { flash.hidden = true; };
+    var lancer = function () { clearTimeout(minuteur); if (seul) minuteur = setTimeout(fermer, 5000); };
+    var retenir = function () { clearTimeout(minuteur); };
+    flash.addEventListener("mouseenter", retenir); flash.addEventListener("mouseleave", lancer);
+    flash.addEventListener("focusin", retenir); flash.addEventListener("focusout", lancer);
+    flash.querySelector("[data-fermer-flash]").addEventListener("click", fermer);
+    lancer();
+  });
+
+  /* ------------------------------------------------- Dépôt d'un fichier */
+
+  // Zone de dépôt (.depot) : le nom du fichier choisi remplace l'invite, qui revient si on n'en garde aucun.
+  document.querySelectorAll(".depot [data-fichier]").forEach(function (champ) {
+    var nom = champ.closest(".depot").querySelector("[data-nom-fichier]");
+    if (!nom) return;
+    var invite = nom.textContent;
+    champ.addEventListener("change", function () {
+      nom.textContent = champ.files[0] ? champ.files[0].name : invite;
+    });
+  });
+
   document.querySelectorAll("[data-telephone]").forEach(telephone);
   document.querySelectorAll("[data-date]").forEach(date);
   document.querySelectorAll("select[data-liste-recherche]").forEach(listeRecherche);

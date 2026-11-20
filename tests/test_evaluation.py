@@ -21,7 +21,8 @@ CATEGORIES = (
 def _ev(note=82, alertes=(), perimetre="dans", perimetre_motif="Poste produit, dans les postes visés.", categories=None):
     return Evaluation(
         perimetre=perimetre, perimetre_motif=perimetre_motif,
-        note_globale=note, adequation_profil=70, classe_suggeree="A", angle="Produit et IA",
+        note_globale=note, adequation_profil=70, angle="Produit et IA",
+        pour=["Poste produit et IA", " "], contre=[], arbitrage="Le profil couvre l'essentiel.",
         resume="Bon alignement produit et IA.",
         criteres=[Critere(critere="langue", etat="ok", note="Anglais suffit.")],
         exigences=[Exigence(exigence="Own the AI product roadmap", couverture="oui", categorie="experience", appui="P-03")],
@@ -132,3 +133,37 @@ def test_consigne_et_schema_portent_les_categories():
 def test_evaluation_d_avant_l_analyse_reste_lisible():
     assert adequation.lire({"note_globale": 80}) == [] and adequation.lire(None) == []
     assert adequation.resume({}) == ""
+
+
+def test_avis_oui_peut_etre_non_autour_de_50():
+    """20.11 : plus de A/B/C. L'avis se tire de la moyenne de la note et du profil : oui dès 50 % ; un peu
+    en dessous, ou des chiffres qui divergent (profil haut, note basse), peut-être ; le reste, non."""
+    avis = lambda g, p, crit=(): evaluation.avis(g, p, crit)["cle"]
+    assert avis(68, 60) == "oui" and avis(50, 50) == "oui"
+    assert avis(38, 55) == "peut-etre" and avis(45, 40) == "peut-etre"
+    assert avis(30, 75) == "peut-etre" and evaluation.avis(30, 75)["divergence"]   # profil haut, note basse
+    assert avis(35, 70) == "peut-etre"                                              # moyenne 52, un chiffre bas
+    assert avis(34, 25) == "non" and avis(10, 20) == "non"
+    assert avis(70, 70, [{"etat": "ko"}]) == "peut-etre"                            # critère violé : jamais oui d'office
+    a = evaluation.avis(68, 60)
+    assert (a["classe"], a["libelle"], a["moyenne"]) == ("A", "Oui", 64)
+
+
+def test_avis_non_ecarte_la_nouvelle_mais_pas_le_peut_etre(reg):
+    """Ce qui est non n'est plus proposé : passe 2, limite, consultable dans Offres et réversible ; le
+    peut-être reste à trancher avec ses raisons."""
+    non = annonce(reg, titre="Assistant administratif", entreprise="A Bureau", texte="Saisie.")
+    doute = annonce(reg, titre="Chef de projet SI", entreprise="B Conseil", texte="Projets.")
+    ev_non, ev_doute = _ev(note=20), _ev(note=30)          # profil 70 : moyennes 45 et 50
+    ev_non.adequation_profil = 25
+    ev_doute.adequation_profil = 65
+    c = FauxMoteur([ev_non, ev_doute])
+    bilan = evaluation.evaluer_lot(reg, evaluation.a_evaluer(reg, texte_profil="P"), c=c, texte_profil="P")
+    assert bilan["ecartees"] == 1
+    f = reg.get(non)
+    assert f["statut"] == "C" and f["passe_ecart"] == evaluation.PASSE_IA and f["limite"]
+    assert f["motif"].startswith("Avis non : moyenne 22 %")
+    assert reg.get(doute)["statut"] == "nouvelle"
+    lue = evaluation.lire(reg, doute)
+    assert lue["avis"]["cle"] == "peut-etre" and lue["avis"]["divergence"]
+    assert lue["resultat"]["pour"] == ["Poste produit et IA"] and lue["resultat"]["arbitrage"]
