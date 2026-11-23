@@ -1,5 +1,7 @@
 """Une annonce ajoutée à la main : lien de plateforme, page quelconque, texte collé."""
 
+import re
+
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -193,3 +195,24 @@ def test_meme_poste_deja_postule_rejoint_la_candidature(reg):
     assert r["empreinte"] == a and not r["nouvelle"] and "Même poste déjà au registre" in r["message"]
     doublon = [f for f in reg.liste(["doublon"])]
     assert len(doublon) == 1 and doublon[0]["extra"]["doublon_de"] == a
+
+
+@pytest.mark.parametrize("url, valide", [
+    ("https://www.exemple.ch/offre/42", True), ("http://exemple.ch", True), ("https://jobs.exemple.co.uk/pm?id=7", True),
+    ("https://exemple", False), ("www.exemple.ch", False), ("exemple.ch", False), ("https://", False),
+    ("ftp://exemple.ch", False), ("https://www.", False), ("https://exemple.c", False),
+])
+def test_lien_valide(url, valide):
+    """Un lien d'annonce : http(s)://, www. ou non, un domaine avec son extension ; refusé sinon, avant toute lecture."""
+    assert bool(ajout.URL_VALIDE.match(url)) is valide
+    if not valide:
+        with pytest.raises(ajout.AjoutRefuse, match="lien incomplet"):
+            ajout.preparer(url)
+
+
+def test_meme_regle_de_lien_dans_la_page():
+    """champs.js garde « Ajouter » désactivé avec la même règle que le serveur."""
+    from pathlib import Path
+    js = (Path(ajout.__file__).parent / "web" / "static" / "champs.js").read_text(encoding="utf-8")
+    regle = re.search(r"var LIEN = /(.+)/i;", js).group(1).replace("\\/", "/")
+    assert regle == ajout.URL_VALIDE.pattern

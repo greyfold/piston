@@ -48,6 +48,11 @@ _SANS_LECTURE = {"linkedin.com": "LinkedIn", "indeed.com": "Indeed", "indeed.ch"
 EN_COURS = set()
 
 
+# Un lien d'annonce : http(s)://, www. ou non, un domaine avec son extension (.ch, .com…), puis un chemin
+# facultatif. Même règle côté page (champs.js, data-format="url"), qui garde « Ajouter » désactivé sinon.
+URL_VALIDE = re.compile(r"^https?://(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(:\d+)?([/?#]\S*)?$", re.I)
+
+
 class AjoutRefuse(Exception):
     """Ajout refusé ; `manque` dit quoi demander en plus : "texte" (l'annonce collée) ou "details"
     (employeur, intitulé, lieu), pour que le formulaire n'affiche que ces champs."""
@@ -196,8 +201,8 @@ def preparer(url="", texte="", entreprise="", titre="", lieu="", client=None, c=
     """L'annonce brute prête à ingérer, et d'où vient son texte."""
     url, texte = (url or "").strip(), (texte or "").strip()
     entreprise, titre, lieu = (entreprise or "").strip(), (titre or "").strip(), (lieu or "").strip()
-    if url and not url.startswith(("http://", "https://")):
-        raise AjoutRefuse("adresse illisible (https://…)")
+    if url and not URL_VALIDE.match(url):
+        raise AjoutRefuse("lien incomplet : https://… suivi d'un domaine comme exemple.ch")
     url = nettoyer(url) if url else ""
     if not url and not texte:
         raise AjoutRefuse("il faut le lien de l'annonce ou son texte", "texte")

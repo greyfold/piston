@@ -592,15 +592,31 @@
     champ.addEventListener("input", function () { if (motif.test(champ.value)) afficher(champ.dataset.cible, false); });
   });
 
-  /* ------------------------------------------------- Envoi désactivé sans saisie */
-  // form[data-vide-desactive] : le bouton d'envoi reste désactivé tant qu'aucun champ texte n'est rempli.
+  /* ------------------------------------------------- Envoi désactivé sans saisie valide */
+  // form[data-vide-desactive] : le bouton d'envoi reste désactivé tant qu'aucun champ texte n'est rempli, ou
+  // qu'un champ [data-format="url"] rempli n'est pas un lien complet (même règle que URL_VALIDE, ajout.py).
+  // L'erreur (#id-erreur) s'affiche en quittant le champ et disparaît dès que le lien est bon.
+  var LIEN = /^https?:\/\/(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(:\d+)?([\/?#]\S*)?$/i;
+  function lienValide(c) { var v = c.value.trim(); return !v || LIEN.test(v); }
   document.querySelectorAll("form[data-vide-desactive]").forEach(function (form) {
     var envoi = form.querySelector('button:not([type="button"])');
     if (!envoi) return;
+    var liens = form.querySelectorAll('[data-format="url"]');
+    function signaler(c, montrer) {
+      var erreur = document.getElementById(c.id + "-erreur");
+      var ko = !lienValide(c);
+      if (ko) c.setAttribute("aria-invalid", "true"); else c.removeAttribute("aria-invalid");
+      if (erreur && (montrer || !ko)) erreur.hidden = !ko;
+    }
     function verifier() {
       var champs = form.querySelectorAll('input[type="text"], input:not([type]), textarea');
-      envoi.disabled = !Array.prototype.some.call(champs, function (c) { return c.value.trim(); });
+      var rempli = Array.prototype.some.call(champs, function (c) { return c.value.trim(); });
+      envoi.disabled = !rempli || !Array.prototype.every.call(liens, lienValide);
     }
+    liens.forEach(function (c) {
+      c.addEventListener("input", function () { signaler(c, false); });
+      c.addEventListener("change", function () { signaler(c, true); });
+    });
     form.addEventListener("input", verifier);
     form.addEventListener("reset", function () { setTimeout(verifier); });
     verifier();

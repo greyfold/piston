@@ -394,7 +394,8 @@
   <div class="champ large">
     <label for="{{ p }}-url">Lien de l'annonce</label>
     <input type="text" id="{{ p }}-url" name="url" inputmode="url" spellcheck="false" placeholder="https://…" value="{{ saisi.url or '' }}"
-           data-afficher-si="(linkedin|indeed)\." data-cible="{{ p }}-bloc-texte">
+           data-format="url" aria-describedby="{{ p }}-url-erreur" data-afficher-si="(linkedin|indeed)\." data-cible="{{ p }}-bloc-texte">
+    <p class="erreur-champ" id="{{ p }}-url-erreur" role="alert" hidden>Lien incomplet : https://… suivi d'un domaine comme exemple.ch.</p>
     {% if not texte %}<span class="aide"><button type="button" class="lien-neutre petit" data-afficher="{{ p }}-bloc-texte">Pas de lien ? Colle le texte de l'annonce</button></span>{% endif %}
   </div>
   <div class="champ large" id="{{ p }}-bloc-texte"{% if not texte %} hidden{% endif %}>

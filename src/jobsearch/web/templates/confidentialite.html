@@ -33,10 +33,10 @@
   </div>
 </div>
 
-<h2>Comment l'IA travaille</h2>
+<h2>Comment l'IA travaille{% if moteur and moteur.connecte %} <span class="puce B">connecté</span>{% endif %}</h2>
 <div class="carte">
   <ul class="liste-confidentialite">
-    <li><b>Avec ton abonnement Claude</b>, sans clé API ni intermédiaire.{% if moteur and moteur.connecte %} <span class="puce B">connecté</span>{% endif %}</li>
+    <li><b>Avec ton abonnement Claude</b>, sans clé API ni intermédiaire.</li>
     <li><b>Sans aucun outil</b> pour noter les annonces et écrire les dossiers : ni fichiers, ni Internet, ni tes réglages, extensions ou connecteurs Claude.</li>
     <li><b>Consigne dans un fichier temporaire</b> lisible de ton seul compte, effacé après la tâche : rien de ton profil n'apparaît dans la liste des processus.</li>
     <li><b>Dans la machine virtuelle</b>, toujours : Claude Code et son Chrome y tournent, jamais sur ton Mac. Elle ne voit qu'un dossier d'échange (jeton, journaux, ce qu'une tâche lui confie) ; ni ta base, ni ton profil, ni ton dossier personnel, ni ton trousseau, ni Mail, ni ton Chrome à toi.</li>
