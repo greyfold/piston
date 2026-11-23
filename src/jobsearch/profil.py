@@ -566,6 +566,9 @@ OPTIONS = [
     {"id": "jobroom", "titre": "Preuves de recherche Job-Room",
      "description": "Pour l'ORP : l'application prépare la saisie de chaque postulation dans Job-Room et te rappelle les délais."},
 ]
+# Options coupées dans cette version (version 1 : pas de preuves Job-Room) : toujours éteintes, sans
+# interrupteur ; leur code reste, pour une version suivante.
+HORS_VERSION = {"jobroom"}
 # Le suivi des objectifs n'a pas d'interrupteur : il suit les objectifs saisis dans « Ma recherche ».
 OPTION_OBJECTIFS = "objectifs"
 
@@ -590,13 +593,15 @@ def progressif(p=None):
 def option(nom, p=None):
     if nom == OPTION_OBJECTIFS:                            # actif dès qu'un objectif est saisi
         return any(objectifs_rythme().values())
+    if nom in HORS_VERSION:
+        return False
     p = charger() if p is None else p
     v = lire(p, "interface." + nom)
     return (not progressif(p)) if v is None else bool(v)
 
 
 def poser_option(nom, valeur):
-    if nom not in {o["id"] for o in OPTIONS}:
+    if nom not in {o["id"] for o in OPTIONS} or nom in HORS_VERSION:
         raise ProfilInvalide("option inconnue")
     p = copy.deepcopy(charger())
     _poser(p, "interface." + nom, bool(valeur))

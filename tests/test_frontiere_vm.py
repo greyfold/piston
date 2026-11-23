@@ -11,6 +11,8 @@ from conftest import annonce
 from jobsearch import agent_claude, vm
 from jobsearch.notify import alerte_action as ALERTE, notifier as NOTIFIER      # les vraies, avant conftest
 
+pytestmark = pytest.mark.usefixtures("jobroom_en_service")   # code des preuves Job-Room, coupé en version 1
+
 
 @pytest.fixture
 def jobroom_prepare(reg, monkeypatch):

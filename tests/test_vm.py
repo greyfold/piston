@@ -94,3 +94,12 @@ def test_copie_du_code_sans_donnees(tmp_path):
 def test_connexion_exige_une_vm_demarree(lima):
     with pytest.raises(vm.VMImpossible, match="démarrer d'abord"):
         vm.connexion()
+
+
+def test_deconnexion_dans_la_vm(lima):
+    etat, commandes = lima
+    with pytest.raises(vm.VMImpossible, match="arrêtée"):
+        vm.deconnexion()
+    etat["instance"] = {"name": "jobsearch", "status": "Running"}
+    assert "déconnecté" in vm.deconnexion()
+    assert any(c[0] == "shell" and "claude auth logout" in c[-1] for c in commandes)

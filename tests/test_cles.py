@@ -119,3 +119,29 @@ def test_plus_de_cle_api_claude():
     assert "anthropic" not in cles.SERVICES
     with pytest.raises(cles.CleRefusee, match="service inconnu"):
         cles.enregistrer("anthropic", "sk-ant-api03-" + "x" * 40)
+
+
+def test_ia_deconnexion_et_un_seul_fournisseur(monkeypatch, reg):
+    from fastapi.testclient import TestClient
+    from jobsearch import moteur, vm
+    from jobsearch.travailleur import client as travailleur
+    from jobsearch.web import app as appmod
+    monkeypatch.setattr(appmod, "_reg", lambda: type(reg)(reg.chemin))
+    web = TestClient(appmod.app)
+    ia = web.get("/ia").text
+    assert "Se déconnecter" in ia and 'action="/ia/claude/deconnecter"' in ia and 'data-connexion-ia="claude"' not in ia
+
+    vues = []
+    monkeypatch.setattr(travailleur, "distant", lambda: True)
+    monkeypatch.setattr(vm, "deconnexion", lambda: vues.append("logout") or "ok")
+    r = web.post("/ia/claude/deconnecter", follow_redirects=False)
+    assert r.status_code == 303 and "ok=1" in r.headers["location"] and vues == ["logout"]
+    assert web.post("/ia/autre/deconnecter", follow_redirects=False).headers["location"].endswith("ok=0")
+
+    # Un seul fournisseur à la fois : un second ne se connecte pas tant que Claude l'est.
+    monkeypatch.setattr(moteur, "FOURNISSEURS", moteur.FOURNISSEURS + [{"id": "autre", "nom": "Autre", "detail": "Test"}])
+    monkeypatch.setattr(appmod, "etat_claude", lambda: {"connecte": True, "message": "Connecté"})
+    page = web.get("/ia").text
+    assert "déconnecte d'abord Claude" in page and 'data-connexion-ia="autre"' not in page
+    r = web.post("/ia/connexion/autre/demarrer")
+    assert r.status_code == 409 and "un seul fournisseur" in r.json()["message"]

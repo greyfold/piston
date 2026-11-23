@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone, etat_vide, bouton_action, meta, notes, alertes, delais, adequation, annuler_go, postuler, claude, etat_tache %}
+{% from "_macros.html" import icone, etat_vide, bouton_action, bouton_ajout, modale_annonce, delais, salaire, points_a_verifier, annuler_go, postuler, claude, etat_tache, modale_ajout %}
 {% block contenu %}
 {# Par défaut, une section vide ne s'affiche pas. Le courrier des employeurs ne compte qu'une fois une candidature
    envoyée. Rien du tout à faire : un état vide remplace la page (la checklist « Bien démarrer » reste au-dessus). #}
@@ -18,7 +18,7 @@
   <div class="tete">
     <div><h2 id="premiers-pas-titre">Bien démarrer</h2>
       <p class="muet petit">{{ faits }} sur {{ premiers_pas | length }} fait{{ 's' if faits > 1 }}. Le reste rend la note des annonces et tes dossiers plus justes.</p></div>
-    <div class="boutons-tete"><a class="petit" href="/fonctions">Ce qui s'ouvre</a>
+    <div class="boutons-tete">
       <form method="post" action="/premiers-pas/masquer"><button class="lien-neutre petit">Masquer</button></form></div>
   </div>
   <div class="progression" role="progressbar" aria-valuemin="0" aria-valuemax="{{ premiers_pas | length }}" aria-valuenow="{{ faits }}" aria-label="Bien démarrer">
@@ -38,11 +38,13 @@
 {% if rien %}
 {% call etat_vide("recherche", "Aucun poste identifié pour le moment", titre_balise="h1",
      description="Le tri n'a encore retenu aucune annonce pour toi ; le prochain passage en cherchera de nouvelles. La page Offres montre tout ce qui a été trouvé, et ce que le tri a écarté.") %}
-    <a class="bouton" href="/offres/ajouter">Ajouter une annonce trouvée ailleurs</a>
+    {{ bouton_ajout("ajout-annonce", "Ajouter une annonce trouvée ailleurs", classe="") }}
     <a class="bouton go" href="/offres">Voir les offres {{ icone("suivant") }}</a>
 {% endcall %}
 {% else %}
-<h1>À faire aujourd'hui</h1>
+{# En-tête : le titre, le rythme des postulations au milieu, et l'ajout d'une annonce trouvée ailleurs à droite. #}
+<header class="entete-page entete-accueil"><div class="ligne-entete-page">
+<div class="titre-entete-page"><h1>À faire aujourd'hui</h1></div>
 {% if rythme.actif %}{# option « Objectifs », et au moins un objectif : une ligne discrète, seules les périodes qui en ont un #}
 <div class="chiffres rythme">
   <span>Postulations</span>
@@ -55,6 +57,8 @@
 {% endfor %}
 </div>
 {% endif %}
+<div class="actions-entete">{{ bouton_ajout("ajout-annonce", "Ajouter une annonce", classe="") }}</div>
+</div></header>
 <div class="chiffres">
 {% macro chiffre(n, libelle, ancre, chaud=false) %}{% if n %}<a class="chiffre {{ 'chaud' if chaud }}" href="#{{ ancre }}"><b>{{ n }}</b><span>{{ libelle }}</span></a>{% else %}<div class="chiffre"><b>0</b><span>{{ libelle }}</span></div>{% endif %}{% endmacro %}
   {{ chiffre(a_trancher | length, "à trancher", "trancher") }}
@@ -76,8 +80,8 @@
       </div>
       <span class="puce {{ 'entretien' if j <= 1 }}">{{ e.date | jour_fr }}{% if e.heure %} {{ e.heure }}{% endif %}</span>
     </div>
-    {% if e.avec %}<p class="petit" style="margin:.5rem 0 0"><b>Avec :</b> {{ e.avec }}</p>{% endif %}
-    <p class="petit" style="margin:.5rem 0 0"><a href="/annonce/{{ f.empreinte }}?onglet=entretien">Ouvrir la préparation →</a></p>
+    {% if e.avec %}<p class="ligne-carte petit"><b>Avec :</b> {{ e.avec }}</p>{% endif %}
+    <div class="boutons pied-carte"><a class="bouton avec-icone" href="/annonce/{{ f.empreinte }}?onglet=entretien">{{ icone("externe") }}<span>Ouvrir la préparation</span></a></div>
   </article>
 {% endfor %}
 </div>
@@ -95,41 +99,59 @@
     <a class="bouton go" href="/trier">Trancher maintenant</a>
   </div>
 </article>
-<p class="petit"><a href="/offres/ajouter">Ajouter une annonce trouvée ailleurs</a></p>
 {% endif %}
 
 {% if retenues %}
-<h2 id="retenues">Tes oui, à envoyer</h2>
+{# Une carte par oui, pour savoir quoi faire ensuite : le délai, la note, le salaire et l'état du dossier ; le
+   détail de l'évaluation reste sur la page de l'annonce, une ligne y mène quand un point est à vérifier. Une
+   seule action en pied de carte ; la date et le canal d'envoi se notent dans une modale. Le titre mène à
+   l'annonce et à son dossier. #}
+<h2 id="retenues">Dossiers prêts à envoyer</h2>
 <div class="cartes deux">
-{% for f in retenues %}
-  <article class="carte">
-    <div class="tete"><div>
-      <h3><a href="/annonce/{{ f.empreinte }}">{{ f.titre }}</a></h3>
-      <div><b>{{ f.entreprise }}</b></div>
-      {{ delais(f) }}
-      {% set d = dossiers.get(f.empreinte) %}
-      <div class="meta">
-        {% if d and d.etat == "en_cours" %}<span data-suivi-dossier="{{ f.empreinte }}">{{ libelle_dossier(d) }}</span>
-        {% elif d and d.etat == "interrompu" %}{{ libelle_dossier(d) }} · <a href="/annonce/{{ f.empreinte }}?onglet=dossier">le refaire</a>
-        {% elif d and d.etat in ("pret", "a_revoir") %}<a href="/annonce/{{ f.empreinte }}?onglet=dossier">Ouvrir le dossier →</a>{% if d.couverture is not none %} · couverture {{ d.couverture }} %{% endif %}
-        {% elif d and d.etat == "echec" %}Dossier en échec : {{ (d.erreur or "")[:120] }} · <a href="/annonce/{{ f.empreinte }}?onglet=dossier">détails</a>
-        {% endif %}
+{% for f in retenues %}{% set d = dossiers.get(f.empreinte) %}{% set e = evals.get(f.empreinte) %}
+{% set id_envoi = "envoi-" ~ f.empreinte[:12] %}
+  <article class="carte carte-oui">
+    <div class="tete">
+      <div>
+        <h3><a href="/annonce/{{ f.empreinte }}">{{ f.titre }}</a></h3>
+        <div class="meta"><b>{{ f.entreprise }}</b>{% if f.lieu %} · {{ f.lieu }}{% endif %}</div>
+      </div>
+      <div class="statut-carte">
+        <span class="puce {{ 'retard' if d and d.etat in ('echec', 'a_revoir', 'interrompu') else 'B' if (d and d.etat == 'pret') or (not d and f.cv_genere) else '' if d else 'nouvelle' }}">
+          {{ {"en_cours": "en préparation", "pret": "dossier prêt", "a_revoir": "à revoir", "echec": "échec", "interrompu": "interrompu"}.get(d.etat) if d else ("dossier prêt" if f.cv_genere else "dossier à faire") }}</span>
+        {{ annuler_go(f, raisons, "/#retenues") }}
       </div>
     </div>
-    <div class="statut-carte">
-      <span class="puce {{ 'retard' if d and d.etat in ('echec', 'a_revoir', 'interrompu') else 'B' if (d and d.etat == 'pret') or (not d and f.cv_genere) else '' if d else 'nouvelle' }}">
-        {{ {"en_cours": "en préparation", "pret": "dossier prêt", "a_revoir": "à revoir", "echec": "échec", "interrompu": "interrompu"}.get(d.etat) if d else ("dossier prêt" if f.cv_genere else "dossier à faire") }}</span>
-      {{ annuler_go(f, raisons, "/#retenues") }}
-    </div></div>
-    {{ adequation(evals.get(f.empreinte)) }}
-    <form method="post" action="/action" class="boutons">
+    <div class="reperes-carte">{{ delais(f, publiee=false) }}</div>
+    {{ points_a_verifier(e, f) }}
+    {% if d and d.etat == "en_cours" %}<p class="ligne-carte petit muet"><span data-suivi-dossier="{{ f.empreinte }}">{{ libelle_dossier(d) }}</span></p>
+    {% elif d and d.etat == "echec" %}<p class="ligne-carte petit muet">Le dossier n'a pas pu être écrit.</p>{% endif %}
+    {# Postuler d'abord : « Marquer envoyée… » remplace « Postuler sur le site » une fois le formulaire officiel
+       ouvert. Sans lien vers un formulaire, l'envoi se note dès que le dossier est prêt. #}
+    {% set pret = d and d.etat in ("pret", "a_revoir") %}
+    {% set postule = f.empreinte in postules %}
+    {% set lien = f.url_postuler or f.url %}
+    {% set envoi = postule or (pret and not lien) %}
+    {% if e or (pret and lien) or envoi %}
+    {# Pied : la note et le salaire à gauche, l'action à droite. #}
+    <div class="boutons pied-carte">
+      {% if e %}<span class="reperes-pied"><span class="note-glob {{ 'haute' if e.note_globale >= 80 else 'moyenne' if e.note_globale >= 50 else 'basse' }}" title="Adéquation globale : profil, annonce et critères">{{ e.note_globale }}<small>/100</small></span>
+        {% if e.resultat.salaire %}{{ salaire(e.resultat.salaire) }}{% endif %}</span>{% endif %}
+      {% if pret and not postule and lien %}{{ postuler(f, classe="", retour="/#retenues") }}
+      {% elif envoi %}<button type="button" class="avec-icone" data-ouvrir-modale="{{ id_envoi }}" aria-haspopup="dialog" aria-controls="{{ id_envoi }}">{{ icone("envoyer") }}<span>Marquer envoyée…</span></button>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% if envoi %}{% call modale_ajout(id_envoi, "Marquer la candidature envoyée", "/action", libelle="Marquer envoyée", texte=f.entreprise ~ " · " ~ f.titre) %}
       <input type="hidden" name="empreinte" value="{{ f.empreinte }}"><input type="hidden" name="retour" value="/#retenues">
       <input type="hidden" name="type" value="candidature">
-      <input type="date" name="date" value="{{ aujourdhui }}" aria-label="Date d'envoi">
-      <input type="text" name="canal" placeholder="Canal (portail, e-mail…)" aria-label="Canal">
-      <button>Marquer envoyée</button>
-    </form>
-    {% if d and d.etat in ("pret", "a_revoir") %}<div class="boutons">{{ postuler(f, classe="") }}</div>{% endif %}
+      <div class="grille-champs">
+        <div class="champ"><label for="{{ id_envoi }}-date">Date d'envoi</label>
+          <input type="date" id="{{ id_envoi }}-date" name="date" value="{{ aujourdhui }}"></div>
+        <div class="champ"><label for="{{ id_envoi }}-canal">Canal</label>
+          <input type="text" id="{{ id_envoi }}-canal" name="canal" placeholder="Portail, e-mail…"></div>
+      </div>
+    {% endcall %}{% endif %}
   </article>
 {% endfor %}
 </div>
@@ -235,4 +257,5 @@
 {% if relances.a_classer %}<p class="petit muet">{{ relances.a_classer | length }} candidatures ont eu leurs deux relances sans réponse : à classer (refus ou sans suite) depuis <a href="/candidatures#sans-suite">Candidatures</a>.</p>{% endif %}
 {% endif %}
 {% endif %}{# rien à faire #}
+{{ modale_annonce() }}
 {% endblock %}

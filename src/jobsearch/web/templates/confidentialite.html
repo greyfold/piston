@@ -8,39 +8,28 @@
 <h2>La preuve, avec ton profil</h2>
 <div class="cartes deux">
   <div class="carte">
-    <div class="tete"><b>Sur ton Mac</b><span class="puce B">ce que tu vois</span></div>
-    <p class="demo">{{ entete or "Complète tes coordonnées dans « Ma recherche » pour voir la démonstration." }}</p>
-  </div>
-  <div class="carte">
-    <div class="tete"><b>Ce que l'IA reçoit</b><span class="puce">balises</span></div>
-    <p class="demo balises">{{ entete_masque or "{NOM_COMPLET} · {ADRESSE} · {TELEPHONE} · {EMAIL}" }}</p>
-  </div>
-</div>
-<p class="petit muet">À chaque tâche (note d'une annonce, CV, lettre, fiche d'envoi), avant l'envoi : la machine virtuelle où tourne l'IA ne reçoit que les balises.</p>
-
-<div class="cartes deux">
-  <div class="carte">
     <div class="tete"><b>Reste sur ton Mac</b>{{ icone("cadenas") }}</div>
+    <p class="demo">{{ entete or "Complète tes coordonnées dans « Ma recherche » pour voir la démonstration." }}</p>
     <ul class="liste-confidentialite">
-      <li>Nom et prénom, aussi dans les noms de fichiers</li>
-      <li>Adresse, téléphone, e-mail, site et LinkedIn</li>
-      <li>Date de naissance et numéro AVS</li>
+      <li>Ces coordonnées, aussi dans les noms de fichiers</li>
+      <li>Ta date de naissance et ton numéro AVS</li>
       <li>Les coordonnées des personnes citées dans tes preuves{% if tiers %} ({{ tiers }} dans ton profil){% endif %}</li>
       <li>Ton inscription au chômage : la réponse « assignation ORP » et la rubrique Job-Room de la fiche d'envoi s'écrivent sans l'IA</li>
       <li>Tes montants : retirés de tes critères avant d'être gardés ou envoyés</li>
-      <li>Ta base, tes sauvegardes, tes dossiers de candidature : dans un dossier réservé à ton compte, que la machine virtuelle ne voit pas</li>
+      <li>Ta base, tes sauvegardes et tes dossiers de candidature</li>
     </ul>
   </div>
   <div class="carte">
-    <div class="tete"><b>Ce que l'IA reçoit, parce qu'elle en a besoin</b>{{ icone("ia") }}</div>
+    <div class="tete"><b>Ce que l'IA reçoit</b>{{ icone("modele") }}</div>
+    <p class="demo balises">{{ entete_masque or "{NOM_COMPLET} · {ADRESSE} · {TELEPHONE} · {EMAIL}" }}</p>
     <ul class="liste-confidentialite">
       <li>Ton parcours : postes, employeurs, dates, réalisations</li>
       <li>Tes compétences, tes preuves et tes critères de recherche</li>
       <li>Ta ville (trajets, lieu de la lettre) et ta nationalité (droit de travailler)</li>
       <li>Le texte des annonces</li>
     </ul>
-    <p class="petit muet">C'est une protection par balises, pas un anonymat : un parcours détaillé reste reconnaissable par qui le
-      cherche. C'est pourquoi il ne part que vers ton propre compte Claude, jamais vers un autre service.</p>
+    <p class="petit muet">C'est une protection par balises, pas un anonymat : un parcours détaillé reste reconnaissable. C'est pourquoi
+      il ne part que vers ton propre compte Claude, jamais vers un autre service.</p>
   </div>
 </div>
 
@@ -58,7 +47,7 @@
 <h2>Les exceptions, que tu déclenches</h2>
 <div class="carte">
   <ul class="liste-confidentialite">
-    <li><b>Remplir un formulaire</b> ou <b>saisir une preuve Job-Room</b> avec Claude : Claude tape tes vraies coordonnées dans la page de l'employeur ou de Job-Room, dans le Chrome de la machine virtuelle. Il doit les voir pour les saisir. Il ne le fait que quand tu le lui demandes ; le pré-remplissage sans Claude, lui, les saisit sans l'IA.</li>
+    <li><b>Remplir un formulaire</b> avec Claude : Claude tape tes vraies coordonnées dans la page de l'employeur, dans le Chrome de la machine virtuelle. Il doit les voir pour les saisir. Il ne le fait que quand tu le lui demandes ; le pré-remplissage sans Claude, lui, les saisit sans l'IA.</li>
     <li><b>Gmail</b>, s'il est activé : la session Claude qui interroge ta boîte voit les messages liés à tes candidatures. Le tri des réponses se fait ensuite sur ton Mac. Apple Mail, lui, est lu sur ton Mac, sans l'IA.</li>
   </ul>
 </div>

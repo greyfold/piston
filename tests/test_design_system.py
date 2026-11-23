@@ -54,7 +54,7 @@ COULEUR = r"#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\("
 
 # Attributs style="…" dans les gabarits : la mise en forme passe par une classe de style.css.
 BASE_STYLE_EN_LIGNE = {
-    "_macros.html": 5, "accueil.html": 3, "ajout.html": 2,
+    "_macros.html": 5, "accueil.html": 1,
     "connexion.html": 2,
 }
 

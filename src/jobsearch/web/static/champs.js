@@ -573,6 +573,39 @@
     });
   });
 
+  /* ------------------------------------------------- Divulgation progressive */
+  // Un bloc caché (hidden) ne s'affiche que s'il sert : le bouton [data-afficher="id"] le montre et disparaît ;
+  // un champ [data-afficher-si="motif"][data-cible="id"] le montre dès que sa valeur correspond (lien LinkedIn…).
+  function afficher(id, focus) {
+    var bloc = document.getElementById(id);
+    if (!bloc || !bloc.hidden) return;
+    bloc.hidden = false;
+    document.querySelectorAll('[data-afficher="' + id + '"]').forEach(function (b) { b.hidden = true; });
+    var champ = focus && bloc.querySelector("input, textarea, select");
+    if (champ) champ.focus();
+  }
+  document.querySelectorAll("[data-afficher]").forEach(function (b) {
+    b.addEventListener("click", function () { afficher(b.dataset.afficher, true); });
+  });
+  document.querySelectorAll("[data-afficher-si]").forEach(function (champ) {
+    var motif = new RegExp(champ.dataset.afficherSi, "i");
+    champ.addEventListener("input", function () { if (motif.test(champ.value)) afficher(champ.dataset.cible, false); });
+  });
+
+  /* ------------------------------------------------- Envoi désactivé sans saisie */
+  // form[data-vide-desactive] : le bouton d'envoi reste désactivé tant qu'aucun champ texte n'est rempli.
+  document.querySelectorAll("form[data-vide-desactive]").forEach(function (form) {
+    var envoi = form.querySelector('button:not([type="button"])');
+    if (!envoi) return;
+    function verifier() {
+      var champs = form.querySelectorAll('input[type="text"], input:not([type]), textarea');
+      envoi.disabled = !Array.prototype.some.call(champs, function (c) { return c.value.trim(); });
+    }
+    form.addEventListener("input", verifier);
+    form.addEventListener("reset", function () { setTimeout(verifier); });
+    verifier();
+  });
+
   document.querySelectorAll("[data-telephone]").forEach(telephone);
   document.querySelectorAll("[data-date]").forEach(date);
   document.querySelectorAll("select[data-liste-recherche]").forEach(listeRecherche);

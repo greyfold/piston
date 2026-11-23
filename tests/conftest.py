@@ -166,3 +166,11 @@ def annonce(reg, **champs):
     reg.enregistrer(f)
     reg.commit()
     return f["empreinte"]
+
+
+@pytest.fixture
+def jobroom_en_service(monkeypatch):
+    """Les preuves Job-Room sont coupées dans la version 1 (profil.HORS_VERSION) ; leur code reste et
+    ses tests le font tourner avec l'option remise en service."""
+    from jobsearch import profil
+    monkeypatch.setattr(profil, "HORS_VERSION", set())

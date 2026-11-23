@@ -1,43 +1,15 @@
 {% extends "base.html" %}
+{% from "_macros.html" import champs_annonce %}
 {% block titre %}Ajouter une annonce · Recherche d'emploi{% endblock %}
 {% block contenu %}
+{# L'ajout se fait d'ordinaire dans la modale « Ajouter une annonce » (Aujourd'hui, Offres) ; cette page reprend la
+   saisie quand l'ajout est refusé, avec le message, et sert sans JavaScript. #}
 <p class="petit"><a href="/offres">← Offres</a></p>
 <h1>Ajouter une annonce</h1>
-<p class="muet">Une annonce trouvée ailleurs (site de l'employeur, e-mail, réseau…) : elle rejoint le registre sans doublon,
-  reçoit sa note d'adéquation et attend ta décision dans « À trancher », comme celles du passage du matin.
-  Le pré-tri ne l'écarte pas : tu l'as choisie.</p>
+<p class="muet">Elle rejoint le registre sans doublon, reçoit sa note et attend ta décision dans « À trancher ».</p>
 
-<form method="post" action="/offres/ajouter" class="carte profil" data-occupe="Lecture de l'annonce…">
-  <div class="grille-champs">
-    <div class="champ large">
-      <label for="url">Lien de l'annonce</label>
-      <input type="text" id="url" name="url" inputmode="url" spellcheck="false" placeholder="https://…" value="{{ saisi.url or '' }}">
-      <span class="aide">Job-Room, jobup et jobs.ch sont lus par leur route ; toute autre page est téléchargée et lue en texte.
-        LinkedIn et Indeed ne se lisent pas ici : colle le texte en plus du lien.</span>
-    </div>
-    <div class="champ large">
-      <label for="texte">Texte de l'annonce</label>
-      <textarea id="texte" name="texte" rows="10" placeholder="Facultatif avec un lien : le texte collé prime sur la page.">{{ saisi.texte or '' }}</textarea>
-    </div>
-    <div class="champ">
-      <label for="entreprise">Employeur</label>
-      <input type="text" id="entreprise" name="entreprise" value="{{ saisi.entreprise or '' }}" placeholder="Lu dans l'annonce si vide">
-    </div>
-    <div class="champ">
-      <label for="titre">Intitulé du poste</label>
-      <input type="text" id="titre" name="titre" value="{{ saisi.titre or '' }}" placeholder="Lu dans l'annonce si vide">
-    </div>
-    <div class="champ">
-      <label for="lieu">Lieu</label>
-      <input type="text" id="lieu" name="lieu" value="{{ saisi.lieu or '' }}" placeholder="Lu dans l'annonce si vide">
-    </div>
-  </div>
-  <p class="petit muet" style="margin:1rem 0 0">Sans employeur ni intitulé, Claude les relève dans le texte (une tâche sur ton abonnement) ;
-    seuls sont gardés ceux qui y figurent mot pour mot. Le texte de l'annonce n'est jamais réécrit.</p>
-  <div class="boutons pied">
-    <label class="petit" style="margin-right:auto;display:flex;gap:.4rem;align-items:center">
-      <input type="checkbox" name="evaluer" value="1" {{ 'checked' if saisi.evaluer != '0' }}> Évaluer tout de suite</label>
-    <button class="go">Ajouter</button>
-  </div>
+<form method="post" action="/offres/ajouter" class="carte profil" data-occupe="Lecture de l'annonce…" data-vide-desactive>
+  {{ champs_annonce(saisi, manque=manque) }}
+  <div class="boutons pied"><button class="go">Ajouter</button></div>
 </form>
 {% endblock %}

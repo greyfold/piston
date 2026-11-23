@@ -135,7 +135,16 @@ def web(reg, monkeypatch):
 
 def test_page_et_formulaire(web, reg):
     assert 'action="/offres/ajouter"' in web.get("/offres/ajouter").text
-    assert 'href="/offres/ajouter"' in web.get("/offres").text
+    # Sur Offres et Aujourd'hui, « Ajouter une annonce » ouvre une modale qui porte le formulaire.
+    for page in (web.get("/offres").text, web.get("/").text):
+        assert 'data-ouvrir-modale="ajout-annonce"' in page and '<dialog class="modale large" id="ajout-annonce"' in page
+        assert 'action="/offres/ajouter" data-occupe=' in page and 'href="/offres/ajouter"' not in page
+        # Divulgation progressive : seul le lien se voit ; le texte s'ouvre à la demande, l'évaluation suit toujours.
+        modale = page.split('id="ajout-annonce"')[1].split("</dialog>")[0]
+        assert 'id="ajout-annonce-bloc-texte" hidden' in modale and 'data-afficher="ajout-annonce-bloc-texte"' in modale
+        assert 'name="entreprise"' not in modale and 'type="checkbox"' not in modale
+        assert '<input type="hidden" name="evaluer" value="1">' in modale
+        assert 'data-vide-desactive' in modale    # « Ajouter » désactivé tant que rien n'est saisi (champs.js)
     r = web.post("/offres/ajouter", data={"texte": TEXTE, "entreprise": "Exemple SA", "titre": "Product Manager"},
                  follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].startswith("/annonce/")
@@ -143,6 +152,9 @@ def test_page_et_formulaire(web, reg):
     assert reg.stats()["par_statut"] == {"nouvelle": 1}
     refus = web.post("/offres/ajouter", data={"texte": TEXTE, "lieu": "Morges"})
     assert refus.status_code == 200 and "Refusé" in refus.text and "Morges" in refus.text
+    # Le refus n'ouvre que ce qui manque : le texte pour un lien LinkedIn, l'employeur et l'intitulé sinon.
+    refus = web.post("/offres/ajouter", data={"url": "https://www.linkedin.com/jobs/view/1"}).text
+    assert "Refusé" in refus and 'id="ajout-annonce-bloc-texte">' in refus and 'name="entreprise"' not in refus
 
 
 def test_evaluation_en_cours_affichee(web, reg):

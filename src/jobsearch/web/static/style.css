@@ -89,6 +89,16 @@ a.chiffre:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
 /* Ligne d'une carte sous son en-tête (connecteurs) : un peu d'air ; une liste numérotée alignée sur le texte. */
 .carte .ligne-carte { margin: .35rem 0 0; }
 .carte ol.ligne-carte { padding-left: 1.1rem; }
+/* Carte à action latérale (Nexus Card) : le texte à gauche, les boutons à droite, centrés en hauteur ;
+   sous 560 px, les boutons repassent dessous. */
+.carte.action-droite { display: flex; align-items: center; gap: 1rem; }
+.carte.action-droite > .texte-carte { flex: 1 1 auto; min-width: 0; }
+.carte.action-droite > .boutons { flex: none; margin-top: 0; }
+.carte.action-droite > form { display: contents; }     /* le formulaire vide du bouton : pas de case dans la rangée */
+@media (max-width: 560px) {
+  .carte.action-droite { flex-direction: column; align-items: stretch; gap: 0; }
+  .carte.action-droite > .boutons { margin-top: .55rem; }
+}
 .carte ul.exig { margin: .4rem 0 0; padding-left: 1.1rem; font-size: .9rem; color: var(--texte-2); }
 
 .puce { display: inline-block; padding: .05rem .5rem; border-radius: 999px; font-size: .76rem; font-weight: 600; background: var(--surface-2); color: var(--texte-2); white-space: nowrap; }
@@ -657,8 +667,8 @@ button.interrupteur:focus-visible { outline: 2px solid var(--vert); outline-offs
 
 /* Page Confidentialité : ce que l'IA reçoit */
 .confidentialite .carte .tete .icone { width: 1.1rem; height: 1.1rem; color: var(--texte-3); flex: none; }
-.confidentialite .cartes.deux + .cartes.deux { margin-top: 1rem; }
-.confidentialite .demo { margin: .6rem 0 0; font-size: .92rem; line-height: 1.5; overflow-wrap: anywhere; }
+.confidentialite .demo { margin: .6rem 0 .75rem; padding: .6rem .75rem; background: var(--surface-2); border-radius: 8px;
+  font-size: .92rem; line-height: 1.5; overflow-wrap: anywhere; }
 .confidentialite .demo.balises { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85rem; color: var(--vert-fonce); }
 .liste-confidentialite { margin: .5rem 0 0; padding-left: 1.1rem; color: var(--texte-2); font-size: .92rem; line-height: 1.5; }
 .liste-confidentialite li + li { margin-top: .3rem; }
@@ -707,10 +717,13 @@ body:has(> .menu-lateral) > main { width: 100%; padding-top: 1.75rem; }
   background: var(--vert); color: var(--sur-vert); }
 .compte-notifs.attention { background: var(--attention-pale); color: var(--attention); }
 .compte-notifs.alerte { background: var(--alerte); color: var(--sur-alerte); }
-.reglages-contenu { min-width: 0; max-width: 52rem; }
+.reglages-contenu { min-width: 0; max-width: 52rem; margin-inline: auto; }     /* centrée dans la colonne à droite du menu */
 .reglages-contenu .tache { max-width: none; margin: 0; }
 .reglages-contenu form.profil { max-width: none; }     /* une étape de Ma recherche : la largeur de la liste */
 .reglages-contenu .cartes.deux { grid-template-columns: minmax(0, 1fr); }     /* une seule colonne */
+@media (min-width: 960px) {     /* sauf la preuve de Confidentialité : le Mac et l'IA côte à côte */
+  .reglages-contenu .confidentialite .cartes.deux { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
 @media (max-width: 760px) {
   body:has(> .menu-lateral) { display: block; }
   body:has(> .menu-lateral) > main { padding-top: 1.25rem; }
@@ -1104,7 +1117,7 @@ ul.notifications { list-style: none; margin: -.5rem -1.5rem 0; padding: 0; }
   border-radius: var(--rayon); background: var(--surface-2); }
 
 /* Bouton avec icône (Nexus Button) : l'icône Lucide à gauche du libellé, alignée sur la ligne. */
-.avec-icone { display: inline-flex; align-items: center; gap: .4rem; }
+.avec-icone, a.bouton.avec-icone { display: inline-flex; align-items: center; gap: .4rem; }
 .avec-icone .icone { width: 1rem; height: 1rem; }
 form[data-postuler] { display: inline; margin: 0; }
 
@@ -1119,6 +1132,12 @@ form[data-postuler] { display: inline; margin: 0; }
 .meta-entete { margin: .35rem 0 0; font-size: .85rem; color: var(--texte-3); }
 .entete-page .delais { margin-top: .5rem; }
 .entete-page form.decision { max-width: 52rem; }
+/* Sur Aujourd'hui : le rythme des postulations entre le titre et l'action, sur la même ligne. */
+.entete-accueil { margin-bottom: 0; }
+.entete-accueil .ligne-entete-page { align-items: center; }
+.entete-accueil .titre-entete-page { flex: none; }
+.entete-accueil h1 { margin: 0; }
+.entete-accueil .chiffres.rythme { margin: 0; }
 
 /* Menu d'actions (Nexus DropdownMenu) : bouton rond à trois points ; la liste s'ouvre dessous, alignée à droite,
    en surface flottante. Une action destructrice est en --alerte (macro menu_actions). */
@@ -1145,6 +1164,21 @@ form[data-postuler] { display: inline; margin: 0; }
 @media (prefers-reduced-motion: reduce) { .panneau-menu { animation: none; } }
 /* Sur une carte (Go donné, à envoyer) : le statut et son menu côte à côte, en haut à droite. */
 .statut-carte { display: flex; align-items: center; gap: .35rem; flex: none; }
+/* Carte d'un oui à envoyer, carte d'un entretien (Nexus Card) : l'en-tête, les repères, puis un pied collé au bas
+   de la carte, aligné d'une carte à l'autre. Sur un oui : le délai en repère, au besoin une ligne « à vérifier » ;
+   dans le pied, la note et le salaire à gauche, l'action à droite. */
+.carte-oui, .entretien-prochain { display: flex; flex-direction: column; }
+.carte-oui h3 { margin: 0; font-size: 1rem; line-height: 1.35; }
+.reperes-carte { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; margin-top: .75rem; }
+.reperes-carte .delais { margin-top: 0; }
+.a-verifier { display: inline-flex; align-items: center; gap: .35rem; align-self: flex-start; margin-top: .6rem;
+  font-size: .85rem; font-weight: 500; color: var(--attention); }
+.a-verifier .icone { width: 1rem; height: 1rem; flex: none; }
+.a-verifier:hover { color: var(--texte); }
+.a-verifier:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; border-radius: 3px; }
+.pied-carte { margin-top: auto; padding-top: .9rem; justify-content: flex-end; }
+.pied-carte > form { margin: 0; }
+.reperes-pied { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1rem; margin-right: auto; }
 
 /* Page d'une annonce : le contenu de l'onglet sous les onglets ; titres de carte, sections de la modale de suivi. */
 .corps-onglet { margin-top: 1rem; }

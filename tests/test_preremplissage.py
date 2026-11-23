@@ -4,6 +4,8 @@ from conftest import annonce
 from jobsearch import preremplissage
 from jobsearch.navigateur import valeurs_jobroom
 
+pytestmark = pytest.mark.usefixtures("jobroom_en_service")   # code des preuves Job-Room, coupé en version 1
+
 ENVOI = """## 5. Job-Room
 
 | Champ | Valeur |

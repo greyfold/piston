@@ -297,13 +297,21 @@ def test_interface_qui_s_ouvre_et_options(neuve, monkeypatch, reg):
     emp = reg.liste(["A"])[0]["empreinte"]
     r = web.post("/action", data={"empreinte": emp, "type": "go", "retour": "/"}, follow_redirects=False)
     assert "postuler" in unquote(r.headers["location"]) and reg.get(emp)["statut"] == "A"   # refusé côté serveur aussi
-    web.post("/fonctions/jobroom", data={"actif": "1"})
-    page = web.get("/").text                                       # option ouverte : le compteur ; rien à saisir :
-    assert profil.option("jobroom") and "preuves Job-Room" in page and 'id="jobroom"' not in page   # pas de section vide
-    assert "<h1>Fonctions</h1>" in web.get("/fonctions").text
-    assert web.get("/interface", follow_redirects=False).headers["location"] == "/fonctions"   # ancienne page
+    # Version 1 : ni page « Fonctions » (ni l'ancienne « Interface »), ni preuves Job-Room, même d'un profil d'avant.
+    for adresse in ("/fonctions", "/interface"):
+        assert web.get(adresse, follow_redirects=False).headers["location"] == "/reglages"
+    assert 'href="/fonctions"' not in web.get("/?ensuite=1").text
+    with pytest.raises(profil.ProfilInvalide):
+        profil.poser_option("jobroom", True)
+    assert not profil.option("jobroom") and "preuves Job-Room" not in web.get("/").text
+    from jobsearch import agent_claude, preremplissage
+    with pytest.raises(preremplissage.PreremplissageImpossible, match="pas dans cette version"):
+        preremplissage.jobroom(reg, emp)
+    with pytest.raises(agent_claude.LancementImpossible, match="pas dans cette version"):
+        agent_claude.lancer(reg, "jobroom")
     # Le profil de Camille (d'avant l'accueil) garde tout ; le suivi des objectifs suit les objectifs saisis.
-    assert all(profil.fonctions({"identite": {"prenom": "J"}})[k] for k in ("offres", "noter", "postuler", "jobroom"))
+    assert all(profil.fonctions({"identite": {"prenom": "J"}})[k] for k in ("offres", "noter", "postuler"))
+    assert not profil.fonctions({"identite": {"prenom": "J"}})["jobroom"]
 
 
 from urllib.parse import unquote  # noqa: E402
@@ -337,11 +345,12 @@ def test_bien_demarrer_disparait_une_fois_tout_fait_et_etat_vide(neuve, monkeypa
     assert 'id="ia-deconnectee"' not in page
     assert "Aucun poste identifié pour le moment" in page and 'href="/offres">Voir les offres' in page
     # Rien à faire : l'état vide remplace la page ; aucune section vide, pas de courrier sans candidature.
-    for titre in ("À faire aujourd'hui", "À trancher", "Tes oui, à envoyer", "Courrier des employeurs", "Relances dues",
-                  "Écartées limites", 'class="chiffres"'):
-        assert titre not in page
+    for titre in ("À faire aujourd'hui", "À trancher", "Dossiers prêts à envoyer", "Courrier des employeurs", "Relances dues",
+                  "Écartées limites"):
+        assert ">%s</h" % titre not in page
+    assert 'class="chiffres"' not in page
     annonce(reg, statut="A")
     reg.commit()
     page = web.get("/").text
     assert "À trancher" in page and "Aucun poste identifié" not in page
-    assert "Tes oui, à envoyer" not in page and "Courrier des employeurs" not in page and "Relances dues" not in page
+    assert "Dossiers prêts à envoyer" not in page and "Courrier des employeurs" not in page and "Relances dues" not in page

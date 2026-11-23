@@ -120,8 +120,11 @@ def noter_envoi(emp, url):
 def jobroom(reg, emp):
     """(valeurs, jetons anti-doublon) pour la preuve Job-Room. Refuse tout ce qui ferait une
     preuve fausse : candidature pas partie, preuve déjà inscrite au registre."""
+    from . import profil
     from .courrier import jetons_employeur
     from .navigateur import valeurs_jobroom
+    if not profil.option("jobroom"):
+        raise PreremplissageImpossible("les preuves Job-Room ne sont pas dans cette version")
     f = reg.get(emp)
     if not f:
         raise PreremplissageImpossible("annonce introuvable")

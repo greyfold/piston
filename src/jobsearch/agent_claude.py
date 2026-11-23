@@ -221,6 +221,8 @@ def occupante(reg, minutes=40):
 def lancer(reg, type_, empreinte=None, executer=None):
     """Démarre la session en arrière-plan et renvoie l'identifiant de la tâche. Si une autre
     session tient Chrome, la tâche attend en file et démarre quand celle-ci se termine."""
+    if type_ in ("jobroom", "pre-jobroom") and not profil.option("jobroom"):
+        raise LancementImpossible("les preuves Job-Room ne sont pas dans cette version")
     _schema(reg)
     deja = en_cours(reg, type_, empreinte)
     if deja:

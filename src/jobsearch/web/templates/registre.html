@@ -1,17 +1,17 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone, etat_vide %}
+{% from "_macros.html" import icone, etat_vide, bouton_ajout, modale_annonce %}
 {% block titre %}Offres · Recherche d'emploi{% endblock %}
 {% block contenu %}
 {% if not stats.total %}
 {% call etat_vide("recherche", "Aucune annonce pour le moment", titre_balise="h1",
      description="Chaque passage lit tes sources et range ici toutes les annonces trouvées, retenues ou écartées par le tri.") %}
     <a class="bouton" href="/sources">Voir mes sources</a>
-    <a class="bouton go" href="/offres/ajouter">Ajouter une annonce {{ icone("suivant") }}</a>
+    {{ bouton_ajout("ajout-annonce", "Ajouter une annonce", classe="go") }}
 {% endcall %}
 {% else %}
 <header class="entete-page"><div class="ligne-entete-page">
   <div class="titre-entete-page"><h1>Offres</h1></div>
-  <div class="actions-entete"><a class="bouton" href="/offres/ajouter">Ajouter une annonce</a></div>
+  <div class="actions-entete">{{ bouton_ajout("ajout-annonce", "Ajouter une annonce", classe="") }}</div>
 </div></header>
 <form class="filtres" method="get" role="search" data-filtre-auto>
   <input type="text" name="q" value="{{ q }}" placeholder="Entreprise ou intitulé, puis Entrée" aria-label="Chercher une entreprise ou un intitulé">
@@ -55,4 +55,5 @@
 </table></div>
 {% endif %}
 {% endif %}
+{{ modale_annonce() }}
 {% endblock %}

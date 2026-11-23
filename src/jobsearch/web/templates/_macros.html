@@ -13,7 +13,8 @@
 {% if f.sources %} · {{ f.sources | join(", ") }}{% endif %}
 {%- endmacro %}
 
-{% macro delais(f) -%}
+{# Délai de postulation et date de publication ; publiee=false pour une carte qui n'a de place que pour le délai. #}
+{% macro delais(f, publiee=true) -%}
 {% set j = f.delai_postulation | jours_restants %}
 <div class="delais">
   {% if f.delai_postulation %}
@@ -30,7 +31,7 @@
       {% if jf is not none and jf < 0 %}Plus en ligne depuis le {{ f.fin_publication | date_fr(True) }}{% else %}En ligne jusqu'au {{ f.fin_publication | date_fr(True) }}{% endif %}
     </span>
   {% else %}<span class="delai sans">Pas de délai indiqué</span>{% endif %}
-  {% if f.publiee_le %}<span class="publiee" title="Date de publication">Publiée le {{ f.publiee_le | date_fr(True) }} ({{ f.publiee_le | il_y_a }})</span>{% endif %}
+  {% if publiee and f.publiee_le %}<span class="publiee" title="Date de publication">Publiée le {{ f.publiee_le | date_fr(True) }} ({{ f.publiee_le | il_y_a }})</span>{% endif %}
 </div>
 {%- endmacro %}
 
@@ -187,13 +188,14 @@
 
 {# « Postuler sur le site » : ouvre le formulaire officiel dans le navigateur (base.html, [data-postuler]) et
    note le clic (action `postuler`) ; la page revient sur l'onglet Dossier, où les fichiers à joindre
-   apparaissent. Seulement pour un oui dont on connaît le lien. #}
-{% macro postuler(f, classe="go") -%}
+   apparaissent ; depuis une carte d'Aujourd'hui, `retour` y ramène, la carte proposant alors « Marquer envoyée… ».
+   Seulement pour un oui dont on connaît le lien. #}
+{% macro postuler(f, classe="go", retour=none) -%}
 {% set lien = f.url_postuler or f.url %}
 {% if f.statut == "retenue" and lien %}
 <form method="post" action="/action" data-postuler="{{ lien }}">
   <input type="hidden" name="empreinte" value="{{ f.empreinte }}"><input type="hidden" name="type" value="postuler">
-  <input type="hidden" name="retour" value="/annonce/{{ f.empreinte }}?onglet=dossier#fichiers">
+  <input type="hidden" name="retour" value="{{ retour or '/annonce/' ~ f.empreinte ~ '?onglet=dossier#fichiers' }}">
   <button class="{{ classe }} avec-icone">{{ icone("externe") }}<span>Postuler sur le site</span></button>
 </form>
 {% endif %}
@@ -237,6 +239,19 @@
 {{ detail_avis(e) }}
 {{ alertes(e) }}
 {% else %}<p class="petit muet" style="margin:.45rem 0 0">Pas encore évaluée (prochain passage, ou « Évaluer » sur la page de l'annonce).</p>{% endif %}
+{%- endmacro %}
+
+{# Sur une carte, au lieu du détail de l'évaluation : le nombre de critères non tenus et de signaux à
+   vérifier, en une ligne qui mène à l'onglet Adéquation de l'annonce. Rien quand il n'y a rien à vérifier. #}
+{% macro points_a_verifier(e, f) -%}
+{% set ko = (e.resultat.criteres or []) | selectattr("etat", "equalto", "ko") | list | length if e else 0 %}
+{% set signaux = (e.resultat.alertes or []) | length if e else 0 %}
+{% if ko or signaux %}
+<a class="a-verifier" href="/annonce/{{ f.empreinte }}">{{ icone("alerte") }}<span>
+  {%- if ko %}{{ ko }} critère{{ 's' if ko > 1 }} non tenu{{ 's' if ko > 1 }}{% endif %}
+  {%- if ko and signaux %} · {% endif %}
+  {%- if signaux %}{{ signaux }} signal{{ 'aux' if signaux > 1 }} à vérifier{% endif %}</span></a>
+{% endif %}
 {%- endmacro %}
 
 {% macro alertes(e) -%}
@@ -292,6 +307,7 @@
   "points": '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
   "externe": '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
   "coche": '<path d="M20 6 9 17l-5-5"/>',
+  "alerte": '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
   "horloge": '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
   "cloche": '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>',
   "accueil": '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
@@ -352,10 +368,10 @@
 {% macro bouton_ajout(id, libelle, classe="discret petit") -%}
 <button type="button" class="{{ classe }} bouton-ajout" data-ouvrir-modale="{{ id }}" aria-haspopup="dialog" aria-controls="{{ id }}">{{ icone("plus") }}<span>{{ libelle }}</span></button>
 {%- endmacro %}
-{% macro modale_ajout(id, titre, action, libelle="Ajouter", texte="") -%}
+{% macro modale_ajout(id, titre, action, libelle="Ajouter", texte="", occupe="", vide_desactive=false) -%}
 <dialog class="modale large" id="{{ id }}" aria-labelledby="{{ id }}-titre"{% if texte %} aria-describedby="{{ id }}-texte"{% endif %}>
   <div class="modale-tete"><h2 id="{{ id }}-titre">{{ titre }}</h2>{% if texte %}<p class="petit muet" id="{{ id }}-texte">{{ texte }}</p>{% endif %}</div>
-  <form method="post" action="{{ action }}">
+  <form method="post" action="{{ action }}"{% if occupe %} data-occupe="{{ occupe }}"{% endif %}{% if vide_desactive %} data-vide-desactive{% endif %}>
     {{ caller() }}
     <div class="actions-modale">
       <button type="button" class="lien-neutre" data-fermer-modale>Annuler</button>
@@ -363,6 +379,52 @@
     </div>
   </form>
 </dialog>
+{%- endmacro %}
+
+{# Ajouter une annonce trouvée ailleurs : les champs du formulaire, partagés par la modale (Aujourd'hui, Offres)
+   et la page /offres/ajouter, qui reprend la saisie quand l'ajout est refusé. Divulgation progressive : seul le
+   lien est demandé. Le texte s'ouvre par « Pas de lien ? », ou de lui-même pour un lien LinkedIn ou Indeed, qui ne
+   se lisent pas ici ; l'employeur, l'intitulé et le lieu seulement quand l'annonce ne les donne pas
+   (`manque` = "texte" ou "details", de AjoutRefuse). L'évaluation suit toujours l'ajout. #}
+{% macro champs_annonce(saisi={}, p="ajout-annonce", manque="") -%}
+{% set texte = saisi.texte or manque == "texte" %}
+{% set details = saisi.entreprise or saisi.titre or saisi.lieu or manque == "details" %}
+<input type="hidden" name="evaluer" value="1">
+<div class="grille-champs">
+  <div class="champ large">
+    <label for="{{ p }}-url">Lien de l'annonce</label>
+    <input type="text" id="{{ p }}-url" name="url" inputmode="url" spellcheck="false" placeholder="https://…" value="{{ saisi.url or '' }}"
+           data-afficher-si="(linkedin|indeed)\." data-cible="{{ p }}-bloc-texte">
+    {% if not texte %}<span class="aide"><button type="button" class="lien-neutre petit" data-afficher="{{ p }}-bloc-texte">Pas de lien ? Colle le texte de l'annonce</button></span>{% endif %}
+  </div>
+  <div class="champ large" id="{{ p }}-bloc-texte"{% if not texte %} hidden{% endif %}>
+    <label for="{{ p }}-texte">Texte de l'annonce</label>
+    <textarea id="{{ p }}-texte" name="texte" rows="8">{{ saisi.texte or '' }}</textarea>
+    <span class="aide">LinkedIn et Indeed ne se lisent pas ici : colle le texte avec le lien. Le texte collé prime sur la page.</span>
+  </div>
+  {% if details %}
+  <div class="champ">
+    <label for="{{ p }}-entreprise">Employeur</label>
+    <input type="text" id="{{ p }}-entreprise" name="entreprise" value="{{ saisi.entreprise or '' }}">
+  </div>
+  <div class="champ">
+    <label for="{{ p }}-titre">Intitulé du poste</label>
+    <input type="text" id="{{ p }}-titre" name="titre" value="{{ saisi.titre or '' }}">
+  </div>
+  <div class="champ">
+    <label for="{{ p }}-lieu">Lieu</label>
+    <input type="text" id="{{ p }}-lieu" name="lieu" value="{{ saisi.lieu or '' }}">
+  </div>
+  {% endif %}
+</div>
+{%- endmacro %}
+
+{# La modale « Ajouter une annonce », une fois par page ; le bouton : bouton_ajout("ajout-annonce", "Ajouter une annonce"). #}
+{% macro modale_annonce() -%}
+{% call modale_ajout("ajout-annonce", "Ajouter une annonce", "/offres/ajouter", occupe="Lecture de l'annonce…", vide_desactive=true,
+     texte="Elle rejoint le registre sans doublon, reçoit sa note et attend ta décision dans « À trancher ».") %}
+  {{ champs_annonce() }}
+{% endcall %}
 {%- endmacro %}
 
 {# État vide (Nexus EmptyState) : centré, pictogramme dans un cercle neutre, titre court, une ou deux phrases

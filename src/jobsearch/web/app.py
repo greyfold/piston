@@ -9,6 +9,7 @@ import datetime as dt
 import json
 import os
 import re
+import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import quote, urlencode
@@ -357,6 +358,7 @@ def accueil(request: Request, ensuite: str = "", ouverture: str = ""):
         from .. import agent_claude
         tache_jobroom = agent_claude.vue(agent_claude.derniere(reg, "jobroom"))
         retenues = sorted(reg.liste(["retenue"]), key=lambda f: priorite(f, note(f)))
+        postules = {f["empreinte"] for f in retenues if postuler_ouvert(reg, f["empreinte"])}
         p = profil_mod.charger()
         claude = etat_claude()
         premiers = (profil_mod.premiers_pas(p, ia_connectee=bool(claude.get("connecte")))
@@ -372,7 +374,7 @@ def accueil(request: Request, ensuite: str = "", ouverture: str = ""):
                     tache_jobroom=tache_jobroom, etats_taches=agent_claude.ETATS,
                     dossiers=dossiers, courrier_a_trancher=courrier.pour_le_tableau(reg, reg.liste(["candidature", "entretien", "offre"])),
                     courrier_recent=courrier.recents(reg), ouvertes=reg.liste(["candidature", "entretien", "offre"]),
-                    retenues=retenues, relances=followups.relances(reg),
+                    retenues=retenues, postules=postules, relances=followups.relances(reg),
                     jobroom=followups.jobroom(reg),
                     sans_reponse=followups.sans_reponse(reg), stats=reg.stats(),
                     entretiens=entretiens.a_venir(reg),
@@ -782,7 +784,7 @@ def registre(request: Request, statut: str = "", q: str = "", source: str = ""):
 
 @app.get("/offres/ajouter", response_class=HTMLResponse)
 def offres_ajouter(request: Request):
-    return page(request, "ajout.html", saisi={})
+    return page(request, "ajout.html", saisi={}, manque="")
 
 
 @app.post("/offres/ajouter", response_class=HTMLResponse)
@@ -799,7 +801,7 @@ def offres_ajouter_enregistrer(request: Request, url: str = Form(""), texte: str
             ajout.evaluer_en_tache(r["empreinte"])
             msg += " Évaluation en cours (une à deux minutes)."
     except ajout.AjoutRefuse as e:
-        return page(request, "ajout.html", saisi=saisi, msg="Refusé : %s." % e, ok=False)
+        return page(request, "ajout.html", saisi=saisi, manque=e.manque, msg="Refusé : %s." % e, ok=False)
     finally:
         reg.fermer()
     return RedirectResponse("/annonce/%s?msg=%s&ok=1#evaluation" % (r["empreinte"], quote(msg)), status_code=303)
@@ -1089,9 +1091,33 @@ def etat_claude():
 def ia_page(request: Request):
     """Le fournisseur d'IA (abonnement de la personne), à part des connecteurs."""
     from ..travailleur import client as travailleur
-    moteur = etat_claude()
-    fournisseurs = [dict(f, etat=moteur if f["id"] == "claude" else {}) for f in moteur_mod.FOURNISSEURS]
-    return page(request, "ia.html", fournisseurs=fournisseurs, distant=travailleur.distant())
+    fournisseurs = etats_fournisseurs()
+    actif = next((f for f in fournisseurs if f["etat"].get("connecte")), None)
+    return page(request, "ia.html", fournisseurs=fournisseurs, actif=actif, distant=travailleur.distant())
+
+
+def etats_fournisseurs():
+    """Chaque fournisseur d'IA avec l'état de sa connexion. Un seul peut être connecté à la fois."""
+    return [dict(f, etat=etat_claude() if f["id"] == "claude" else {}) for f in moteur_mod.FOURNISSEURS]
+
+
+@app.post("/ia/{fournisseur}/deconnecter")
+def ia_deconnecter(fournisseur: str):
+    """Déconnecte le fournisseur : l'application n'utilise plus l'abonnement (rien n'est résilié)."""
+    from .. import vm
+    from ..travailleur import client as travailleur
+    f = next((f for f in moteur_mod.FOURNISSEURS if f["id"] == fournisseur), None)
+    if f is None:
+        return RedirectResponse("/ia?msg=%s&ok=0" % quote("Fournisseur inconnu."), status_code=303)
+    try:
+        if not travailleur.distant():
+            raise vm.VMImpossible("%s ne tourne que dans la machine virtuelle" % f["nom"])
+        vm.deconnexion()
+        msg, ok = "%s est déconnecté. Tu peux te reconnecter quand tu veux." % f["nom"], 1
+    except (vm.VMImpossible, subprocess.TimeoutExpired) as e:
+        msg, ok = "La déconnexion n'a pas abouti : %s." % str(e).rstrip("."), 0
+    _ETAT_CLAUDE["v"] = None
+    return RedirectResponse("/ia?msg=%s&ok=%d" % (quote(msg), ok), status_code=303)
 
 
 @app.post("/connecteurs/{nom}/{action}")
@@ -1181,7 +1207,6 @@ GROUPES_REGLAGES = (
         ("/confidentialite", "Confidentialité", "cadenas", "Ce que l'IA voit de toi, et ce qui lui est masqué."),
     )),
     ("Application", (
-        ("/fonctions", "Fonctions", "objectifs", "Ce que l'application fait pour toi, et ce qui ouvre chaque fonction."),
         ("/sante", "Système", "systeme", "Les 30 derniers matins, les sauvegardes et les clés d'accès."),
     )),
 )
@@ -1560,6 +1585,10 @@ def ia_connexion_demarrer(fournisseur: str):
     from .. import connexion_ia
     if fournisseur not in {f["id"] for f in moteur_mod.FOURNISSEURS}:
         return JSONResponse({"etat": "echec", "message": "fournisseur inconnu"}, status_code=404)
+    autre = next((f for f in etats_fournisseurs() if f["id"] != fournisseur and f["etat"].get("connecte")), None)
+    if autre:                                     # un seul fournisseur actif à la fois
+        return JSONResponse({"etat": "echec", "message": "déconnecte d'abord %s : un seul fournisseur à la fois"
+                             % autre["nom"]}, status_code=409)
     return connexion_ia.demarrer(fournisseur)
 
 
@@ -1585,30 +1614,13 @@ def ia_connexion_annuler():
     return {"etat": "annulee"}
 
 
-@app.get("/fonctions", response_class=HTMLResponse)
-def fonctions_page(request: Request):
-    """Ce que la plateforme fait : les fonctions qui s'ouvrent avec la configuration, et les options."""
-    return page(request, "fonctions.html", options=profil_mod.OPTIONS, deblocages=profil_mod.DEBLOCAGES)
-
-
+# La page « Fonctions » (fonctions.html) n'est pas dans la version 1 : son adresse, et celle de l'ancienne
+# page « Interface et objectifs », mènent aux réglages. Sa seule option (preuves Job-Room) est coupée
+# (profil.HORS_VERSION).
+@app.get("/fonctions")
 @app.get("/interface")
-def interface():
-    """Ancienne page « Interface et objectifs » : ses fonctions vivent dans « Fonctions »."""
-    return RedirectResponse("/fonctions", status_code=303)
-
-
-@app.post("/fonctions/{option}")
-async def fonctions_option(request: Request, option: str):
-    form = await request.form()
-    return await run_in_threadpool(_fonctions_option, request, option, form)
-
-
-def _fonctions_option(request, option: str, form):
-    try:
-        profil_mod.poser_option(option, form.get("actif") == "1")
-    except profil_mod.ProfilInvalide:
-        return RedirectResponse("/fonctions", status_code=303)
-    return RedirectResponse("/fonctions?msg=%s&ok=1#%s" % (quote("Enregistré."), option), status_code=303)
+def fonctions_page():
+    return RedirectResponse("/reglages", status_code=303)
 
 
 @app.post("/premiers-pas/masquer")

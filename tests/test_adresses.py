@@ -83,7 +83,7 @@ def test_preuve_jobroom_prend_l_adresse_rangee():
     assert (v["rue"], v["numero"], v["npa"], v["ville"]) == ("Avenue Général Guisan", "70a", "1009", "Pully")
 
 
-def test_preuve_jobroom_cherche_l_adresse_si_dossier_ancien(reg, monkeypatch):
+def test_preuve_jobroom_cherche_l_adresse_si_dossier_ancien(reg, monkeypatch, jobroom_en_service):
     e = annonce(reg, entreprise="ELCA Informatique SA", titre="Consultant", lieu="Pully VD", statut="candidature",
                 postulee_le="2026-10-29")
     c, _ = zefix_simule()

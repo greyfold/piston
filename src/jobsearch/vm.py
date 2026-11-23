@@ -375,6 +375,16 @@ def connexion():
                            env=environnement_lima())
 
 
+def deconnexion():
+    """`claude auth logout` dans la VM : l'application n'utilise plus l'abonnement de la personne.
+    Une connexion encore en route est arrêtée d'abord."""
+    if (instance() or {}).get("status") != "Running":
+        raise VMImpossible("la machine virtuelle est arrêtée : démarre-la, puis recommence")
+    _lima("shell", "--workdir", "/", nom(), "--", "pkill", "-f", "^claude.auth.login", timeout=30)
+    _shell('export PATH="$HOME/.local/bin:$PATH"; exec claude auth logout', timeout=60)
+    return "Claude est déconnecté."
+
+
 def supprimer():
     if not instance():
         return "Aucune machine virtuelle « %s »." % nom()
@@ -394,6 +404,8 @@ def commande(action):
             print(json.dumps(etat(), ensure_ascii=False, indent=1))
         elif action == "connexion":
             return connexion()
+        elif action == "deconnexion":
+            print(deconnexion())
         elif action == "supprimer":
             print(supprimer())
     except (VMImpossible, subprocess.TimeoutExpired) as e:

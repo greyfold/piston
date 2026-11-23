@@ -149,7 +149,7 @@ def test_etats_vides(web, reg):
     """L'état vide Nexus (EmptyState, macro etat_vide), le même partout, adapté à chaque page."""
     offres, cands, sante, accueil = (web.get(u).text for u in ("/offres", "/candidatures", "/sante", "/"))
     assert '<h1 class="titre-vide" id="etat-vide-titre">Aucune annonce pour le moment</h1>' in offres
-    assert "<table" not in offres and 'class="filtres"' not in offres and 'href="/offres/ajouter"' in offres
+    assert "<table" not in offres and 'class="filtres"' not in offres and 'data-ouvrir-modale="ajout-annonce"' in offres
     assert '<h1 class="titre-vide" id="etat-vide-titre">Aucune candidature pour le moment</h1>' in cands
     assert "<table" not in cands
     assert '<div class="etat-vide compact">' in sante and '<h3 class="titre-vide" id="notifications-vide">' in sante
@@ -189,9 +189,10 @@ def test_menu_lateral_et_reglages(web, reg):
     assert r.status_code == 200
     reglages = r.text
     contenu = reglages.split("<main>")[1]
-    for href in ("/profil", "/reglages/parcours", "/fonctions", "/sources", "/ia", "/connecteurs",
+    for href in ("/profil", "/reglages/parcours", "/sources", "/ia", "/connecteurs",
                  "/confidentialite", "/sante"):
         assert 'class="reglage-ligne" href="%s"' % href in contenu
+    assert 'href="/fonctions"' not in contenu                           # pas dans la version 1
     assert "Fournisseur d'IA" in unescape(contenu) and "Connexions" not in contenu      # IA à part des connecteurs
     assert '<a href="/reglages" class="actif" aria-current="page">' in reglages
     assert 'class="retour" href="/reglages"' not in reglages             # pas de retour vers elle-même
@@ -523,19 +524,42 @@ def test_apercu_et_mots_cles_dans_la_page(web, reg, tmp_path, monkeypatch):
     assert lances == [(e, ["discovery"], "vrai")] and "ok=1" in r.headers["location"]
 
 
-def test_carte_go_montre_adequation_et_criteres(web, reg):
+def test_carte_go_courte_le_detail_sur_l_annonce(web, reg):
+    """La carte d'un oui reste courte : note, salaire, et une ligne qui compte ce qui est à vérifier et mène à
+    l'annonce ; le résumé, les pour et contre et le détail des critères restent sur la page de l'annonce.
+    La date et le canal d'envoi se notent dans une modale."""
     from jobsearch import evaluation
-    from jobsearch.evaluation import Critere
+    from jobsearch.evaluation import Alerte, Critere
     from test_evaluation import FauxMoteur, _ev
     e = annonce(reg, statut="retenue", texte=FR)
-    ev = _ev(note=35)
+    ev = _ev(note=35, alertes=[Alerte(gravite="moyenne", signal="Disponibilité permanente", extrait="24/7")])
     ev.criteres = [Critere(critere="langue", etat="ko", note="Allemand B2–C1 exigé."),
                    Critere(critere="présence", etat="incertain", note="Rien sur le télétravail.")]
     evaluation.evaluer_lot(reg, [reg.get(e)], c=FauxMoteur([ev]), texte_profil="P")
-    page = web.get("/").text
-    carte = page[page.index('id="retenues"'):]
-    assert "35<small>/100</small>" in carte and "✕ langue" in carte and "? présence" in carte
-    assert "130–150 k CHF" in carte
+    carte = web.get("/").text.split('id="retenues"')[1].split("<script")[0]
+    assert "35<small>/100</small>" in carte and "130–150 k CHF" in carte
+    assert 'class="a-verifier" href="/annonce/%s"' % e in carte
+    assert "1 critère non tenu · 1 signal à vérifier" in carte
+    assert "✕ langue" not in carte and "Bon alignement produit et IA." not in carte and "Le profil couvre" not in carte
+    assert "Marquer envoyée" not in carte and "data-postuler" not in carte       # pas de dossier : rien à envoyer
+
+
+def test_carte_go_marquer_envoyee_remplace_postuler(web, reg, tmp_path):
+    """Sur la carte d'un oui, « Marquer envoyée… » n'apparaît qu'après « Postuler sur le site », et le remplace ;
+    la carte n'a pas de lien vers le dossier, le titre mène à l'annonce."""
+    from jobsearch import dossier as dmod
+    e = annonce(reg, statut="retenue", texte=FR, url="https://exemple.ch/postuler")
+    reg.cx.executescript(dmod.SCHEMA)
+    reg.cx.execute("INSERT INTO dossiers (empreinte, etat, chemin) VALUES (?,?,?)", (e, "pret", str(tmp_path)))
+    reg.commit()
+    carte = web.get("/?ensuite=1").text.split('id="retenues"')[1].split("<script")[0]
+    assert 'data-postuler="https://exemple.ch/postuler"' in carte and 'value="/#retenues"' in carte
+    assert "Marquer envoyée" not in carte and "Ouvrir le dossier" not in carte
+    r = web.post("/action", data={"empreinte": e, "type": "postuler", "retour": "/#retenues"}, follow_redirects=False)
+    assert r.status_code == 303
+    carte = web.get("/?ensuite=1").text.split('id="retenues"')[1].split("<script")[0]
+    assert "data-postuler" not in carte and "Ouvrir le dossier" not in carte
+    assert 'data-ouvrir-modale="envoi-%s"' % e[:12] in carte and '<dialog class="modale large" id="envoi-%s"' % e[:12] in carte
 
 
 def test_rythme_et_alerte_du_vendredi(reg, sans_notification):
@@ -557,7 +581,7 @@ def test_rythme_et_alerte_du_vendredi(reg, sans_notification):
     assert not pipeline.rappel_rythme(reg, vendredi + dt.timedelta(days=1))["alerte"]
 
 
-def test_accueil_montre_le_rythme(web, reg):
+def test_accueil_montre_le_rythme(web, reg, jobroom_en_service):
     annonce(reg, statut="candidature", postulee_le=dt.date.today().isoformat())
     html = web.get("/").text
     assert "<span>cette semaine</span>" in html and "<span>ce mois</span>" in html
@@ -591,7 +615,7 @@ def test_sans_objectif_sans_rappel(web, reg, sans_notification):
     assert "<span>cette semaine</span>" not in web.get("/").text
 
 
-def test_marquer_envoyee_depuis_le_tableau_de_bord_lance_claude(web, reg):
+def test_marquer_envoyee_depuis_le_tableau_de_bord_lance_claude(web, reg, jobroom_en_service):
     from jobsearch import agent_claude
     e = annonce(reg, statut="retenue")
     r = web.post("/action", data={"empreinte": e, "type": "candidature", "date": "2026-10-26", "canal": "portail"},
@@ -673,7 +697,7 @@ def test_annonce_en_onglets_et_suivi_en_modale(web, reg):
     assert web.get("/dossier/%s" % e, follow_redirects=False).headers["location"] == "/annonce/%s?onglet=dossier" % e
 
 
-def test_courrier_a_trancher_propose_et_se_cherche(web, reg):
+def test_courrier_a_trancher_propose_et_se_cherche(web, reg, jobroom_en_service):
     from jobsearch import courrier
     annonce(reg, entreprise="Losinger Marazzi SA", titre="Coach IA 80-100%", statut="candidature", postulee_le="2026-10-20")
     e = annonce(reg, entreprise="Employeur non divulgué sur Jobup", titre="Consultant.e IA", statut="candidature",
@@ -728,7 +752,7 @@ def test_page_confidentialite_montre_ce_que_l_ia_recoit(web, monkeypatch):
 def test_reglages_sans_dossier_et_comptes_mail_dans_connecteurs(web):
     profil_page = web.get("/profil").text                                         # la liste des étapes
     assert 'href="/profil/dossier"' not in profil_page and 'href="/profil/objectifs"' in profil_page
-    assert "Objectifs de postulation" in profil_page and 'href="/fonctions"' in web.get("/reglages").text
+    assert "Objectifs de postulation" in profil_page
     assert 'name="courrier.comptes"' not in web.get("/profil/objectifs").text
     r = web.post("/connecteurs/apple-mail/comptes", data={"comptes": "iCloud\nTravail"}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].endswith("#apple-mail")

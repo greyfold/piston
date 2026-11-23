@@ -49,7 +49,11 @@ EN_COURS = set()
 
 
 class AjoutRefuse(Exception):
-    pass
+    """Ajout refusé ; `manque` dit quoi demander en plus : "texte" (l'annonce collée) ou "details"
+    (employeur, intitulé, lieu), pour que le formulaire n'affiche que ces champs."""
+    def __init__(self, message, manque=""):
+        super().__init__(message)
+        self.manque = manque
 
 
 # --- Lecture par le moteur ----------------------------------------------------------
@@ -172,7 +176,7 @@ def texte_de_la_page(url, client):
             texte = liens_et_texte(html_rendu(url), url)[0]
         except RouteCassee as e:
             if not texte:
-                raise AjoutRefuse("page illisible : %s. Colle le texte de l'annonce." % e)
+                raise AjoutRefuse("page illisible : %s. Colle le texte de l'annonce." % e, "texte")
     return texte[:TEXTE_MAX]
 
 
@@ -196,7 +200,7 @@ def preparer(url="", texte="", entreprise="", titre="", lieu="", client=None, c=
         raise AjoutRefuse("adresse illisible (https://…)")
     url = nettoyer(url) if url else ""
     if not url and not texte:
-        raise AjoutRefuse("il faut le lien de l'annonce ou son texte")
+        raise AjoutRefuse("il faut le lien de l'annonce ou son texte", "texte")
     client = client or Client(pause=0.3)
 
     a = plateforme(url, client) if url and not texte else None
@@ -206,7 +210,7 @@ def preparer(url="", texte="", entreprise="", titre="", lieu="", client=None, c=
     else:
         nom = _sans_lecture(url) if url and not texte else None
         if nom:
-            raise AjoutRefuse("%s ne se lit pas ici : colle le texte de l'annonce avec son lien" % nom)
+            raise AjoutRefuse("%s ne se lit pas ici : colle le texte de l'annonce avec son lien" % nom, "texte")
         origine = "texte collé" if texte else "page de l'annonce"
         brut = texte or texte_de_la_page(url, client)
         if entreprise and titre:
@@ -216,7 +220,7 @@ def preparer(url="", texte="", entreprise="", titre="", lieu="", client=None, c=
             try:
                 lu, corps = lire(brut, url, c)
             except moteur.MoteurImpossible as e:
-                raise AjoutRefuse("employeur et intitulé à indiquer (lecture par l'IA impossible : %s)" % e)
+                raise AjoutRefuse("employeur et intitulé à indiquer (lecture par l'IA impossible : %s)" % e, "details")
         a = Annonce(source=SOURCE, id_source=url or "texte-" + hashlib.sha1(corps.encode("utf-8")).hexdigest()[:12],
                     entreprise=entreprise or (lu.entreprise if lu else ""), titre=titre or (lu.titre if lu else ""),
                     lieu=lieu or (lu.lieu if lu else ""), url=url, url_postuler=url, texte=corps[:TEXTE_MAX],
@@ -236,7 +240,7 @@ def preparer(url="", texte="", entreprise="", titre="", lieu="", client=None, c=
     manque = [n for n, v in (("l'employeur", a.entreprise), ("l'intitulé", a.titre)) if not v.strip()]
     if manque:
         raise AjoutRefuse("%s introuvable%s dans l'annonce : à indiquer" % (
-            " et ".join(manque), "s" if len(manque) > 1 else ""))
+            " et ".join(manque), "s" if len(manque) > 1 else ""), "details")
     a.requetes = [ETIQUETTE]
     return a, origine
 

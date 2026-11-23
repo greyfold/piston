@@ -94,7 +94,7 @@ document.querySelectorAll("[data-recharger]").forEach(function (el) {
 // Bouton Claude : bloqué avec son indicateur dès le clic, le temps que la session démarre.
 document.querySelectorAll("form[data-occupe]").forEach(function (form) {
   form.addEventListener("submit", function () {
-    var b = form.querySelector("button");
+    var b = form.querySelector('button:not([type="button"])');   // pas « Annuler » d'une modale
     if (b.disabled) return;
     b.dataset.libelle = b.textContent;
     b.textContent = form.dataset.occupe;

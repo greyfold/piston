@@ -1,17 +1,29 @@
 {% extends "base.html" %}
-{% from "_macros.html" import entete_reglage %}
+{% from "_macros.html" import entete_reglage, confirmation %}
 {% block contenu %}
 {% call entete_reglage(reglage) %}L'IA de ton abonnement : elle note les annonces et écrit tes dossiers de candidature. Aucune clé API, rien n'est facturé en plus. Ce que l'application peut lire pour toi (courrier, Indeed, Chrome) est sur la page <a href="/connecteurs">Connecteurs</a>.{% endcall %}
 
 <div class="cartes deux">
 {% for f in fournisseurs %}
-  <section class="carte" id="{{ f.id }}">
+  <section class="carte action-droite" id="{{ f.id }}">
+    <div class="texte-carte">
     <div class="tete"><b>{{ f.nom }}</b>
       {% if f.etat.connecte %}<span class="puce B">connecté{% if f.etat.abonnement %} · {{ f.etat.abonnement }}{% endif %}</span>
       {% else %}<span class="puce retard">{{ "non connecté" if f.etat.installe else "non installé" }}</span>{% endif %}</div>
-    <div class="meta">{{ f.detail }}. Évaluation des annonces, dossiers de candidature, Indeed, preuves Job-Room et formulaires.{% if distant %} Tourne dans la machine virtuelle.{% endif %}</div>
+    <div class="meta">{{ f.detail }}. Évaluation des annonces, dossiers de candidature, Indeed et formulaires.{% if distant %} Tourne dans la machine virtuelle.{% endif %}</div>
     <div class="petit muet ligne-carte">{{ f.etat.message }}</div>
-    {% if not f.etat.connecte %}
+    {% if not f.etat.connecte and actif %}
+    <div class="petit muet ligne-carte">Un seul fournisseur à la fois : déconnecte d'abord {{ actif.nom }}.</div>
+    {% endif %}
+    </div>
+    {% if f.etat.connecte %}
+    <div class="boutons">
+      <button type="button" class="lien-danger" form="deconnecter-{{ f.id }}" data-confirmer-modale="confirmer-deconnecter-{{ f.id }}">Se déconnecter</button></div>
+    <form method="post" action="/ia/{{ f.id }}/deconnecter" id="deconnecter-{{ f.id }}"></form>
+    {{ confirmation("confirmer-deconnecter-" ~ f.id, "Se déconnecter de " ~ f.nom ~ " ?",
+         "L'application ne notera plus les annonces et n'écrira plus tes dossiers tant qu'aucune IA n'est connectée. Ton abonnement n'est pas résilié.",
+         "Se déconnecter", "deconnecter-" ~ f.id, "confirme", "1") }}
+    {% elif not actif %}
     <div class="boutons">
       <button type="button" class="go" data-connexion-ia="{{ f.id }}" data-nom="{{ f.nom }}">Se connecter avec {{ f.nom }}</button></div>
     {% endif %}
@@ -19,5 +31,5 @@
 {% endfor %}
 </div>
 
-<p class="petit">Tes coordonnées ne sont jamais envoyées à l'IA : balises à l'aller, vraies valeurs au retour, sur ton Mac. <a href="/confidentialite">Ce que l'IA reçoit</a></p>
+<p class="petit"><a href="/confidentialite">En savoir plus sur la confidentialité</a></p>
 {% endblock %}

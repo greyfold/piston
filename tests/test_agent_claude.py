@@ -7,6 +7,8 @@ import pytest
 from conftest import annonce
 from jobsearch import actions, agent_claude, session_vm
 
+pytestmark = pytest.mark.usefixtures("jobroom_en_service")   # code des preuves Job-Room, coupé en version 1
+
 
 @pytest.fixture
 def sans_preparation(monkeypatch):
