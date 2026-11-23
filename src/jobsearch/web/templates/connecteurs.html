@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% from "_macros.html" import entete_reglage, champ_lignes %}
 {% block contenu %}
-{% call entete_reglage(reglage) %}Ce que la plateforme peut lire pour toi. Les connecteurs « compte Claude » passent par ton compte Claude (claude.ai) ; ceux « sur ton Mac » restent sur ton Mac. Chaque tâche ne reçoit que les outils de lecture du connecteur qu'elle utilise : rien n'est envoyé, déplacé ni effacé.{% endcall %}
+{% call entete_reglage(reglage) %}Ce que l'application peut lire pour toi, en lecture seule : rien n'est envoyé, déplacé ni effacé.{% endcall %}
 
-<p class="petit muet">Les connecteurs « compte Claude » demandent que Claude soit connecté : {% if moteur.connecte %}c'est le cas{% else %}<a href="/ia" data-connexion-ia="claude" data-nom="Claude">se connecter</a>{% endif %} (page <a href="/ia">Fournisseur d'IA</a>).</p>
+{% if not moteur.connecte %}<div class="bandeau attention"><span class="point"></span><span>Les connecteurs « compte Claude » demandent que Claude soit connecté. <a href="/ia" data-connexion-ia="claude" data-nom="Claude">Se connecter à Claude</a>.</span></div>{% endif %}
 
 {% for role, libelle in roles.items() %}
 <h2>{{ libelle }}</h2>
@@ -28,15 +28,15 @@
     {% if c.id == "apple-mail" %}
     <form method="post" action="/connecteurs/apple-mail/comptes" class="ligne-carte">
       {% set lignes = [] %}{% for x in comptes_mail %}{% set _ = lignes.append([x]) %}{% endfor %}
-      {{ champ_lignes("comptes", "Comptes où chercher les réponses", [("", "Nom du compte", "iCloud")], lignes, "comptes-mail",
+      {{ champ_lignes("comptes", "Comptes où chercher les réponses", [("", "Nom du compte", "Nom du compte dans Mail")], lignes, "comptes-mail",
            aide="Le nom de chaque compte tel qu'il figure dans Mail.", ajout="Ajouter un compte") }}
-      <div class="boutons"><button class="discret">Enregistrer les comptes</button></div>
+      <div class="boutons"><button>Enregistrer les comptes</button></div>
     </form>
     {% endif %}
     <div class="boutons">
       <form method="post" action="/connecteurs/{{ c.id }}/{{ 'desactiver' if c.actif else 'activer' }}">
-        <button class="{{ 'discret' if c.actif else 'go' }}">{{ "Désactiver" if c.actif else "Activer" }}</button></form>
-      <form method="post" action="/connecteurs/{{ c.id }}/tester"><button class="discret">Tester</button></form>
+        <button class="{{ '' if c.actif else 'go' }}">{{ "Désactiver" if c.actif else "Activer" }}</button></form>
+      <form method="post" action="/connecteurs/{{ c.id }}/tester"><button>Tester</button></form>
     </div>
   </section>
 {% endfor %}

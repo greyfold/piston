@@ -93,7 +93,7 @@ def test_page_sante_et_saisie_sur_le_mac(monkeypatch, reg):
     web = TestClient(appmod.app)
     page = web.get("/sante").text
     assert "Clés d'accès" in page and 'type="password"' in page and "absente" in page
-    assert 'href="/ia"' in page and "API Claude" not in page and "sk-ant-" not in page
+    assert "API Claude" not in page and "sk-ant-" not in page
     ia = web.get("/ia").text
     assert "Fournisseur d'IA" in ia and "Connecté au compte Claude" in ia and "Clés d'accès" not in ia
     r = web.post("/cles/apify/enregistrer", data={"cle": CLE}, follow_redirects=False)

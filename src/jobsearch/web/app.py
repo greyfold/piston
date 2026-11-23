@@ -233,7 +233,7 @@ def etat_passage(reg):
     if r is not None and r["statut"] == "demarre" and (age is None or age <= seuil):
         niveau, texte = "attention", "Passage en cours depuis %s." % r["debut"]
     elif r is None or age is None:
-        niveau, texte = "alerte", "Aucun passage de la plateforme pour l'instant."
+        niveau, texte = "alerte", "Aucun passage pour l'instant."
     elif age > seuil:
         niveau, texte = "alerte", "Dernier passage terminé il y a %d h : la chaîne a raté au moins un matin." % age
     elif r["statut"] == "interrompu":
@@ -1125,12 +1125,20 @@ def sante(request: Request):
             jours.append({"date": d, "fait": d in veilles})
         sauvegardes = sorted((DATA / "sauvegardes").glob("jobsearch-*.db"))
         return page(request, "sante.html", jours=jours,
-                    derniere_sauvegarde=sauvegardes[-1].name if sauvegardes else None,
+                    derniere_sauvegarde=_moment_sauvegarde(sauvegardes[-1].name) if sauvegardes else None,
                     nb_sauvegardes=len(sauvegardes),
                     depuis_le_mac=depuis_le_mac(request), cles=[cles.etat(n) for n in cles.SERVICES],
                     moteur=etat_claude())
     finally:
         reg.fermer()
+
+
+def _moment_sauvegarde(nom):
+    """« jobsearch-20261122-040012.db » → « 2026-11-22T04:00 » (pour moment_fr) ; None si le nom ne suit pas ce format."""
+    try:
+        return dt.datetime.strptime(nom[10:25], "%Y%m%d-%H%M%S").strftime("%Y-%m-%dT%H:%M")
+    except ValueError:
+        return None
 
 
 @app.get("/confidentialite", response_class=HTMLResponse)
@@ -1169,11 +1177,11 @@ GROUPES_REGLAGES = (
     ("Recherche et IA", (
         ("/sources", "Sources", "globe", "Les sites et pages carrière interrogés à chaque passage."),
         ("/ia", "Fournisseur d'IA", "ia", "L'IA qui note les annonces et écrit tes dossiers."),
-        ("/connecteurs", "Connecteurs", "prise", "Ce que la plateforme peut lire pour toi : courrier, sites d'emploi, navigateur."),
+        ("/connecteurs", "Connecteurs", "prise", "Ce que l'application peut lire pour toi : courrier, sites d'emploi, navigateur."),
         ("/confidentialite", "Confidentialité", "cadenas", "Ce que l'IA voit de toi, et ce qui lui est masqué."),
     )),
     ("Application", (
-        ("/fonctions", "Fonctions", "objectifs", "Ce que la plateforme fait pour toi, et ce qui ouvre chaque fonction."),
+        ("/fonctions", "Fonctions", "objectifs", "Ce que l'application fait pour toi, et ce qui ouvre chaque fonction."),
         ("/sante", "Système", "systeme", "Les 30 derniers matins, les sauvegardes et les clés d'accès."),
     )),
 )

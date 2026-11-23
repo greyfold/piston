@@ -45,7 +45,7 @@
       <p class="petit muet ligne-carte">Angle : {{ ev.resultat.angle }} · évaluée le {{ ev.cree_le[:10] | date_fr(True) }}{% if f.texte_origine != "plateforme" %} · sur un résumé, pas l'original{% endif %}</p>
       {{ categories(ev) }}
       {% if categories_adequation(ev.resultat) %}
-      <details><summary class="petit">Atouts et écarts par catégorie</summary>{{ detail_categories(ev) }}</details>
+      <details><summary class="petit">Atouts et écarts par catégorie{{ icone("chevron", "icone chevron") }}</summary>{{ detail_categories(ev) }}</details>
       {% endif %}
       {{ alertes(ev) }}
       {% set sal = ev.resultat.salaire %}
@@ -58,7 +58,7 @@
         <div class="petit muet">{{ sal.raisonnement }}</div>
       </div>
       {% endif %}
-      <details class="detail-criteres"><summary class="petit">Critères et exigences</summary>
+      <details class="detail-criteres"><summary class="petit">Critères et exigences{{ icone("chevron", "icone chevron") }}</summary>
         <div class="tableau"><table><tbody>
           {% for c in ev.resultat.criteres %}<tr><td class="petit">{{ c.critere }}</td><td><span class="puce {{ 'retard' if c.etat == 'ko' else 'B' if c.etat == 'ok' else '' }}">{{ c.etat }}</span></td><td class="petit">{{ c.note }}</td></tr>{% endfor %}
         </tbody></table></div>

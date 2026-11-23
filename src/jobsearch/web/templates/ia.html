@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import entete_reglage %}
 {% block contenu %}
-{% call entete_reglage(reglage) %}L'IA de ton abonnement : elle note les annonces et écrit tes dossiers de candidature. Aucune clé API, rien n'est facturé en plus. Ce que la plateforme peut lire pour toi (courrier, Indeed, Chrome) est sur la page <a href="/connecteurs">Connecteurs</a>.{% endcall %}
+{% call entete_reglage(reglage) %}L'IA de ton abonnement : elle note les annonces et écrit tes dossiers de candidature. Aucune clé API, rien n'est facturé en plus. Ce que l'application peut lire pour toi (courrier, Indeed, Chrome) est sur la page <a href="/connecteurs">Connecteurs</a>.{% endcall %}
 
 <div class="cartes deux">
 {% for f in fournisseurs %}

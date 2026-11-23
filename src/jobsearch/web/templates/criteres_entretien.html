@@ -21,7 +21,7 @@
 <div class="salle-entretien">
   <header class="tete-salle">
     <div class="bande-page">
-      <a class="retour-salle" href="/#premiers-pas">{{ icone("precedent") }}<span>Tableau de bord</span></a>
+      <a class="retour-salle" href="/#premiers-pas">{{ icone("precedent") }}<span>Aujourd'hui</span></a>
       <h1>Ce qui compte pour toi</h1>
       {% if rang is not none %}<p class="etape-salle">Bien démarrer · {{ rang + 1 }} sur {{ total }}</p>{% endif %}
     </div>
@@ -209,7 +209,7 @@
 
       {% if etat.commence %}
       <details class="ajout-base">
-        <summary>Recommencer le questionnaire</summary>
+        <summary>Recommencer le questionnaire{{ icone("chevron", "icone chevron") }}</summary>
         <p class="petit">Efface tes réponses. Ce qui est déjà enregistré dans ton profil reste.</p>
         <div class="actions-el"><button type="submit" form="recommencer" class="lien-danger" formnovalidate
           data-confirmer="Effacer tes réponses et recommencer ?">Recommencer</button></div>

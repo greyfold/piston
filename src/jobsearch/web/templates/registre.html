@@ -9,12 +9,12 @@
     <a class="bouton go" href="/offres/ajouter">Ajouter une annonce {{ icone("suivant") }}</a>
 {% endcall %}
 {% else %}
-<div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap">
-  <h1>Offres <span class="muet" style="font-weight:500">{{ stats.total }} annonces</span></h1>
-  <a class="bouton" href="/offres/ajouter">Ajouter une annonce</a>
-</div>
-<form class="filtres" method="get">
-  <input type="text" name="q" value="{{ q }}" placeholder="Entreprise ou intitulé" aria-label="Recherche">
+<header class="entete-page"><div class="ligne-entete-page">
+  <div class="titre-entete-page"><h1>Offres</h1></div>
+  <div class="actions-entete"><a class="bouton" href="/offres/ajouter">Ajouter une annonce</a></div>
+</div></header>
+<form class="filtres" method="get" role="search" data-filtre-auto>
+  <input type="text" name="q" value="{{ q }}" placeholder="Entreprise ou intitulé, puis Entrée" aria-label="Chercher une entreprise ou un intitulé">
   <select name="statut" aria-label="Statut">
     <option value="">À suivre (sans les non)</option>
     <option value="tous" {{ 'selected' if statut == 'tous' }}>Tous les statuts</option>
@@ -24,7 +24,6 @@
     <option value="">Toutes les sources</option>
     {% for s, n in stats.par_source.items() %}<option value="{{ s }}" {{ 'selected' if s == source }}>{{ s }} ({{ n }})</option>{% endfor %}
   </select>
-  <button>Filtrer</button>
 </form>
 {% if not fiches and not statut and not q and not source %}
 {% call etat_vide("recherche", "Aucune annonce à suivre", titre_balise="h2",
@@ -37,17 +36,18 @@
     <a class="bouton go" href="/offres?statut=tous">Tout afficher</a>
 {% endcall %}
 {% else %}
-<p class="petit muet">{{ total }} résultat{{ 's' if total != 1 }}{% if total > 400 %} (400 affichés){% endif %}.
-  {%- if not statut and not q and ecartees %} {% if ecartees > 1 %}{{ ecartees }} annonces écartées ne sont pas affichées{% else %}1 annonce écartée n'est pas affichée{% endif %} (non, doublons, expirées) : <a href="?statut=C">voir les non</a>.{% endif %}</p>
+{% set avec_motif = fiches | selectattr("motif") | list or fiches | selectattr("angle") | list %}
+<p class="petit muet">{{ total }} annonce{{ 's' if total != 1 }}{% if not statut and not q and not source %} à suivre{% endif %}{% if total > 400 %} (400 affichées){% endif %}.
+  {%- if not statut and not q and ecartees %} {{ ecartees }} écartée{{ 's' if ecartees > 1 }} (non, doublons, expirées) : <a href="?statut=C">voir les non</a>.{% endif %}</p>
 <div class="tableau"><table>
-  <thead><tr><th>Annonce</th><th>Source</th><th>Statut</th><th>Motif</th><th>Vue le</th></tr></thead>
+  <thead><tr><th>Annonce</th><th>Source</th><th>Statut</th>{% if avec_motif %}<th>Motif</th>{% endif %}<th>Vue le</th></tr></thead>
   <tbody>
   {% for f in fiches %}
     <tr>
       <td><a href="/annonce/{{ f.empreinte }}">{{ f.titre }}</a><div class="muet petit">{{ f.entreprise }} · {{ f.lieu }}</div></td>
-      <td class="petit">{% for s in f.sources or [] %}<a href="?source={{ s | urlencode }}">{{ s }}</a>{{ ", " if not loop.last }}{% else %}<span class="muet">?</span>{% endfor %}{% if f.url %} <a href="{{ f.url }}" target="_blank" rel="noopener noreferrer" aria-label="Voir l'annonce en ligne">↗</a>{% endif %}</td>
+      <td class="petit">{% for s in f.sources or [] %}<a class="lien-neutre" href="?source={{ s | urlencode }}" title="Ne montrer que {{ s }}">{{ s }}</a>{{ ", " if not loop.last }}{% else %}<span class="muet">?</span>{% endfor %}{% if f.url %} <a class="lien-neutre lien-externe" href="{{ f.url }}" target="_blank" rel="noopener noreferrer" aria-label="Voir l'annonce en ligne">{{ icone("externe") }}</a>{% endif %}</td>
       <td><span class="puce {{ f.statut }}">{{ f.statut | statut }}</span></td>
-      <td class="petit">{{ (f.motif or f.angle or "")[:140] }}</td>
+      {% if avec_motif %}<td class="petit">{{ (f.motif or f.angle or "")[:140] }}</td>{% endif %}
       <td class="petit">{{ f.vue_le | date_fr(True) }}</td>
     </tr>
   {% endfor %}

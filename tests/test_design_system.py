@@ -54,8 +54,8 @@ COULEUR = r"#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?)\("
 
 # Attributs style="…" dans les gabarits : la mise en forme passe par une classe de style.css.
 BASE_STYLE_EN_LIGNE = {
-    "_macros.html": 5, "accueil.html": 6, "ajout.html": 2,
-    "connexion.html": 2, "registre.html": 2,
+    "_macros.html": 5, "accueil.html": 3, "ajout.html": 2,
+    "connexion.html": 2,
 }
 
 
@@ -79,22 +79,23 @@ def test_pas_de_couleur_en_dur_dans_les_gabarits_ni_le_js():
 
 
 def test_css_couleurs_par_jetons():
-    """Hors des blocs :root, pas de couleur en dur : seuls #fff (texte sur fond vert ou rouge) et les
-    rgba() des ombres et des fonds assombris (::backdrop) sont admis."""
+    """Hors des blocs :root, pas de couleur en dur : le texte sur fond vert ou rouge prend --sur-vert ou
+    --sur-alerte. Seuls le #fff du curseur de l'interrupteur et les rgba() des ombres et des fonds assombris
+    (::backdrop) sont admis."""
     ecarts = []
     for selecteur, decl in _regles_css():
         if selecteur == ":root":
             continue
         for prop, valeur in re.findall(r"([a-z-]+)\s*:\s*([^;]+)", decl):
             for c in re.findall(r"#[0-9a-fA-F]{3,8}\b", valeur):
-                if c.lower() not in ("#fff", "#ffffff"):
+                if not (c.lower() in ("#fff", "#ffffff") and selecteur == "button.interrupteur .curseur"):
                     ecarts.append(f"{selecteur} {{ {prop}: {c} }}")
             if re.search(r"\b(?:rgba?|hsla?)\(", valeur):
                 ombre = prop == "box-shadow" or (prop == "background" and "::backdrop" in selecteur)
                 if not ombre:
                     ecarts.append(f"{selecteur} {{ {prop}: {valeur.strip()} }}")
-    # Dette : fonds des puces retenue/candidature (clair et sombre), fond de l'aperçu PDF, texte de la note haute.
-    _comparer(Counter({"style.css": len(ecarts)}) - Counter(), {"style.css": 4},
+    # Dette : fond de l'aperçu PDF.
+    _comparer(Counter({"style.css": len(ecarts)}) - Counter(), {"style.css": 1},
               "couleur en dur dans style.css (" + " ; ".join(ecarts) + ")",
               "Utiliser un jeton, ou en ajouter un dans :root et dans le bloc sombre.")
 

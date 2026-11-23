@@ -42,7 +42,7 @@
     </button>
     {% endfor %}
   </div>
-  <p class="aide-accueil" data-apres-connexion="/bienvenue/offres">Tes identifiants restent dans l'application : la plateforme ne les voit jamais.</p>
+  <p class="aide-accueil" data-apres-connexion="/bienvenue/offres">Tu te connectes directement chez Claude : l'application ne voit jamais tes identifiants.</p>
   <p class="aide-accueil lien-confidentialite">{{ icone("cadenas") }}<span>Ton nom, ton adresse et ton téléphone ne partent jamais vers l'IA : elle reçoit des balises à leur place. <a href="/confidentialite" target="_blank">Voir ce qu'elle reçoit</a></span></p>
   <div class="actions-accueil">
     <a class="lien-neutre" href="/bienvenue/offres">Passer pour l'instant</a>
@@ -52,7 +52,7 @@
 {% elif ecran == 'sources' %}
   {# ---------------------------------------------------------------- 2. Les sources #}
   <h1>Tes sources</h1>
-  <p class="intro">Les sites que la plateforme lit pour toi chaque matin. Ils sont publics : aucun compte n'est nécessaire.</p>
+  <p class="intro">Les sites que l'application lit pour toi chaque matin. Ils sont publics : aucun compte n'est nécessaire.</p>
   <form method="post" action="/bienvenue/sources" class="formulaire-accueil" id="form-sources">
     <fieldset class="cartes-choix">
       <legend>Sites d'emploi</legend>
@@ -67,7 +67,7 @@
       <p class="fort">Plus tard, depuis la page Sources</p>
       <ul>
         <li><span class="fort">Indeed</span>, par ton compte d'IA une fois connecté.</li>
-        <li><span class="fort">Les pages carrière</span> des entreprises qui t'intéressent : tu colles l'adresse, la plateforme la lit chaque matin.</li>
+        <li><span class="fort">Les pages carrière</span> des entreprises qui t'intéressent : tu colles l'adresse, l'application la lit chaque matin.</li>
       </ul>
     </div>
     <div class="actions-accueil">
@@ -86,7 +86,7 @@
 {% elif ecran == 'recherche' %}
   {# ---------------------------------------------------------------- 2. La recherche #}
   <h1>Ta recherche</h1>
-  <p class="intro">Ce que la plateforme cherchera pour toi chaque matin.</p>
+  <p class="intro">Ce que l'application cherchera pour toi chaque matin.</p>
 
   <form method="post" action="/bienvenue/recherche" class="formulaire-accueil" id="form-recherche">
     <fieldset class="cartes-choix">
@@ -114,14 +114,14 @@
         {% endfor %}
       </div>
       <details class="autres-cantons"{% if cantons_choisis | reject('in', romands) | list %} open{% endif %}>
-        <summary>Autres cantons</summary>
+        <summary>Autres cantons{{ icone("chevron", "icone chevron") }}</summary>
         <div class="puces-cantons">
           {% for code, nom in cantons | dictsort(by='value') if code not in romands %}
           <label class="puce-canton"><input type="checkbox" name="cantons" value="{{ code }}"{% if code in cantons_choisis %} checked{% endif %}><span>{{ nom }}</span></label>
           {% endfor %}
         </div>
       </details>
-      <div class="aide" id="cantons-aide">La plateforme ne cherche que là. Rien n'est envoyé aux employeurs.</div>
+      <div class="aide" id="cantons-aide">L'application ne cherche que là. Rien n'est envoyé aux employeurs.</div>
     </fieldset>
 
     {# Les objectifs de postulations sont facultatifs : la question dit s'il y en a, puis combien. #}

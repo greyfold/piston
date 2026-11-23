@@ -60,11 +60,11 @@
   </form>
   {% endif %}
 
-  <details class="petit detail-mots-cles"><summary>Présents ({{ motscles.presents | length }})</summary>
+  <details class="petit detail-mots-cles"><summary>Présents ({{ motscles.presents | length }}){{ icone("chevron", "icone chevron") }}</summary>
     <div class="tags mots">{% for t, n in motscles.presents %}<span class="present"{% if f.langue %} lang="{{ f.langue }}"{% endif %}>{{ t }} <small>×{{ n }}</small></span>{% endfor %}</div>
   </details>
   {% if motscles.format %}
-  <details class="petit"><summary>Format du CV ({{ motscles.format | length }} point{{ 's' if motscles.format | length > 1 }})</summary>
+  <details class="petit"><summary>Format du CV ({{ motscles.format | length }} point{{ 's' if motscles.format | length > 1 }}){{ icone("chevron", "icone chevron") }}</summary>
     <ul>{% for x in motscles.format %}<li>{{ x }}</li>{% endfor %}</ul>
   </details>
   {% endif %}

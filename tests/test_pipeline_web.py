@@ -252,7 +252,7 @@ def test_registre_montre_la_source(web, reg):
     annonce(reg, titre="Head of Design", sources=[])
     html = web.get("/offres").text
     assert "<th>Source</th>" in html
-    assert '<a href="?source=jobup">jobup</a>, <a href="?source=linkedin">linkedin</a>' in html
+    assert '>jobup</a>, <a class="lien-neutre" href="?source=linkedin"' in html
     assert 'href="https://www.jobup.ch/fr/emplois/detail/1/"' in html
 
 def test_clic_go_ecrit_tout_de_suite(web, reg):
@@ -778,7 +778,7 @@ def test_offres_sans_les_non_et_libelles_oui_peut_etre_non(web, reg):
     ecartee = annonce(reg, titre="Cheffe de cuisine", statut="C", motif="Hors métier")
     offres = web.get("/offres").text
     assert "/annonce/" + garde in offres and "/annonce/" + ecartee not in offres
-    assert "1 annonce écartée n'est pas affichée" in offres and 'href="?statut=C"' in offres
+    assert "1 écartée (non, doublons, expirées)" in offres and 'href="?statut=C"' in offres
     assert '<span class="puce B">peut-être</span>' in offres
     non = web.get("/offres?statut=C").text
     assert "/annonce/" + ecartee in non and '<span class="puce C">non</span>' in non
