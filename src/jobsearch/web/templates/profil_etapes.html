@@ -3,7 +3,7 @@
 {% block contenu %}
 {# Ma recherche : ses étapes en lignes de réglage, comme la page Réglages ; chaque ligne ouvre sa page, qui a un
    retour vers celle-ci. Une étape à remplir porte la pilule « à compléter ». #}
-{% call entete_reglage(reglage) %}Ce que la plateforme sait de toi pour chercher, trier et écrire tes dossiers. Gardé sur ton Mac seulement.{% endcall %}
+{% call entete_reglage(reglage) %}Ce que l'application sait de toi pour chercher, trier et écrire tes dossiers. Gardé sur ton Mac seulement.{% endcall %}
 {% set ids_manquants = profil_manquants | map('first') | list %}
 <ul class="reglages-liste">
   {% for x in etapes %}

@@ -10,7 +10,7 @@
                    or relances.a_classer) %}
 {# L'IA n'est plus connectée : un bandeau (Nexus Banner) qui ouvre la modale de connexion, jamais la checklist de retour. #}
 {% if ia_deconnectee %}<div class="bandeau attention" id="ia-deconnectee"><span class="point"></span><span>Ton IA n'est plus connectée : sans elle, les annonces ne sont pas notées et aucun dossier n'est préparé. <a href="/ia" data-connexion-ia="claude" data-nom="Claude">Se connecter à Claude</a>.</span></div>{% endif %}
-{% if rythme.alerte and not rien %}<div class="bandeau alerte"><span class="point"></span><span>{{ rythme.semaine.n }} postulation{{ 's' if rythme.semaine.n > 1 }} cette semaine, l'objectif est {{ rythme.semaine.min }} : il en manque {{ rythme.semaine.manque }} d'ici dimanche.</span></div>{% endif %}
+{% if rythme.alerte and not rien %}<div class="bandeau attention"><span class="point"></span><span>Encore {{ rythme.semaine.manque }} postulation{{ 's' if rythme.semaine.manque > 1 }} d'ici dimanche pour tenir ton objectif de la semaine.</span></div>{% endif %}
 
 {% if premiers_pas %}{% set faits = premiers_pas | selectattr(5) | list | length %}
 {# Checklist Nexus du premier tableau de bord : ce qui reste du profil, pourquoi et en combien de temps ; masquable. #}
@@ -47,7 +47,7 @@
 <div class="chiffres rythme">
   <span>Postulations</span>
 {% for nom, lib in [("semaine", "cette semaine"), ("mois", "ce mois")] if rythme[nom].actif %}{% set p = rythme[nom] %}
-  <div class="chiffre {{ 'atteint' if p.atteint else ('chaud' if nom == 'semaine' and rythme.alerte) }}">
+  <div class="chiffre {{ 'atteint' if p.atteint }}">
     <b>{{ p.n }} <small>/ {{ p.min }}</small></b>
     <span>{{ lib }}</span><span class="cache">{{ "objectif atteint" if p.atteint else "il en manque %d" % p.manque }}</span>
     <div class="jauge" aria-hidden="true"><i style="width:{{ [100 * p.n // p.min, 100] | min if p.min else 100 }}%"></i></div>
@@ -56,14 +56,15 @@
 </div>
 {% endif %}
 <div class="chiffres">
-  <div class="chiffre"><b>{{ a_trancher | length }}</b><span>à trancher</span></div>
-  <div class="chiffre"><b>{{ retenues | length }}</b><span>oui, à envoyer</span></div>
-  <div class="chiffre {{ 'chaud' if relances.dues }}"><b>{{ relances.dues | length }}</b><span>relances dues</span></div>
-  {% if fonctions.jobroom %}<div class="chiffre {{ 'chaud' if jobroom.a_saisir and jobroom.a_saisir[0]._jours_restants <= 5 }}"><b>{{ jobroom.a_saisir | length }}</b><span>preuves Job-Room</span></div>{% endif %}
+{% macro chiffre(n, libelle, ancre, chaud=false) %}{% if n %}<a class="chiffre {{ 'chaud' if chaud }}" href="#{{ ancre }}"><b>{{ n }}</b><span>{{ libelle }}</span></a>{% else %}<div class="chiffre"><b>0</b><span>{{ libelle }}</span></div>{% endif %}{% endmacro %}
+  {{ chiffre(a_trancher | length, "à trancher", "trancher") }}
+  {{ chiffre(retenues | length, "oui, à envoyer", "retenues") }}
+  {{ chiffre(relances.dues | length, "relances dues", "relances", relances.dues) }}
+  {% if fonctions.jobroom %}{{ chiffre(jobroom.a_saisir | length, "preuves Job-Room", "jobroom", jobroom.a_saisir and jobroom.a_saisir[0]._jours_restants <= 5) }}{% endif %}
 </div>
 
 {% if entretiens %}
-<h2 id="entretiens">Entretiens à venir <span class="compte">{{ entretiens | length }}</span></h2>
+<h2 id="entretiens">Entretiens à venir</h2>
 <div class="cartes deux">
 {% for e in entretiens %}{% set f = e._annonce %}{% set j = e.date | jours_restants %}
   <article class="carte entretien-prochain{{ ' proche' if j <= 1 }}">
@@ -84,7 +85,7 @@
 
 {% if a_trancher %}
 {# Le tri lui-même se fait dans la pile de /trier, une annonce à la fois ; ici, seulement l'entrée. #}
-<h2 id="trancher">À trancher <span class="compte">{{ a_trancher | length }}</span></h2>
+<h2 id="trancher">À trancher</h2>
 <article class="carte">
   <div class="tete">
     <div>
@@ -98,7 +99,7 @@
 {% endif %}
 
 {% if retenues %}
-<h2 id="retenues">Tes oui, à envoyer <span class="compte">{{ retenues | length }}</span></h2>
+<h2 id="retenues">Tes oui, à envoyer</h2>
 <div class="cartes deux">
 {% for f in retenues %}
   <article class="carte">
@@ -112,11 +113,11 @@
         {% elif d and d.etat == "interrompu" %}{{ libelle_dossier(d) }} · <a href="/annonce/{{ f.empreinte }}?onglet=dossier">le refaire</a>
         {% elif d and d.etat in ("pret", "a_revoir") %}<a href="/annonce/{{ f.empreinte }}?onglet=dossier">Ouvrir le dossier →</a>{% if d.couverture is not none %} · couverture {{ d.couverture }} %{% endif %}
         {% elif d and d.etat == "echec" %}Dossier en échec : {{ (d.erreur or "")[:120] }} · <a href="/annonce/{{ f.empreinte }}?onglet=dossier">détails</a>
-        {% else %}Dossier pas encore produit{% endif %}
+        {% endif %}
       </div>
     </div>
     <div class="statut-carte">
-      <span class="puce {{ 'retard' if d and d.etat in ('echec', 'a_revoir', 'interrompu') else 'retenue' }}">
+      <span class="puce {{ 'retard' if d and d.etat in ('echec', 'a_revoir', 'interrompu') else 'B' if (d and d.etat == 'pret') or (not d and f.cv_genere) else '' if d else 'nouvelle' }}">
         {{ {"en_cours": "en préparation", "pret": "dossier prêt", "a_revoir": "à revoir", "echec": "échec", "interrompu": "interrompu"}.get(d.etat) if d else ("dossier prêt" if f.cv_genere else "dossier à faire") }}</span>
       {{ annuler_go(f, raisons, "/#retenues") }}
     </div></div>
@@ -126,7 +127,7 @@
       <input type="hidden" name="type" value="candidature">
       <input type="date" name="date" value="{{ aujourdhui }}" aria-label="Date d'envoi">
       <input type="text" name="canal" placeholder="Canal (portail, e-mail…)" aria-label="Canal">
-      <button class="go">Marquer envoyée</button>
+      <button>Marquer envoyée</button>
     </form>
     {% if d and d.etat in ("pret", "a_revoir") %}<div class="boutons">{{ postuler(f, classe="") }}</div>{% endif %}
   </article>
@@ -135,7 +136,7 @@
 {% endif %}
 
 {% if courrier_utile %}
-<h2 id="courrier">Courrier des employeurs <span class="compte">{{ courrier_a_trancher | length }} à trancher</span></h2>
+<h2 id="courrier">Courrier des employeurs</h2>
 {% if courrier_a_trancher %}
 <div class="cartes">
 {% for c in courrier_a_trancher %}
@@ -164,7 +165,7 @@
         <option value="">— type de réponse —</option>
         {% for k, v in [("accuse", "Accusé de réception"), ("entretien", "Entretien"), ("refus", "Refus"), ("offre", "Offre")] %}<option value="{{ k }}" {{ 'selected' if k == c.classe_proposee }}>{{ v }}</option>{% endfor %}
       </select>
-      <button class="go" name="decision" value="applique">Appliquer</button>
+      <button name="decision" value="applique">Appliquer</button>
       <button class="discret" name="decision" value="ignore" formnovalidate>Ignorer</button>
       {% if c.lien %}<a class="petit" href="{{ c.lien }}">ouvrir dans Mail</a>{% endif %}
     </form>
@@ -173,22 +174,22 @@
 </div>
 {% endif %}
 {% if courrier_recent %}
-<details class="petit" style="margin-top:.5rem"><summary>{{ courrier_recent | length }} réponse(s) appliquée(s) ces 14 derniers jours</summary>
+<details class="petit" style="margin-top:.5rem"><summary>{{ courrier_recent | length }} réponse(s) appliquée(s) ces 14 derniers jours{{ icone("chevron", "icone chevron") }}</summary>
   <ul>{% for c in courrier_recent %}<li>{{ c.recu_le | date_fr(True) }} · <a href="/annonce/{{ c.empreinte }}">{{ c.entreprise }}</a> · {{ c.classe }}{% if c.message %} ({{ c.message }}){% endif %}</li>{% endfor %}</ul>
 </details>
 {% endif %}
 {% endif %}
 
 {% if jobroom_utile %}{# option « Preuves de recherche Job-Room », et quelque chose à saisir ou vérifier #}
-<h2 id="jobroom">Preuves Job-Room <span class="compte">{{ jobroom.a_saisir | length }} à saisir</span></h2>
-<div class="boutons" style="margin:-.3rem 0 .6rem">
-  {% if jobroom.a_saisir or (tache_jobroom and tache_jobroom.active) %}{{ claude(none, "jobroom", "Saisir par Claude", "/#jobroom", "go", tache_jobroom) }}{% endif %}
+<h2 id="jobroom">Preuves Job-Room</h2>
+<div class="boutons tete-section">
+  {% if jobroom.a_saisir or (tache_jobroom and tache_jobroom.active) %}{{ claude(none, "jobroom", "Saisir par Claude", "/#jobroom", "", tache_jobroom) }}{% endif %}
   {{ etat_tache(tache_jobroom, etats_taches) }}
   <span class="petit muet">Automatique dès qu'une candidature est notée envoyée.</span>
 </div>
 {% if jobroom.a_saisir or jobroom.refus_a_reporter %}
 <div class="tableau"><table>
-  <thead><tr><th>Avant le</th><th>Raison sociale</th><th>Désignation exacte du poste</th><th>Postulation</th><th></th></tr></thead>
+  <thead><tr><th>Avant le</th><th>Employeur</th><th>Poste</th><th>Envoyée</th><th class="actions"><span class="cache">Action</span></th></tr></thead>
   <tbody>
   {% for f in jobroom.a_saisir %}
     <tr>
@@ -196,7 +197,7 @@
       <td>{{ f.entreprise }}</td>
       <td><a href="/annonce/{{ f.empreinte }}">{{ f.titre }}</a></td>
       <td>{{ f.postulee_le | date_fr(True) }}{% if f.canal_envoi %} · {{ f.canal_envoi }}{% endif %}</td>
-      <td style="white-space:nowrap">{{ bouton_action(f, "jobroom_saisie", "Saisie faite", "/#jobroom") }}</td>
+      <td class="actions">{{ bouton_action(f, "jobroom_saisie", "Saisie faite", "/#jobroom") }}</td>
     </tr>
   {% endfor %}
   {% for f in jobroom.refus_a_reporter %}
@@ -204,28 +205,27 @@
       <td><span class="puce">refus</span></td><td>{{ f.entreprise }}</td>
       <td><a href="/annonce/{{ f.empreinte }}">{{ f.titre }}</a></td>
       <td>Résultat négatif à reporter{% if f.motif_refus %} : {{ f.motif_refus }}{% endif %}</td>
-      <td>{{ bouton_action(f, "jobroom_refus", "Reporté", "/#jobroom") }}</td>
+      <td class="actions">{{ bouton_action(f, "jobroom_refus", "Reporté", "/#jobroom") }}</td>
     </tr>
   {% endfor %}
   </tbody>
 </table></div>
-<p class="petit muet">À saisir sur <a href="https://www.job-room.ch/work-efforts/create" target="_blank" rel="noopener noreferrer">job-room.ch</a> : résultat « en suspens », assignation ORP « non ». Vérifier d'abord la liste du mois (anti-doublon).</p>
+<p class="petit muet">À saisir sur <a href="https://www.job-room.ch/work-efforts/create" target="_blank" rel="noopener noreferrer">job-room.ch</a> avec l'employeur et l'intitulé exact du poste : résultat « en suspens », assignation ORP « non ». Vérifie d'abord la liste du mois, pour ne rien saisir deux fois.</p>
 {% endif %}
 {% if jobroom.a_verifier %}<p class="petit muet">{{ jobroom.a_verifier | length }} candidatures plus anciennes n'ont pas de preuve inscrite au registre (délai passé) : à vérifier dans Job-Room, voir <a href="/candidatures">Candidatures</a>.</p>{% endif %}
 {% endif %}
 
 {% if relances.dues or relances.a_classer %}
-<h2 id="relances">Relances dues <span class="compte">{{ relances.dues | length }}</span></h2>
+<h2 id="relances">Relances dues</h2>
 {% if relances.dues %}
 <div class="tableau"><table>
-  <thead><tr><th>Échéance</th><th>Annonce</th><th>Action</th><th></th></tr></thead>
+  <thead><tr><th>Échéance</th><th>Annonce</th><th class="actions"><span class="cache">Action</span></th></tr></thead>
   <tbody>
   {% for f in relances.dues[:25] %}
     <tr>
-      <td><span class="puce retard">{{ f._echeance | date_fr(True) }}</span>{% if f._retard > 0 %} <span class="muet petit">+{{ f._retard }} j</span>{% endif %}</td>
-      <td><a href="/annonce/{{ f.empreinte }}">{{ f.entreprise }}</a><div class="muet petit">{{ f.titre }}</div></td>
-      <td class="petit">{{ f.prochaine_action or "" }}</td>
-      <td style="white-space:nowrap">{{ bouton_action(f, "relance_faite", "Relancé", "/#relances") }} {{ bouton_action(f, "refus", "Refus", "/#relances", "discret") }}</td>
+      <td><span class="puce retard">{{ f._echeance | date_fr(True) }}</span>{% if f._retard > 0 %}<div class="muet petit">{{ f._retard }} j de retard</div>{% endif %}</td>
+      <td><a href="/annonce/{{ f.empreinte }}">{{ f.entreprise }}</a><div class="muet petit">{{ f.titre }}</div>{% if f.prochaine_action %}<div class="petit">{{ f.prochaine_action }}</div>{% endif %}</td>
+      <td class="actions">{{ bouton_action(f, "relance_faite", "Relancé", "/#relances") }} {{ bouton_action(f, "refus", "Refus", "/#relances", "discret") }}</td>
     </tr>
   {% endfor %}
   </tbody>

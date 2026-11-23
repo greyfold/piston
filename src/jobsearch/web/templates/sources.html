@@ -8,7 +8,7 @@
   {{ bouton_ajout("modale-ajout-source", "Noter une source sans la brancher") }}
 </div>
 {% call modale_ajout("modale-brancher", "Brancher une page carrière", "/sources/essayer", libelle="Essayer",
-     texte="La plateforme reconnaît le logiciel de la page ou, à défaut, la fait lire par Claude, et te montre ce qu'elle y trouve avant d'enregistrer.") %}
+     texte="L'application reconnaît le logiciel de la page ou la fait lire par Claude, et te montre ce qu'elle y trouve avant d'enregistrer.") %}
   <div class="grille-champs">
     <div class="champ large">
       <label for="essai-entreprise">Employeur <span class="requis" title="obligatoire">*</span></label>
@@ -77,7 +77,9 @@
   <h2 class="section-base" id="groupe-sources-{{ loop.index }}">{{ titre }}</h2>
   <ul class="reglages-liste">
     {% for s in liste %}{% set vues = s.n.vues or 0 %}
-    {{ ligne_lien("/sources/" ~ (s.id | urlencode), s.nom, "globe",
+    {# L'icône dit comment la source est lue : par le passage, par l'IA en session, par courriel, à brancher, interdite. #}
+    {{ ligne_lien("/sources/" ~ (s.id | urlencode), s.nom, {"en session": "modele", "à brancher": "prise", "alertes e-mail": "courrier",
+         "interdit à la plateforme": "cadenas"}.get(s.acces, "globe"),
          s.acces ~ " · " ~ vues ~ " annonce" ~ ("s" if vues != 1 else "") ~ " vue" ~ ("s" if vues != 1 else ""), statut=s.statut) }}
     {% endfor %}
   </ul>

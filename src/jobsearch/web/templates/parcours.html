@@ -66,12 +66,12 @@
 
       {% if cv %}
       <details class="ajout-base">
-        <summary>CV d'origine{% if cv | length > 1 %}s ({{ cv | length }}){% endif %}</summary>
+        <summary>CV d'origine{% if cv | length > 1 %}s ({{ cv | length }}){% endif %}{{ icone("chevron", "icone chevron") }}</summary>
         {% for d in cv %}<p class="petit muet">{{ d.nom }}, importé le {{ d.importe_le | date_fr }}</p><pre class="cv-origine">{{ d.texte }}</pre>{% endfor %}
       </details>
       {% endif %}
       <details class="ajout-base">
-        <summary>Repartir de zéro</summary>
+        <summary>Repartir de zéro{{ icone("chevron", "icone chevron") }}</summary>
         <form method="post" action="/parcours/vider{{ suite }}" class="edition">
           <p class="petit">Retire toute la base, l'entretien et le CV importé. Rien ne se récupère ensuite.</p>
           <label class="petit"><input type="checkbox" name="confirmer" value="oui" required> Je veux vider mon parcours</label>
@@ -139,9 +139,8 @@
       <h1>Ton parcours</h1>
       {# L'explication ne sert qu'avant l'import : une fois la base remplie, la page montre la base. #}
       {% if vide %}
-      <p class="intro">Ton CV d'abord, puis l'IA te pose des questions, expérience après expérience, pour faire ressortir
-        tes projets et tes réalisations ; tes formations restent une simple ligne. Tout est gardé dans l'application, avec tes mots : c'est cette base, en entier, qui sert
-        ensuite à noter les annonces et à écrire tes CV et tes lettres.</p>
+      <p class="intro">L'IA range ton CV, puis te pose des questions, expérience après expérience, pour faire ressortir tes
+        réalisations. Cette base, avec tes mots, sert ensuite à noter les annonces et à écrire tes CV et tes lettres.</p>
       {% endif %}
     </div>
   </div>
@@ -155,9 +154,8 @@
   {% if vide %}
   <section class="carte-accueil import-cv" aria-labelledby="import-titre">
     <h2 id="import-titre">Importe ton CV</h2>
-    <p class="intro">PDF, Word ou texte. L'IA le range en expériences, projets et réalisations, sans rien résumer :
-      chaque puce devient une réalisation, mot pour mot, et le texte d'origine est gardé tel quel. Tes formations
-      restent une ligne : intitulé, école, dates.</p>
+    <p class="intro">Rien n'est résumé : chaque puce devient une réalisation, mot pour mot. Tes formations restent une
+      ligne : intitulé, école, dates.</p>
     <form data-import data-de="{{ de }}" enctype="multipart/form-data" class="formulaire-import">
       <label class="depot">
         <input type="file" name="fichier" accept=".pdf,.docx,.txt,.md,application/pdf" data-fichier>
@@ -165,7 +163,7 @@
         <span><b data-nom-fichier>Choisir mon CV</b><span class="muet petit">PDF, Word (.docx) ou texte</span></span>
       </label>
       <details class="coller">
-        <summary>Ou colle le texte de ton CV</summary>
+        <summary>Ou colle le texte de ton CV{{ icone("chevron", "icone chevron") }}</summary>
         <textarea name="texte" rows="10" aria-label="Texte du CV"></textarea>
       </details>
       <div class="etat-tache" data-attente hidden><span class="spinner" aria-hidden="true"></span>

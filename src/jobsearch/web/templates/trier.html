@@ -13,13 +13,13 @@
 <div class="salle-entretien salle-tri" data-tri data-total="{{ total }}">
   <header class="tete-salle">
     <div class="bande-page">
-      <a class="retour-salle" href="/?ensuite=1">{{ icone("precedent") }}<span>Tableau de bord</span></a>
+      <a class="retour-salle" href="/?ensuite=1">{{ icone("precedent") }}<span>Aujourd'hui</span></a>
       <h1>À trancher</h1>
       <p class="etape-salle" aria-live="polite"><span data-rang>1</span> sur {{ total }}</p>
     </div>
     <div class="dedans-salle">
-      <div class="progression" role="progressbar" aria-valuemin="0" aria-valuemax="{{ total }}" aria-valuenow="0"
-           aria-label="Annonces tranchées" data-progression><i></i></div>
+      <div class="progression" role="progressbar" aria-valuemin="1" aria-valuemax="{{ total }}" aria-valuenow="1"
+           aria-label="Annonce en cours" data-progression><i style="width: {{ 100 // total }}%"></i></div>
     </div>
   </header>
 
@@ -45,7 +45,7 @@
         {% if f.motif and f.statut == 'B' %}<p class="ligne-carte petit muet">{{ f.motif }}</p>{% endif %}
         <div class="pied-carte-tri">
           <details class="raisons">
-            <summary>Pourquoi ? (facultatif)</summary>
+            <summary>Pourquoi ? (facultatif){{ icone("chevron", "icone chevron") }}</summary>
             <div class="tags">
               <span class="groupe">Pour</span>
               {% for r in raisons.pour %}<label><input type="checkbox" form="form-tri" name="raisons" value="{{ r }}">{{ r }}</label>{% endfor %}

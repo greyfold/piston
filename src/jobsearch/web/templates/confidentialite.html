@@ -2,8 +2,8 @@
 {% from "_macros.html" import icone, entete_reglage %}
 {% block contenu %}
 <div class="confidentialite">
-{% call entete_reglage(reglage) %}L'IA écrit tes candidatures sans connaître ton nom. Ton nom, ton adresse, ton téléphone et ton e-mail ne quittent jamais ton Mac. L'IA reçoit des balises
-  à leur place ; la plateforme remet tes vraies coordonnées dans le CV et la lettre une fois le texte revenu, ici, sur ton Mac.{% endcall %}
+{% call entete_reglage(reglage) %}L'IA écrit tes candidatures sans connaître ton nom : elle reçoit des balises à la place de tes coordonnées,
+  et l'application remet les vraies dans le CV et la lettre, sur ton Mac.{% endcall %}
 
 <h2>La preuve, avec ton profil</h2>
 <div class="cartes deux">
@@ -66,13 +66,13 @@
 <h2>Ton réglage chez Claude</h2>
 <div class="carte">
   <p>Dans <a href="https://claude.ai/settings/data-privacy-controls" rel="noopener" target="_blank">claude.ai → Paramètres → Confidentialité</a>,
-    désactive « Aider à améliorer Claude » si tu ne veux pas que tes échanges servent à entraîner les modèles. Ce réglage vaut aussi pour la plateforme, qui passe par ton compte.</p>
+    désactive « Aider à améliorer Claude » si tu ne veux pas que tes échanges servent à entraîner les modèles. Ce réglage vaut aussi pour l'application, qui passe par ton compte.</p>
 </div>
 
 {% if extrait %}
 <h2>Vérifier toi-même</h2>
 <details class="carte">
-  <summary><b>Ton profil tel que l'IA le reçoit</b> <span class="muet petit">(les lignes qui contenaient une coordonnée)</span></summary>
+  <summary><b>Ton profil tel que l'IA le reçoit</b> <span class="muet petit">(les lignes qui contenaient une coordonnée)</span>{{ icone("chevron", "icone chevron") }}</summary>
   <pre class="extrait-masque">{% for l in extrait %}{{ l }}
 {% endfor %}</pre>
   {% if balises %}

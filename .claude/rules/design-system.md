@@ -24,8 +24,10 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
 ## Interdits
 
 - **Aucune couleur en dur** (`#hex`, `rgb()`, nom de couleur) dans un gabarit, un JS ou une règle CSS de
-  composant. Toujours `var(--…)`. Seules exceptions tolérées : `#fff` sur un fond `--vert`/`--alerte`, et
-  les ombres `rgba(0,0,0,…)` des surfaces flottantes (modale, volet, panneau).
+  composant. Toujours `var(--…)`. Le texte sur un fond plein `--vert` ou `--alerte` prend `--sur-vert` ou
+  `--sur-alerte` (blanc en clair, foncé en sombre : du blanc sur le vert clair du mode sombre ne tient pas
+  le contraste AA), jamais `#fff`. Seules exceptions tolérées : le curseur blanc de l'interrupteur, et les
+  ombres `rgba(0,0,0,…)` des surfaces flottantes (modale, volet, panneau).
 - **Aucun attribut `style="…"`** ni bloc `<style>` dans un gabarit. Ceux qui existent sont une dette : ne
   pas en ajouter, et retirer celui qu'on croise dans les lignes qu'on modifie. Seule exception : la largeur
   calculée d'une barre `.progression` ou d'une `.jauge`, écrite `style="width: {{ … }}%"` et rien d'autre.
@@ -34,7 +36,8 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
 - **Aucune icône hors du jeu Lucide** de la macro `icone()`. Pas d'emoji ni de glyphe Unicode comme icône
   (les `⚠` et `✕` existants sont une dette). Une icône manquante s'ajoute au dictionnaire `ICONES` de
   `_macros.html` (tracé Lucide d'origine, `viewBox 0 0 24 24`, trait `currentColor`).
-- **Pas de violet, pas d'étincelle, pas de dégradé « magique » pour l'IA** (règles AI de Nexus). Ce que
+- **Pas de violet, pas d'étincelle, pas de dégradé « magique » pour l'IA** (règles AI de Nexus). Pas de
+  lavande non plus : `--marine` reste un bleu-gris dans les deux modes. Ce que
   l'IA produit est étiqueté par du texte (`badge-ia`, « Question de l'IA »), en vert ou en neutre.
 - **Pas de nouvelle valeur ad hoc** quand un jeton ou une valeur du système existe (voir « Jetons »).
 - **Pas de `!important`**, sauf pour `[hidden]`.
@@ -43,13 +46,13 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
 
 | Usage | Jeton |
 |---|---|
-| Action principale, sélection, focus, succès | `--vert`, `--vert-fonce` (texte sur fond pâle), `--vert-pale` / `--ok-pale` (fond) |
+| Action principale, sélection, focus, succès | `--vert`, `--vert-fonce` (texte sur fond pâle), `--vert-pale` / `--ok-pale` (fond) ; texte sur fond `--vert` plein : `--sur-vert` |
 | Fond de page / surfaces | `--fond`, `--surface` (carte, champ), `--surface-2` (fond neutre, survol) |
 | Bordures et séparateurs | `--bord` |
-| Texte | `--texte` (principal), `--texte-2` (secondaire), `--texte-3` (indications, jamais pour un texte indispensable sur `--fond` : contraste AA insuffisant) |
-| Erreur, destructif, en retard | `--alerte`, `--alerte-pale` |
+| Texte | `--texte` (principal), `--texte-2` (secondaire), `--texte-3` (indications, en-têtes de tableau ; AA tenu sur `--fond` et `--surface` dans les deux modes : ne pas l'éclaircir) |
+| Erreur, destructif, en retard | `--alerte`, `--alerte-pale` ; texte sur fond `--alerte` plein : `--sur-alerte` |
 | Avertissement, à faire bientôt | `--attention`, `--attention-pale` |
-| Accent de marque, statuts « candidature » | `--marine` |
+| Accent de marque, statuts « candidature » | `--marine` (texte), `--marine-pale` (fond de la pilule « envoyée ») |
 | Rayon des cartes et blocs | `--rayon` (10px) ; 8px pour boutons et champs ; 12px pour modale, compositeur, grandes cartes ; 999px pour pilules |
 | Ombre des cartes | `--ombre` (nulle en mode sombre) |
 
@@ -64,13 +67,13 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
 
 | Besoin | À utiliser |
 |---|---|
-| Bouton | `button` / `a.bouton` ; principal `.go` (un seul par écran ou par formulaire), destructif `.non`, discret `.discret`, tailles `.petit` / `.grand` ; action tertiaire en lien `.lien-neutre`, suppression en lien `.lien-danger`. Rangée de boutons : `.boutons` (`.boutons.pied` en bas de formulaire, à droite) |
+| Bouton | `button` / `a.bouton` ; principal `.go` (un seul par écran : sur le tableau de bord, « Trancher maintenant » ; les actions des cartes et des tableaux restent secondaires), destructif `.non`, discret `.discret`, tailles `.petit` / `.grand` ; action tertiaire en lien `.lien-neutre`, suppression en lien `.lien-danger`. Rangée de boutons : `.boutons` (`.boutons.pied` en bas de formulaire, à droite) |
 | Action qui lance Claude | macro `claude()` (bouton bloqué `.occupe` pendant la session), échec via `etat_tache()` |
 | Message après une action (FlashMessage) | `msg`/`ok` passés au gabarit → macro `flash_message()`, rendue par `base.html` sur toutes les pages : flottant en bas à droite, le succès se referme seul, le refus reste jusqu'à sa croix. Ne pas en fabriquer d'autre ni surcharger le bloc `message`. `.flash.ko` ne sert plus qu'aux erreurs écrites par le JS à côté d'une saisie (`data-erreur`) et à la ligne d'état du tri |
 | Bandeau (Banner) | `.bandeau.ok` / `.attention` / `.alerte` / `.info` avec `<span class="point">` |
 | Carte | `.carte` (`.tete`, `.meta`, `.extrait`) dans `.cartes` / `.cartes.deux` |
-| Chiffres clés | `.chiffres` > `.chiffre` ; jauge `.jauge` ; progression `.progression` |
-| Pilule, statut (Badge) | `.puce` et ses variantes (`A`, `B`, `C`, `nouvelle`, `retenue`, `entretien`, `refus`, `retard`…) ; délais `.delai` |
+| Chiffres clés | `.chiffres` > `.chiffre` ; un chiffre qui mène à sa section : `a.chiffre` (lien `#ancre`), et la section ne répète pas le compte dans son titre ; jauge `.jauge` ; progression `.progression` |
+| Pilule, statut (Badge) | `.puce` et ses variantes (`A`, `B`, `C`, `nouvelle`, `retenue`, `entretien`, `refus`, `retard`…) ; délais `.delai`. Un statut d'annonce a sa couleur : à trancher (`nouvelle`, ambre), oui (`retenue`, vert pâle), envoyée (`candidature`, marine), entretien et offre (vert plein), refus et non (neutre). L'avis de l'IA s'écrit « IA : oui / peut-être / non » (macro `notes`), pour ne pas se confondre avec la décision de la personne. Un nom de statut ne sert jamais de nom de bloc ailleurs dans `style.css` (`.entretien` seul a déformé `.puce.entretien`) |
 | État d'un réglage (connecteur, clé, fonction, IA) | `.puce.B` : en service ; `.puce` neutre : éteint par choix ou facultatif (« inactif », « fermée », « absente ») ; `.puce.nouvelle` : à faire, sans rien bloquer (« à configurer », « à compléter ») ; `.puce.retard` : bloquant seulement (« non connecté ») |
 | Ce que l'IA a produit | `.badge-ia` avec `icone("modele")` et un texte (« Question de l'IA », « Proposés par l'IA ») ; une seule étiquette IA, et jamais sur ce qui ne vient pas de l'IA |
 | État vide (EmptyState) | macro `etat_vide()` uniquement (test dans `tests/test_pipeline_web.py`) |
@@ -88,7 +91,9 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
 | Notifications (passages) | volet `dialog.volet.droite#notifications` (`_notifications.html`), ouvert par `[data-ouvrir-notifications]` ; une `li.notification` (`.ok` / `.attention` / `.alerte` / `.en-cours`, `.nouvelle`) par passage. Pas de bandeau d'état du passage dans les pages |
 | En-tête d'une page de réglage | macro `entete_reglage(reglage)` avec l'introduction en `{% call %}` : le `h1` et le titre d'onglet viennent de `GROUPES_REGLAGES` (`app.py`), la même liste que la page Réglages ; ne pas écrire de `h1` ni de `block titre` à la main (test dans `tests/test_reglages.py`) |
 | Ligne de réglage | `ul.reglages-liste` > `li` > `.reglage-ligne` (`.texte` > `.titre` + `.description`, action à droite) ; ligne qui ouvre une page : macro `ligne_lien()` (`a.reglage-ligne` : icône, texte, chevron `suivant`) |
-| Tableau | `.tableau` > `table` ; nombres `td.nb` |
+| Tableau | `.tableau` > `table` ; nombres `td.nb` ; boutons d'une ligne dans `td.actions` (à droite, sans retour à la ligne), sous un `th.actions` au libellé `.cache` ; en-têtes dans les mots de l'application, pas ceux d'un formulaire administratif |
+| Filtres d'une liste | `form.filtres[data-filtre-auto]` : un choix dans une liste déroulante s'applique tout de suite (`champs.js`), la recherche à Entrée ; pas de bouton « Filtrer » |
+| Repli (ExplainDisclosure) | `details` > `summary` terminé par `icone("chevron", "icone chevron")` : le triangle du navigateur est masqué partout, le chevron se retourne à l'ouverture |
 | Liste de vérifications | `.verifs` (`li.ok` / `li.ko`) |
 | Tâche en cours / attente | `.etat-tache` (`.ok`, `.erreur`) avec `.spinner` ; attente IA `.statut-ia` |
 | Entretien avec l'IA | macros `fil_entretien()` (fil, ExplainDisclosure) et `compositeur()` (AIComposer, AIStatus, avertissement `.avert-ia`) |
@@ -104,7 +109,8 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
    `/* Nom (Nexus NomDuComposant) : ce qu'il fait, en une phrase. */`. Classes en français, minuscules,
    avec tirets, dans l'esprit des noms existants.
 3. Uniquement des jetons et des valeurs de l'échelle. Survol avec `--texte-3` sur la bordure ou
-   `--surface-2` en fond ; état actif ou choisi `--vert-pale` + `--vert-fonce` (ou `--vert` + `#fff`).
+   `--surface-2` en fond ; état actif ou choisi `--vert-pale` + `--vert-fonce` (ou `--vert` + `--sur-vert`).
+   Les boutons s'enfoncent de 1px à l'appui (règle globale de `button` et `.bouton`) : ne pas la retirer.
 4. S'il sert à plus d'un endroit ou porte une structure HTML : une macro dans `_macros.html`, avec un
    commentaire `{# … #}` qui dit quand l'utiliser.
 5. Un test dans `tests/` si son rendu est une règle (comme l'état vide).
@@ -120,6 +126,11 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
 - Cible cliquable d'au moins 24px.
 
 ## Textes de l'interface
+
+- L'application se nomme « l'application », jamais « la plateforme » ; le retour vers l'accueil s'appelle
+  « Aujourd'hui », comme dans le menu, jamais « Tableau de bord ».
+- Une introduction tient en une phrase. Si l'écran a besoin de plus d'explication, c'est l'écran qu'il faut
+  changer.
 
 - En français, en **tutoyant** (« Ton parcours », « Ta réponse ») ; jamais de vouvoiement.
 - Majuscule au premier mot seulement ; guillemets « » ; espace insécable avant `: ; ? !`.

@@ -565,6 +565,14 @@
     });
   });
 
+  // Filtres d'une liste (Offres, form[data-filtre-auto]) : un choix dans une liste déroulante s'applique tout de
+  // suite ; la recherche s'applique à Entrée. Pas de bouton « Filtrer ».
+  document.querySelectorAll("form[data-filtre-auto] select").forEach(function (choix) {
+    choix.addEventListener("change", function () {
+      if (choix.form.requestSubmit) choix.form.requestSubmit(); else choix.form.submit();
+    });
+  });
+
   document.querySelectorAll("[data-telephone]").forEach(telephone);
   document.querySelectorAll("[data-date]").forEach(date);
   document.querySelectorAll("select[data-liste-recherche]").forEach(listeRecherche);

@@ -58,8 +58,9 @@
   function avancer() {
     faits += 1;
     if (barre) {
-      barre.querySelector("i").style.width = (100 * faits / total) + "%";
-      barre.setAttribute("aria-valuenow", faits);
+      // La barre suit l'annonce en cours (1 sur 3 : un tiers), comme le compteur au-dessus.
+      barre.querySelector("i").style.width = (100 * Math.min(faits + 1, total) / total) + "%";
+      barre.setAttribute("aria-valuenow", Math.min(faits + 1, total));
     }
     var suivante = dessus();
     if (!suivante) { finir(); return; }

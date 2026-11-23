@@ -40,7 +40,7 @@
   <input type="hidden" name="empreinte" value="{{ f.empreinte }}">
   <input type="hidden" name="retour" value="{{ retour }}">
   <details class="raisons">
-    <summary>Pourquoi ? (un clic, facultatif)</summary>
+    <summary>Pourquoi ? (un clic, facultatif){{ icone("chevron", "icone chevron") }}</summary>
     <div class="tags">
       <span class="groupe">Pour</span>
       {% for r in raisons.pour %}<label><input type="checkbox" name="raisons" value="{{ r }}">{{ r }}</label>{% endfor %}
@@ -65,7 +65,7 @@
 <div class="notes">
   <span class="note-glob {{ 'haute' if e.note_globale >= 80 else 'moyenne' if e.note_globale >= 50 else 'basse' }}" title="Adéquation globale : profil, annonce et critères">{{ e.note_globale }}<small>/100</small></span>
   <span class="note-profil" title="Part des exigences majeures couvertes par le profil">Profil {{ e.adequation_profil }} %</span>
-  {% if e.avis %}<span class="puce {{ e.avis.classe }}" title="Avis tiré de la moyenne de la note et du profil ({{ e.avis.moyenne }} %) : oui dès 50 %">{{ e.avis.libelle }}</span>{% endif %}
+  {% if e.avis %}<span class="puce {{ e.avis.classe }}" title="Avis tiré de la moyenne de la note et du profil ({{ e.avis.moyenne }} %) : oui dès 50 %">IA : {{ e.avis.libelle | lower }}</span>{% endif %}
   {% if e.resultat.salaire %}{{ salaire(e.resultat.salaire) }}{% endif %}
 </div>
 {% endif %}

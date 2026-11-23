@@ -542,7 +542,7 @@ def _taches_checklist(p, ia_connectee):
     recherche = bool(postes_saisis(p)) and bool(lire(p, "recherche.cantons"))
     return [
         ("ia", "Connecter ton IA", "Pour noter les annonces et écrire tes dossiers", "1 min", "/ia", ia_connectee),
-        ("recherche", "Définir ta recherche", "Ce que la plateforme cherche chaque matin", "1 min", "/profil/recherche", recherche),
+        ("recherche", "Définir ta recherche", "Ce que l'application cherche chaque matin", "1 min", "/profil/recherche", recherche),
         ("identite", "Tes coordonnées", "En tête de tes CV et lettres, et pour les formulaires", "2 min", "/premiers-pas/identite", saisie("identite")),
         ("dossier", "Ton parcours", "Ton CV, puis un entretien avec l'IA sur chaque poste : des CV et des lettres "
          "fidèles à ton expérience", "15 min", "/premiers-pas/dossier", _parcours_termine()),
@@ -564,7 +564,7 @@ def _parcours_termine():
 # Fonctions au choix de la personne (page « Fonctions »).
 OPTIONS = [
     {"id": "jobroom", "titre": "Preuves de recherche Job-Room",
-     "description": "Pour l'ORP : la plateforme prépare la saisie de chaque postulation dans Job-Room et te rappelle les délais."},
+     "description": "Pour l'ORP : l'application prépare la saisie de chaque postulation dans Job-Room et te rappelle les délais."},
 ]
 # Le suivi des objectifs n'a pas d'interrupteur : il suit les objectifs saisis dans « Ma recherche ».
 OPTION_OBJECTIFS = "objectifs"

@@ -4,7 +4,7 @@
 {% block contenu %}
 {# Page Réglages : les réglages vivent ici, hors du menu latéral (qui ne garde que les espaces de travail).
    Une liste de lignes de réglage par groupe ; chaque ligne ouvre sa page, qui a un retour vers celle-ci. #}
-{% call entete_reglage({"nom": "Réglages"}) %}Ton profil, d'où viennent les annonces, l'IA et le fonctionnement de la plateforme.{% endcall %}
+{% call entete_reglage({"nom": "Réglages"}) %}Ton profil, d'où viennent les annonces, l'IA et le fonctionnement de l'application.{% endcall %}
 {% for titre, lignes in groupes_reglages %}
 <section class="groupe-reglages" aria-labelledby="groupe-{{ loop.index }}">
   <h2 class="section-base" id="groupe-{{ loop.index }}">{{ titre }}</h2>
