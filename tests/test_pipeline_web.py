@@ -169,6 +169,26 @@ def test_etats_vides(web, reg):
     assert "<h2>Refus" not in cands and 'id="sans-suite"' not in cands        # sections vides masquées
 
 
+def test_cadre_natif_de_l_application_mac(web, reg):
+    """Dans la vue web de l'application Mac, le menu est natif : la page ne le dessine pas, elle dit au cadre
+    où elle en est (JSON #etat-page). Un navigateur ordinaire garde le menu et ne reçoit pas cet état."""
+    import json
+    mac = {"user-agent": "Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 (KHTML, like Gecko) RechercheEmploi"}
+
+    def etat(html):
+        return json.loads(html.split('id="etat-page">')[1].split("</script>")[0])
+
+    html = web.get("/offres", headers=mac).text
+    assert 'class="menu-lateral"' not in html and 'id="notifications"' in html and "coquille" in html
+    e = etat(html)
+    assert e["mode"] == "normal" and e["section"] == "/offres"
+    assert [x["href"] for x in e["espaces"]][0] == "/" and isinstance(e["notifications"], int)
+    assert etat(web.get("/sources", headers=mac).text)["section"] == "/reglages"
+    assert etat(web.get("/parcours", headers=mac).text)["mode"] == "concentre"          # mode concentré
+    ordinaire = web.get("/offres").text
+    assert 'class="menu-lateral"' in ordinaire and 'id="etat-page"' not in ordinaire and "coquille" not in ordinaire
+
+
 def test_anciennes_adresses_redirigees(web, reg):
     for ancienne, nouvelle in (("/pipeline", "/candidatures"), ("/registre?statut=A&q=ux", "/offres?statut=A&q=ux")):
         r = web.get(ancienne, follow_redirects=False)

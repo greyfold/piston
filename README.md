@@ -192,8 +192,9 @@ scripts/construire-app.sh --ouvrir
 
 Le script construit `dist/Piston.app` :
 
-- l'enveloppe SwiftUI (`app/`) : une fenêtre sur le tableau de bord, une icône dans la barre
-  des menus (état du passage, annonces à trancher, connexion à l'IA, machine virtuelle) ;
+- l'enveloppe SwiftUI (`app/`) : une fenêtre sur le tableau de bord dans un cadre natif (barre latérale
+  des espaces de travail et de Réglages, barre d'outils, menu « Aller » : `Cadre.swift`), une icône dans la
+  barre des menus (état du passage, annonces à trancher, connexion à l'IA, machine virtuelle) ;
 - un Python autonome (python-build-standalone, installé par uv) dans `Contents/Resources/python`,
   avec les dépendances aux versions de `uv.lock` ;
 - le code dans `Contents/Resources/racine` (`src/`, `config/`, `pyproject.toml`), trouvé par un
@@ -330,7 +331,7 @@ d'exemple (`tests/fixtures/config`, valeurs fictives), jamais sur `config/` ni s
 
 | Où | Quoi |
 |---|---|
-| `app/` | L'enveloppe SwiftUI (`Etat.swift` : Python embarqué, tableau de bord, échéances). |
+| `app/` | L'enveloppe SwiftUI (`Etat.swift` : Python embarqué, tableau de bord, échéances ; `Cadre.swift` : barre latérale, barre d'outils et menu « Aller » natifs, d'après l'état que chaque page pose en JSON). |
 | `scripts/construire-app.sh` | Construit l'application autoportante. |
 | `config/` | Valeurs par défaut, neutres (vérifié par `tests/test_echeances.py`). |
 | `src/jobsearch/echeances.py` | Ce qui est dû maintenant : passage, alerte, surveillance, date des lettres. |

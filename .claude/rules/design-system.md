@@ -8,7 +8,9 @@ paths:
 # Design system : règles strictes pour l'interface
 
 L'interface suit le design system **Nexus**, aux couleurs, polices et arrondis de la charte **Piston Douceur**
-(maquette Figma « Recherche d'emploi — écrans clés », écran « Aujourd'hui — Piston Douceur »), traduit une fois pour toutes dans
+(maquette Figma « Recherche d'emploi — écrans clés », écran « Aujourd'hui — Piston Douceur »), en **palette atténuée** (écran
+« Aujourd'hui — P5 · Fond blanc, calme » de la section « palette atténuée ») : fond gris très clair, structure en gris chaud,
+la couleur réservée à l'action, au sens d'un statut et à l'urgence. Le tout est traduit une fois pour toutes dans
 `src/jobsearch/web/static/style.css` (jetons et composants) et `src/jobsearch/web/templates/_macros.html`
 (macros Jinja). Ces deux fichiers sont la seule source de vérité. Ces règles sont obligatoires : une
 interface qui ne les respecte pas est à refaire, même si elle « marche ».
@@ -50,7 +52,7 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
 |---|---|
 | Action principale, sélection, focus, succès | `--vert` (Forêt en clair, Pêche en sombre), `--vert-survol` (survol du bouton principal), `--vert-fonce` (texte sur fond pâle), `--vert-pale` / `--ok-pale` (fond) ; texte sur fond `--vert` plein : `--sur-vert` |
 | Liens, titres de carte qui mènent à l'annonce, lien ouvert du menu | `--lien` |
-| Fond de page / surfaces | `--fond`, `--surface` (carte, champ), `--surface-2` (fond neutre, survol) |
+| Fond de page / surfaces | `--fond` (gris très clair), `--surface` (carte, champ, menu), `--surface-2` (fond neutre d'un gris chaud : survol, lien ouvert du menu ; jamais de sauge pour la structure) |
 | Bordures et séparateurs | `--bord` (cartes, séparateurs : décor seul) ; contour des boutons secondaires : `--contour` ; contour de ce qui se remplit ou se coche (champs, compositeur, pilules à cocher, étiquettes) : `--contour-champ` (3:1 au moins, WCAG 1.4.11), survol `--texte` |
 | Texte | `--texte` (principal), `--texte-2` (secondaire), `--texte-3` (indications, en-têtes de tableau ; AA tenu sur `--fond` et `--surface` dans les deux modes : ne pas l'éclaircir) |
 | Réussite, en service, connecté | `--reussite` (texte, vert de la charte) sur `--ok-pale` (sauge) : toujours un vert, jamais le beurre de `--vert-pale` |
@@ -62,7 +64,7 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
 
 - Tailles en `rem`/`em`, sur l'échelle déjà en usage (.72, .75, .78, .8, .82, .85, .88, .9, .92, .95, 1,
   1.05, 1.15, 1.3, 1.45 rem). Hauteur des champs : 42px. Largeur du contenu : `main` (1120px, 40px de marge de
-  chaque côté à droite du menu), cartes et chiffres à 20 × 24px d'intérieur, formulaires et
+  chaque côté à droite du menu), cartes à 20 × 24px d'intérieur, formulaires et
   colonnes de lecture ~46–52rem, texte courant ≤ 72ch.
 - Points de rupture existants seulement : 560, 640, 760, 900, 960px.
 - **Mode sombre obligatoire** : un nouveau jeton se déclare dans `:root` **et** dans le bloc
@@ -75,11 +77,11 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
 | Bouton | `button` / `a.bouton` ; principal `.go` (un seul par écran : sur le tableau de bord, « Trancher maintenant » ; les actions des cartes et des tableaux restent secondaires), destructif `.non`, discret `.discret`, tailles `.petit` / `.grand` ; action tertiaire en lien `.lien-neutre`, suppression en lien `.lien-danger`. Rangée de boutons : `.boutons` (`.boutons.pied` en bas de formulaire, à droite) |
 | Action qui lance Claude | macro `claude()` (bouton bloqué `.occupe` pendant la session), échec via `etat_tache()` |
 | Message après une action (FlashMessage) | `msg`/`ok` passés au gabarit → macro `flash_message()`, rendue par `base.html` sur toutes les pages : flottant en bas à droite, le succès se referme seul, le refus reste jusqu'à sa croix. Ne pas en fabriquer d'autre ni surcharger le bloc `message`. `.flash.ko` ne sert plus qu'aux erreurs écrites par le JS à côté d'une saisie (`data-erreur`) et à la ligne d'état du tri |
-| Bandeau (Banner) | `.bandeau.ok` / `.attention` / `.alerte` / `.info` avec `<span class="point">` |
+| Bandeau (Banner) | `.bandeau.ok` / `.attention` / `.alerte` / `.info` avec `<span class="point">` : une ligne de texte dont le point porte le sens ; seul `.alerte` (erreur) garde un fond |
 | Carte | `.carte` (`.tete`, `.meta`, `.extrait`) dans `.cartes` / `.cartes.deux` |
-| Chiffres clés | `.chiffres` > `.chiffre` ; un chiffre qui mène à sa section : `a.chiffre` (lien `#ancre`), et la section ne répète pas le compte dans son titre ; jauge `.jauge` ; progression `.progression` |
-| Pilule, statut (Badge) | `.puce` et ses variantes (`A`, `B`, `C`, `nouvelle`, `retenue`, `entretien`, `refus`, `retard`…) ; délais `.delai`. Un statut d'annonce a sa couleur : à trancher (`nouvelle`, ambre), oui (`retenue`, vert pâle), envoyée (`candidature`, marine), entretien et offre (vert plein), refus et non (neutre). L'avis de l'IA s'écrit « IA : oui / peut-être / non » (macro `notes`), pour ne pas se confondre avec la décision de la personne. Un nom de statut ne sert jamais de nom de bloc ailleurs dans `style.css` (`.entretien` seul a déformé `.puce.entretien`) |
-| État d'un réglage (connecteur, clé, fonction, IA) | `.puce.B` : en service, connecté (vert `--reussite` sur sauge) ; `.puce` neutre : éteint par choix ou facultatif (« inactif », « fermée », « absente ») ; `.puce.nouvelle` : à faire, sans rien bloquer (« à configurer », « à compléter ») ; `.puce.retard` : bloquant seulement (« non connecté ») |
+| Chiffres clés | `.chiffres` > `.chiffre` (sans cadre : le chiffre et son libellé sur le fond) ; un chiffre qui mène à sa section : `a.chiffre` (lien `#ancre`), et la section ne répète pas le compte dans son titre ; jauge `.jauge` ; progression `.progression` |
+| Pilule, statut (Badge) | `.puce` et ses variantes (`A`, `B`, `C`, `nouvelle`, `retenue`, `entretien`, `refus`, `retard`…) ; délais `.delai`. Pilules, délais et notes (`.note-glob`) sont du texte coloré, sans aplat. Un statut d'annonce a sa couleur de texte : à trancher (`nouvelle`, ambre), oui (`retenue`, `--vert-fonce`), envoyée (`candidature`, marine), entretien et offre (`--vert`), refus et non (neutre), retard en `--alerte`. L'avis de l'IA s'écrit « IA : oui / peut-être / non » (macro `notes`), pour ne pas se confondre avec la décision de la personne. Un nom de statut ne sert jamais de nom de bloc ailleurs dans `style.css` (`.entretien` seul a déformé `.puce.entretien`) |
+| État d'un réglage (connecteur, clé, fonction, IA) | `.puce.B` : en service, connecté (texte `--reussite`) ; `.puce` neutre : éteint par choix ou facultatif (« inactif », « fermée », « absente ») ; `.puce.nouvelle` : à faire, sans rien bloquer (« à configurer », « à compléter ») ; `.puce.retard` : bloquant seulement (« non connecté ») |
 | Ce que l'IA a produit | `.badge-ia` avec `icone("modele")` et un texte (« Question de l'IA », « Proposés par l'IA ») ; une seule étiquette IA, et jamais sur ce qui ne vient pas de l'IA |
 | État vide (EmptyState) | macro `etat_vide()` uniquement (test dans `tests/test_pipeline_web.py`) |
 | Champ (TextField, SelectField) | `.champ` > `label` + contrôle + `.aide`, dans `.grille-champs` (`.champ.large` pour toute la largeur) ; erreur `.erreur-champ` ; préfixe `.avec-prefixe` |
@@ -92,7 +94,7 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
 | Modale (Modal) | `dialog.modale` (`.modale-tete`, `.actions-modale`) ; confirmation d'une action destructrice : macro `confirmation()`, jamais `confirm()` du navigateur |
 | Ajout (« Ajouter… », « Noter… ») | **jamais un accordéon** (`details`). Par défaut une modale : bouton `bouton_ajout(id, libelle)` et `{% call modale_ajout(id, titre, action) %}` les champs `{% endcall %}` (`dialog.modale.large`, avec « Annuler » et le bouton d'envoi). Quand l'ajout se poursuit en conversation avec l'IA (un élément de la base du parcours) : dans la salle de l'entretien, comme `parcours_ajout.html` — une question fixe dans le fil, la réponse en champs structurés (`reponse_question`, `.reponse-guidee`), puis l'entretien sans changer d'écran. L'ajout d'une ligne dans `champ_lignes` ou d'une étiquette dans `champ_puces` reste sur place (test dans `tests/test_design_system.py`) |
 | Volet (SlideOver) | `dialog.volet` (`.tete-volet`, `.corps-volet`, `.pied-volet`, `.fermer-volet`) ; à gauche par défaut, `.droite` pour entrer par la droite |
-| Navigation | menu latéral `aside.menu-lateral` (ResponsiveNavLink, `_menu_lateral.html`, inclus par `base.html`) : les espaces de travail et, en bas, un seul lien « Réglages ». Les réglages n'entrent pas dans le menu : ils ont leur page `/reglages` (`reglages.html`), et chaque page de réglage reçoit de `base.html` un retour `.retour` vers elle ; onglets de page `nav.onglets-annonce` (vues d'une annonce) ; « Ma recherche » liste ses étapes en lignes de réglage (`profil_etapes.html`), chaque étape ayant un retour vers elle ; tri `.tri` ; retour `.retour` |
+| Navigation | menu latéral `aside.menu-lateral` (ResponsiveNavLink, `_menu_lateral.html`, inclus par `base.html`) : les espaces de travail (`ESPACES`, `app.py`) et, en bas, un seul lien « Réglages ». Dans l'application Mac (`body.coquille`), ce menu est natif (`app/…/Cadre.swift`) : la page ne le dessine pas et pose son état en JSON (`#etat-page`) ; un nouvel espace s'ajoute à `ESPACES` et à `Pilote.symbole`. Les réglages n'entrent pas dans le menu : ils ont leur page `/reglages` (`reglages.html`), et chaque page de réglage reçoit de `base.html` un retour `.retour` vers elle ; onglets de page `nav.onglets-annonce` (vues d'une annonce) ; « Ma recherche » liste ses étapes en lignes de réglage (`profil_etapes.html`), chaque étape ayant un retour vers elle ; tri `.tri` ; retour `.retour` |
 | Notifications (passages) | volet `dialog.volet.droite#notifications` (`_notifications.html`), ouvert par `[data-ouvrir-notifications]` ; une `li.notification` (`.ok` / `.attention` / `.alerte` / `.en-cours`, `.nouvelle`) par passage. Pas de bandeau d'état du passage dans les pages |
 | En-tête d'une page de réglage | macro `entete_reglage(reglage)` avec l'introduction en `{% call %}` : le `h1` et le titre d'onglet viennent de `GROUPES_REGLAGES` (`app.py`), la même liste que la page Réglages ; ne pas écrire de `h1` ni de `block titre` à la main (test dans `tests/test_reglages.py`) |
 | Ligne de réglage | `ul.reglages-liste` > `li` > `.reglage-ligne` (`.texte` > `.titre` + `.description`, action à droite) ; ligne qui ouvre une page : macro `ligne_lien()` (`a.reglage-ligne` : icône, texte, chevron `suivant`) |

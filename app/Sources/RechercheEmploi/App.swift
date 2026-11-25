@@ -36,6 +36,8 @@ struct RechercheEmploiApp: App {
         .defaultSize(width: 1180, height: 820)
         .commands {
             CommandGroup(after: .appInfo) { BoutonConnexion().environmentObject(etat) }
+            SidebarCommands()
+            CommandesAller(pilote: Pilote.partage)
         }
 
         MenuBarExtra {
@@ -127,8 +129,9 @@ struct Tableau: View {
             if etat.arretEnCours {
                 EcranArret()
             } else if etat.tableauPret {
-                // Le démarrage de la machine virtuelle se montre dans la page (/demarrage, Etat.swift).
-                PageWeb(url: etat.base, etat: etat)
+                // Le démarrage de la machine virtuelle se montre dans la page (/demarrage, Etat.swift) ;
+                // autour, le cadre natif : barre latérale, barre d'outils (Cadre.swift).
+                CadreNatif()
             } else if let e = etat.erreurTableau {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle").font(.largeTitle)
