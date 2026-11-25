@@ -104,8 +104,30 @@ def _lire(proc, invites=()):
         _poser(etat="connecte", url=None, code=None)
         _choisir(etat().get("fournisseur"))
     elif etat().get("etat") != "annulee":
+        _journaliser(etat().get("fournisseur"), code, vu)
         dernier = [l for l in nettoyer(vu).strip().splitlines() if l.strip() and "http" not in l][-1:] or ["sans message"]
-        _poser(etat="echec", url=None, code=None, message=dernier[0].strip()[:200])
+        message = dernier[0].strip()[:200]
+        if "Input/output error" in message:        # disque du Mac plein : la VM ne peut plus écrire
+            from . import vm
+            message = vm.disque_plein() or message
+        _poser(etat="echec", url=None, code=None, message=message)
+
+
+def _journaliser(fournisseur, code, sortie):
+    """Une connexion ratée, telle que la VM l'a affichée, dans `logs/connexion.log` : l'écran n'en
+    montre que la dernière ligne. Les adresses (qui portent l'état de la connexion) sont retirées ;
+    le code collé n'y est jamais, il ne passe que sur l'entrée du processus."""
+    import datetime as dt
+    from . import config
+    try:
+        journal = config.DATA / "logs" / "connexion.log"
+        journal.parent.mkdir(parents=True, exist_ok=True)
+        texte = ADRESSE.sub("[adresse]", nettoyer(sortie)).strip()
+        with open(journal, "a", encoding="utf-8") as fh:
+            fh.write("== %s · %s · code %s\n%s\n\n" % (dt.datetime.now().isoformat(timespec="seconds"),
+                                                       fournisseur, code, texte[-4000:]))
+    except OSError:
+        pass
 
 
 def _choisir(fid):

@@ -141,6 +141,35 @@ class VMImpossible(Exception):
     pass
 
 
+# Place libre exigée sur le disque du Mac, en Go : le disque de la VM y grandit à mesure qu'elle
+# écrit. Disque plein, Linux ne reçoit plus que des erreurs d'entrée-sortie (« Input/output
+# error ») : mieux vaut le dire avant, en clair.
+LIBRE_MIN_GO = {"creer": 15, "demarrer": 3}
+
+
+def espace_libre_go():
+    try:
+        return shutil.disk_usage(DATA if DATA.exists() else Path.home()).free / 1024 ** 3
+    except OSError:
+        return None
+
+
+def disque_plein(besoin_go=LIBRE_MIN_GO["demarrer"]):
+    """Le message à montrer si le Mac n'a pas la place qu'il faut à la VM, sinon None."""
+    libre = espace_libre_go()
+    if libre is None or libre >= besoin_go:
+        return None
+    return ("le disque de ton Mac est presque plein (%s libres) : la machine virtuelle a besoin d'au moins "
+            "%d Go. Libère de la place, puis quitte et rouvre l'application"
+            % (("%.1f Go" % libre) if libre >= 1 else ("%d Mo" % (libre * 1024)), besoin_go))
+
+
+def exiger_espace(besoin_go):
+    message = disque_plein(besoin_go)
+    if message:
+        raise VMImpossible(message)
+
+
 def r():
     return reglages().get("vm") or {}
 
@@ -574,6 +603,7 @@ def _demarrer(attente_s, annoncer):
 
 
 def _demarrer_suivi(a, i, attente_s):
+    exiger_espace(LIBRE_MIN_GO["demarrer" if i else "creer"])
     if not i:
         a.etape("creation")
         creer()
@@ -657,6 +687,7 @@ def connexion(fournisseur="claude"):
     f = fournisseurs.get(fournisseur)
     if (instance() or {}).get("status") != "Running":
         raise VMImpossible("démarrer d'abord la machine virtuelle : jobsearch vm demarrer")
+    exiger_espace(LIBRE_MIN_GO["demarrer"])
     _lima("shell", "--workdir", "/", nom(), "--", "pkill", "-f", MOTIFS_CONNEXION[f.id], timeout=30)
     return subprocess.call([limactl(), "shell", "--workdir", "/", nom(), "--", "bash", "-lc", f.connexion()],
                            env=environnement_lima())

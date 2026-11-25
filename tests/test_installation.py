@@ -398,3 +398,37 @@ def test_vm_en_demarrage_ecran_bandeau_et_protections(neuve, monkeypatch, reg):
     assert client.message_injoignable(httpx.ConnectError("x")).startswith("la machine virtuelle démarre encore (42 %")
     monkeypatch.setattr(vm, "en_demarrage", lambda: False)
     assert "travailleur injoignable" in client.message_injoignable(httpx.ConnectError("x"))
+
+
+def test_connexion_ratee_journalisee_sans_adresse(monkeypatch, tmp_path):
+    """Une connexion ratée laisse sa sortie entière dans logs/connexion.log (l'écran n'en montre
+    qu'une ligne) ; l'adresse, qui porte l'état de la connexion, n'y est pas."""
+    import io
+    import time
+    from jobsearch import config, connexion_ia
+
+    monkeypatch.setattr(config, "DATA", tmp_path)
+
+    class Echec:
+        def __init__(self, *a, **k):
+            self.stdout = io.BytesIO(b"Visit https://claude.ai/oauth/authorize?state=secret\n/bin/bash: Input/output error\n")
+            self.stdin = io.BytesIO()
+
+        def poll(self):
+            return 1
+
+        def wait(self):
+            return 1
+
+    monkeypatch.setattr("jobsearch.vm.espace_libre_go", lambda: 0.2)
+    connexion_ia.annuler()
+    connexion_ia.demarrer("claude", popen=Echec)
+    for _ in range(100):
+        if connexion_ia.etat()["etat"] == "echec":
+            break
+        time.sleep(.01)
+    e = connexion_ia.etat()
+    assert e["etat"] == "echec" and "disque de ton Mac est presque plein" in e["message"]
+    journal = (tmp_path / "logs" / "connexion.log").read_text(encoding="utf-8")
+    assert "Input/output error" in journal and "[adresse]" in journal and "state=secret" not in journal
+    connexion_ia.annuler()

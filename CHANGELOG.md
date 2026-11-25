@@ -14,6 +14,11 @@ l'application est en essai et peut changer d'une version à l'autre.
   pourcentage et le temps qui reste, estimé d'après la durée de chaque étape la dernière fois.
 - Après « Continuer sans attendre », un **bandeau** en haut des pages suit l'avancement et dit quand
   la machine virtuelle est prête.
+- **Place sur le disque vérifiée** avant de créer la machine virtuelle (15 Go libres), de la démarrer
+  et de connecter l'IA (3 Go) : un disque plein le dit en clair, avec la place qui reste, au lieu de
+  « /bin/bash: Input/output error ».
+- **Journal des connexions à l'IA** : une connexion ratée laisse sa sortie entière dans
+  `logs/connexion.log`, sans les adresses de connexion ; l'écran n'en montre que la dernière ligne.
 
 ### Modifié
 

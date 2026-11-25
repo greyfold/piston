@@ -261,3 +261,37 @@ def test_en_demarrage_suit_le_verrou(tmp_path, monkeypatch):
         fcntl.flock(v, fcntl.LOCK_EX)
         assert vm.en_demarrage()
     assert not vm.en_demarrage()
+
+
+def test_disque_plein_avant_la_creation(lima, monkeypatch):
+    """Disque du Mac presque plein : rien n'est créé ni démarré, et le message le dit en clair
+    (sinon la VM ne rend que des « Input/output error »)."""
+    etat, commandes = lima
+    monkeypatch.setattr(vm, "espace_libre_go", lambda: 0.2)
+    with pytest.raises(vm.VMImpossible, match="disque de ton Mac est presque plein \\(204 Mo libres\\).*15 Go"):
+        vm.demarrer(attente_s=1)
+    assert not any(c[0] in ("create", "start") for c in commandes)
+
+
+def test_creer_exige_plus_de_place_que_demarrer(lima, monkeypatch):
+    etat, commandes = lima
+    monkeypatch.setattr(vm, "espace_libre_go", lambda: 8.0)
+    with pytest.raises(vm.VMImpossible, match="15 Go"):
+        vm.demarrer(attente_s=1)
+    etat["instance"] = {"name": "jobsearch", "status": "Stopped"}
+    monkeypatch.setattr(vm, "travailleur_etat", lambda: {"version": "1"})
+    assert vm.demarrer(attente_s=1)["version"] == "1"          # 8 Go suffisent pour démarrer
+
+
+def test_connexion_refusee_disque_plein(lima, monkeypatch):
+    etat, commandes = lima
+    etat["instance"] = {"name": "jobsearch", "status": "Running"}
+    monkeypatch.setattr(vm, "espace_libre_go", lambda: 1.5)
+    with pytest.raises(vm.VMImpossible, match="1.5 Go libres"):
+        vm.connexion()
+    assert not any(c[0] == "shell" for c in commandes)
+
+
+def test_espace_inconnu_ne_bloque_rien(monkeypatch):
+    monkeypatch.setattr(vm, "espace_libre_go", lambda: None)
+    assert vm.disque_plein(15) is None
