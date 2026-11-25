@@ -364,3 +364,18 @@ d'exemple (`tests/fixtures/config`, valeurs fictives), jamais sur `config/` ni s
 | `src/jobsearch/vm.py`, `travailleur/` | La machine virtuelle (Lima embarqué), son écran et son travailleur. |
 | `src/jobsearch/agent_claude.py`, `session_vm.py`, `preremplir_vm.py` | Les tâches dans le Chrome de la VM et leur relève. |
 | `src/jobsearch/web/` | Le tableau de bord (FastAPI, Jinja). |
+
+
+## Licence
+
+Piston est publié sous la licence [PolyForm Noncommercial 1.0.0](LICENSE.md) : gratuit pour un usage personnel et non commercial, interdit pour un usage commercial sans accord écrit.
+
+- **Permis** : l'usage personnel (chercher un emploi pour soi, étudier, tester, bricoler) et l'usage par une association, une école, un organisme public ou de recherche. Lire le code, le modifier et le partager est permis dans ces mêmes cadres, en gardant la licence et la ligne « Required Notice » qui l'ouvre.
+- **Interdit sans accord** : tout usage commercial, par exemple revendre l'application ou une version modifiée, l'intégrer à un produit ou un service payant, ou s'en servir dans une activité commerciale (agence de placement ou de recrutement, conseil en carrière, service rendu à des clients).
+- **Usage commercial** : écrire à Greyfold par [greyfold.ch](https://greyfold.ch).
+
+Le logiciel est fourni tel quel, sans garantie.
+
+> **License (English):** free for personal and non-commercial use under the [PolyForm Noncommercial License 1.0.0](LICENSE.md). Commercial use is not allowed without written permission; contact Greyfold via [greyfold.ch](https://greyfold.ch).
+
+© 2026 Jeremy Matter, Greyfold.
