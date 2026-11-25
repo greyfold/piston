@@ -3,8 +3,9 @@
 Une application Mac autoportante qui aide une personne, quelle qu'elle soit, à chercher un
 emploi en Suisse : sourcing quotidien (Job-Room, jobup, jobs.ch, pages carrière, Indeed,
 LinkedIn par Apify), registre local, pré-tri, note d'adéquation et dossiers de candidature
-écrits avec l'IA de la personne (Claude, Codex, Antigravity ou Grok), suivi des relances et des
-preuves Job-Room.
+écrits avec l'IA de la personne (Claude, Codex, Antigravity ou Grok), suivi des relances.
+Les preuves Job-Room sont hors de cette version (`profil.HORS_VERSION`) : le code reste, l'option
+est éteinte. Les changements de chaque version sont dans `CHANGELOG.md`.
 
 Tout tourne dans l'application. Elle embarque son Python, ses dépendances, son code et Lima ;
 le moteur d'IA et Google Chrome tournent dans sa machine virtuelle, jamais sur le Mac. Ses données
@@ -52,7 +53,7 @@ posée dans la VM à la fin de l'installation (`vm.code_installe`) et rendue par
   l'écran, journaux du travailleur, et pour chaque tâche Chrome `taches/<id>/` : ce que le Mac lui
   confie). Ni la base, ni le profil, ni les sauvegardes, ni les dossiers de candidature.
 - **L'IA** : toutes les tâches du moteur (masquées par `Protege` avant de partir), Indeed, Gmail.
-- **Chrome** : les sessions de l'IA (preuves Job-Room, formulaires, `agent_claude.py`) et le
+- **Chrome** : les sessions de l'IA (formulaires, `agent_claude.py`) et le
   pré-remplissage sans IA (`navigateur.py`, `preremplir_vm.py`) utilisent le Chrome de la VM
   et son profil : la personne s'y connecte une fois aux sites, dans **Navigateur**. Quel que soit
   le moteur, une session n'a que les deux serveurs MCP de l'application (`mcp_vm.py`) : un filtre
@@ -123,7 +124,7 @@ avant d'écrire quoi que ce soit.
 **Confidentialité** : nom, adresse, téléphone, e-mail, date de naissance, numéro AVS sont
 remplacés par des balises avant chaque tâche (`confidentialite.py`) et rétablis sur le Mac.
 
-Exception, que la personne déclenche : pour remplir un formulaire ou une preuve Job-Room, la
+Exception, que la personne déclenche : pour remplir un formulaire, la
 session de l'IA reçoit les vraies coordonnées (elle doit les taper). Le pré-remplissage sans IA
 les saisit sans l'IA.
 
