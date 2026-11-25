@@ -1,7 +1,7 @@
 """Le tableau de bord : où la personne tranche et suit, sur le Mac ou le téléphone.
 
-Pages rendues par le serveur, formulaires simples, aucune dépendance JS : un
-clic écrit directement dans le registre (actions.appliquer), il n'y a plus
+Pages rendues par le serveur, formulaires simples, un peu de JavaScript sans
+bibliothèque (`static/*.js`) : un clic écrit directement dans le registre (actions.appliquer), il n'y a plus
 de file d'attente à rapprocher au passage suivant.
 """
 
@@ -32,6 +32,7 @@ from .. import repertoire as repertoire_mod
 from ..formatage import annonce_html, nettoyer
 from ..config import DATA, criteres, reglages
 from ..db import ECARTEES, ENVOYEES, LIBELLES_STATUT, PIPELINE, STATUTS, Registre
+from . import etat_distant
 from .auth import COOKIE, autorise, depuis_le_mac, jeton, jeton_valide, meme_origine
 
 ICI = Path(__file__).parent
@@ -42,6 +43,9 @@ async def demarrage(app):
     """Le jeton d'accès existe avant que le serveur n'écoute : l'application Mac le lit dans le
     dossier de données dès que le port répond (auth.py)."""
     jeton()
+    from ..travailleur import client as travailleur
+    if travailleur.distant():
+        etat_distant.prechauffer()            # la première page trouve l'état de la VM déjà lu
     yield
 
 
@@ -159,6 +163,11 @@ def _date_suisse(iso):
 
 
 tpl.env.globals["decomposer_tel"] = _decomposer_tel
+# Les espaces de travail : (adresse, nom, icône, fonction qui l'ouvre ou None). Le menu latéral de la page
+# (_menu_lateral.html) et la barre latérale native de l'application Mac (`etat_coquille`) en sont faits.
+ESPACES = (("/", "Aujourd'hui", "accueil", None), ("/offres", "Offres", "recherche", "offres"),
+           ("/candidatures", "Candidatures", "candidatures", "postuler"))
+tpl.env.globals["ESPACES"] = ESPACES
 # Le moteur d'IA choisi (Claude, Codex, Antigravity, Grok) : les textes des pages le nomment.
 tpl.env.globals["ia_active"] = lambda: moteur_mod.fournisseur().vue
 tpl.env.globals["noms_ia"] = lambda: {f["id"]: f["nom"] for f in moteur_mod.FOURNISSEURS}
@@ -181,7 +190,14 @@ def retour_sur(retour, defaut="/"):
 
 @app.middleware("http")
 async def garde(request: Request, call_next):
-    if request.url.path.startswith("/static") or request.url.path == "/connexion":
+    if request.url.path.startswith("/static"):
+        reponse = await call_next(request)
+        # Feuille et scripts portent leur date dans l'adresse (?v=), les polices ne changent pas : la vue web
+        # les garde sans redemander à chaque page.
+        if reponse.status_code == 200 and ("v" in request.query_params or request.url.path.startswith("/static/polices/")):
+            reponse.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return reponse
+    if request.url.path == "/connexion":
         return await call_next(request)
     if not autorise(request):
         if request.url.path.startswith("/api/") or "x-jobsearch-jeton" in request.headers:
@@ -202,14 +218,47 @@ def page(request, nom, **ctx):
     ctx["raisons"] = criteres().get("raisons") or {}
     ctx["aujourdhui"] = dt.date.today().isoformat()
     ctx["profil_manquants"] = profil_mod.manquants()
-    ctx["accueil"] = request.url.path.startswith("/bienvenue") and profil_mod.en_accueil()   # sans menu
+    ctx["accueil"] = ((request.url.path.startswith("/bienvenue") and profil_mod.en_accueil())   # sans menu
+                      or request.url.path == "/demarrage")
+    # La VM démarre encore (« Continuer sans attendre ») : un bandeau d'avancement sur les autres pages.
+    a = None if ctx["accueil"] else _demarrage_vm()
+    ctx["demarrage_vm"] = a if a and a["en_cours"] else None
     ctx["notifs"] = {"liste": [], "nouvelles": 0} if ctx["accueil"] else _notifications(request)
     p = profil_mod.charger()
     ctx["premiers_pas_affiches"] = p.get(profil_mod.PREMIERS_PAS) == "affichee"
     ctx["fonctions"] = profil_mod.fonctions(p, ia_connectee() if profil_mod.progressif(p) else True)
     if "a_configurer" not in ctx:            # le bandeau ne paraît que sur ces pages (base.html)
         ctx["a_configurer"] = _a_configurer() if ctx["nav"] in ("/", "/sante") else []
+    ctx["coquille"] = dans_la_coquille(request)
+    if ctx["coquille"]:
+        ctx["etat_coquille"] = etat_coquille(ctx)
     return tpl.TemplateResponse(request, nom, ctx)
+
+
+# La vue web de l'application Mac se signale dans son agent utilisateur (PageWeb.swift,
+# `applicationNameForUserAgent`). Elle a son propre cadre natif (barre latérale, barre d'outils, menu Aller) :
+# la page n'y dessine pas son menu latéral. Un navigateur ordinaire garde le menu de la page.
+AGENT_COQUILLE = "RechercheEmploi"
+
+
+def dans_la_coquille(request):
+    return AGENT_COQUILLE in request.headers.get("user-agent", "")
+
+
+def etat_coquille(ctx):
+    """Ce que le cadre natif montre autour de la page (base.html le pose en JSON, PageWeb.swift le lit) :
+    les espaces ouverts, celui de la page, si le profil est à compléter, les notifications nouvelles. Le mode
+    (normal, concentré, accueil) s'ajoute dans base.html, qui seul connaît la classe du corps de la page."""
+    fonctions = ctx.get("fonctions") or {}
+    espaces = [{"href": h, "nom": n} for h, n, _, f in ESPACES if not f or fonctions.get(f)]
+    nav = ctx["nav"]
+    section = next((e["href"] for e in espaces
+                    if nav == e["href"] or (e["href"] != "/" and nav.startswith(e["href"] + "/"))), None)
+    if section is None and ctx.get("dans_reglages"):
+        section = "/reglages"
+    notifs = ctx.get("notifs") or {}
+    return {"section": section, "espaces": espaces, "a_completer": bool(ctx.get("profil_manquants")),
+            "notifications": int(notifs.get("nouvelles") or 0), "niveau": notifs.get("niveau") or "ok"}
 
 
 def _a_configurer():
@@ -1070,8 +1119,15 @@ def navigateur_vm(request: Request):
     adresse, erreur = None, None
     if not depuis_le_mac(request):           # le mot de passe de l'écran ne sort pas du Mac
         return page(request, "navigateur.html", adresse=None, erreur="L'écran de la machine virtuelle ne s'ouvre que sur le Mac.")
+    from ..travailleur import client as travailleur
     try:
-        if (vm.instance() or {}).get("status") == "Running":
+        if travailleur.distant():                # la copie en mémoire, sans attendre `limactl`
+            etat_vm = etat_distant.lire()["vm"]
+            if "erreur" in etat_vm:
+                raise vm.VMImpossible(etat_vm["erreur"])
+        else:
+            etat_vm = {"statut": (vm.instance() or {}).get("status")}
+        if etat_vm.get("statut") == "Running":
             adresse = vm.adresse_ecran()
     except Exception as e:
         erreur = "Machine virtuelle injoignable : %s" % e
@@ -1082,7 +1138,6 @@ def navigateur_vm(request: Request):
 def api_etat():
     """Ce que l'application Mac montre dans la barre des menus : passage, IA, machine virtuelle. La
     clé « claude » garde son nom (l'application Mac la lit) : c'est l'état du moteur choisi."""
-    from .. import vm
     from ..travailleur import client as travailleur
     distant = travailleur.distant()
     reg = _reg()
@@ -1100,19 +1155,16 @@ def api_etat():
         reg.fermer()
     etat_vm, etats_vm = None, None
     if distant:
-        try:
-            e = vm.etat()
-            etat_vm = {"existe": e["existe"], "statut": e["statut"]}
-            tr = e.get("travailleur")
-            if isinstance(tr, dict) and "erreur" not in tr:
-                etats_vm = dict(tr.get("moteurs") or {})
-                etats_vm.setdefault("claude", tr.get("moteur") or {})
-            elif e.get("statut") != "Running":
-                msg = "machine virtuelle arrêtée" if e.get("existe") else "machine virtuelle absente"
-                etats_vm = {f["id"]: {"installe": False, "connecte": False, "abonnement": None, "message": msg}
-                            for f in moteur_mod.FOURNISSEURS}
-        except Exception as ex:
-            etat_vm = {"existe": False, "statut": None, "erreur": str(ex)}
+        e = etat_distant.lire()                   # la copie en mémoire : la barre des menus n'attend pas la VM
+        etat_vm = e["vm"]
+        tr = e["travailleur"]
+        if isinstance(tr, dict) and "erreur" not in tr:
+            etats_vm = dict(tr.get("moteurs") or {})
+            etats_vm.setdefault("claude", tr.get("moteur") or {})
+        elif "erreur" not in etat_vm and etat_vm.get("statut") != "Running":
+            msg = "machine virtuelle arrêtée" if etat_vm.get("existe") else "machine virtuelle absente"
+            etats_vm = {f["id"]: {"installe": False, "connecte": False, "abonnement": None, "message": msg}
+                        for f in moteur_mod.FOURNISSEURS}
     c = etat_ia(etats_vm=etats_vm)
     return {"passage": {"niveau": p["niveau"], "texte": p["texte"]}, "a_trancher": a_trancher,
             "claude": {"connecte": bool(c.get("connecte")), "message": c.get("message", ""),
@@ -1149,6 +1201,12 @@ def _connecteurs_comptes_mail(request, form):
 _ETAT_IA = {"t": 0.0, "v": None}
 
 
+def oublier_etat_ia():
+    """Un moteur vient d'être connecté ou déconnecté : la page suivante relit son état."""
+    _ETAT_IA["v"] = None
+    etat_distant.oublier()
+
+
 def ia_connectee():
     """Pour l'interface (fonctions débloquées) : l'état du moteur d'IA, relu au plus toutes les 15 s."""
     import time
@@ -1158,12 +1216,11 @@ def ia_connectee():
 
 
 def _etats_vm():
-    """{fournisseur: état} tel que le travailleur de la VM le voit ; une erreur pour tous s'il ne répond pas."""
-    from ..travailleur import client as travailleur
-    try:
-        e = travailleur.Distant.depuis_reglages().etat()
-    except Exception as ex:
-        return {f["id"]: {"installe": False, "connecte": False, "abonnement": None, "message": str(ex)}
+    """{fournisseur: état} tel que le travailleur de la VM le voit (copie en mémoire, `etat_distant`) ;
+    une erreur pour tous s'il ne répond pas."""
+    e = etat_distant.lire()["travailleur"]
+    if "erreur" in e:
+        return {f["id"]: {"installe": False, "connecte": False, "abonnement": None, "message": e["erreur"]}
                 for f in moteur_mod.FOURNISSEURS}
     out = dict(e.get("moteurs") or {})
     out.setdefault("claude", e.get("moteur") or {})
@@ -1222,7 +1279,7 @@ def ia_deconnecter(fournisseur: str):
         msg, ok = "%s est déconnecté. Tu peux te reconnecter quand tu veux." % f["nom"], 1
     except (vm.VMImpossible, subprocess.TimeoutExpired) as e:
         msg, ok = "La déconnexion n'a pas abouti : %s." % str(e).rstrip("."), 0
-    _ETAT_IA["v"] = None
+    oublier_etat_ia()
     return RedirectResponse("/ia?msg=%s&ok=%d" % (quote(msg), ok), status_code=303)
 
 
@@ -1522,6 +1579,41 @@ def _page_profil(request, ident, saisi=None, **ctx):
                 manquants=profil_mod.manquants(p), **ctx)
 
 
+# --- Démarrage de la machine virtuelle : écran d'ouverture, bandeau, avancement ---------
+
+def _demarrage_vm():
+    """L'avancement du démarrage de la VM (`vm.avancement`), ou None hors du mode distant."""
+    from .. import vm
+    from ..travailleur import client as travailleur
+    if not travailleur.distant():
+        return None
+    try:
+        return vm.avancement()
+    except Exception:
+        return None
+
+
+@app.get("/api/demarrage")
+def api_demarrage():
+    """Lu toutes les quelques secondes par l'écran de démarrage et le bandeau des pages."""
+    a = _demarrage_vm()
+    return a or {"en_cours": False, "fini": True, "erreur": None, "pourcentage": 100, "etapes": [],
+                 "detail": None, "reste_min": 0, "premiere": False}
+
+
+@app.get("/demarrage", response_class=HTMLResponse)
+def demarrage(request: Request):
+    """L'écran d'ouverture. La toute première fois (assistant pas encore fait) : ce que fait
+    l'application et comment elle protège la personne, avant de commencer, avec l'avancement de la
+    machine virtuelle qui se crée pendant ce temps. Aux ouvertures suivantes, quand la VM met un moment
+    à démarrer : l'avancement seul, et « Continuer sans attendre »."""
+    a = _demarrage_vm()
+    decouverte = profil_mod.en_accueil()
+    if not decouverte and not (a and a["en_cours"]):
+        return RedirectResponse("/", status_code=303)
+    return page(request, "demarrage.html", decouverte=decouverte, avancement=a, ia=nom_ia())
+
+
 # --- Accueil (spec Nexus « 03 Onboarding ») : IA, recherche, premières offres ----------
 
 # La recherche d'abord, l'IA ensuite : on ne commence pas par confier ses informations à une IA.
@@ -1555,7 +1647,8 @@ def _page_accueil(request, ecran, **ctx):
 def bienvenue():
     if not profil_mod.en_accueil():
         return RedirectResponse("/", status_code=303)
-    suite = ("/bienvenue/recherche" if not _recherche_faite() else
+    suite = ("/demarrage" if not _recherche_faite() and not _sources_faites() else
+             "/bienvenue/recherche" if not _recherche_faite() else
              "/bienvenue/sources" if not _sources_faites() else "/bienvenue/ia")
     return RedirectResponse(suite, status_code=303)
 
@@ -1569,7 +1662,9 @@ def bienvenue_ia(request: Request):
     claude = etat_ia()
     if claude.get("connecte") and request.query_params.get("etape") != "ia":
         return RedirectResponse("/bienvenue/offres", status_code=303)          # étape déjà faite
-    return _page_accueil(request, "ia", claude=claude, fournisseurs=moteur_mod.FOURNISSEURS)
+    a = _demarrage_vm()
+    return _page_accueil(request, "ia", claude=claude, fournisseurs=moteur_mod.FOURNISSEURS,
+                         avancement=a if a and a["en_cours"] else None)
 
 
 @app.get("/bienvenue/recherche", response_class=HTMLResponse)
@@ -1689,6 +1784,10 @@ def ia_connexion_demarrer(fournisseur: str):
     from .. import connexion_ia
     if fournisseur not in {f["id"] for f in moteur_mod.FOURNISSEURS}:
         return JSONResponse({"etat": "echec", "message": "fournisseur inconnu"}, status_code=404)
+    a = _demarrage_vm()
+    if a and a["en_cours"]:                       # la connexion se fait dans la VM : elle doit être prête
+        return JSONResponse({"etat": "echec", "message": "la machine virtuelle démarre encore (%d %%) : tu pourras "
+                             "te connecter dans environ %d min" % (a["pourcentage"], a["reste_min"])}, status_code=409)
     autre = next((f for f in etats_fournisseurs() if f["id"] != fournisseur and f["etat"].get("connecte")), None)
     if autre:                                     # un seul fournisseur actif à la fois
         return JSONResponse({"etat": "echec", "message": "déconnecte d'abord %s : un seul fournisseur à la fois"
@@ -1701,7 +1800,7 @@ def ia_connexion_etat():
     from .. import connexion_ia
     e = connexion_ia.etat()
     if e.get("etat") == "connecte":
-        _ETAT_IA["v"] = None                      # l'interface se rouvre tout de suite
+        oublier_etat_ia()                         # l'interface se rouvre tout de suite
     return e
 
 

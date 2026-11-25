@@ -7,7 +7,9 @@ Tout tourne dans l'application, rien n'est installé à côté (pas d'agent laun
 - le rattrapage de l'IA, au plus une fois par demi-heure : les annonces à trancher que le passage
   n'a pas pu noter (machine virtuelle éteinte, Claude déconnecté) reçoivent leur note et leur
   pré-sélection dès que l'IA répond de nouveau ;
-- la surveillance, au plus une fois par heure : passage manquant, objectif de la semaine.
+- la surveillance, au plus une fois par heure : passage manquant, objectif de la semaine ;
+- les lettres des dossiers, une fois par jour : à la date du jour (Word et PDF), pour que l'onglet
+  Dossier n'attende pas le PDF de la machine virtuelle à sa première ouverture de la journée.
 
 Chaque tâche ne part qu'une fois : la dernière exécution est notée dans la base (meta). Les
 fonctions de chaque tâche restent celles de la ligne de commande (`passage`, `surveiller`,
@@ -56,7 +58,7 @@ def dues(reg, maintenant=None):
     from .pipeline import clore_interrompus
     now = maintenant or dt.datetime.now()
     jour = now.date()
-    out = []
+    out = ["lettres"] if lettres_a_dater(reg, jour) else []
     clore_interrompus(reg)               # un passage tué ne doit pas compter comme celui du jour
     p = passage_du_jour(reg, jour)
     if p and p["statut"] == "interrompu" and _reprises(reg, jour) < REPRISES_PAR_JOUR:
@@ -71,6 +73,14 @@ def dues(reg, maintenant=None):
     if _echue(reg, "surveillance", now, SURVEILLANCE_MIN):
         out.append("surveillance")
     return out
+
+
+def lettres_a_dater(reg, jour):
+    """Des dossiers existent et leurs lettres n'ont pas encore été mises à la date de ce jour."""
+    if (reg.meta("lettres_le") or "") == jour.isoformat():
+        return False
+    return reg.cx.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='dossiers'").fetchone() is not None \
+        and reg.cx.execute("SELECT 1 FROM dossiers LIMIT 1").fetchone() is not None
 
 
 def _echue(reg, nom, now, minutes):
@@ -150,4 +160,15 @@ def _rattraper(reg, evaluation, moteur):
     return dict(evaluation.evaluer_lot(reg, lot, c=c), a_evaluer=len(lot))
 
 
-TACHES = {"passage": _passage, "alerte": _alerte, "rattrapage": _rattrapage, "surveillance": _surveillance}
+def _lettres(reg, now):
+    """Chaque lettre à la date du jour. Un PDF que la VM n'a pas pu faire (éteinte, encore au
+    démarrage) : la journée n'est pas notée, la tâche revient à l'échéance suivante."""
+    from . import dossier
+    r = dossier.dater_lettres(reg)
+    if not r["pdf_en_retard"]:
+        reg.poser_meta("lettres_le", now.date().isoformat())
+        reg.commit()
+    return r
+
+
+TACHES = {"lettres": _lettres, "passage": _passage, "alerte": _alerte, "rattrapage": _rattrapage, "surveillance": _surveillance}

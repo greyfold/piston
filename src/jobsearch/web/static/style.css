@@ -1,9 +1,26 @@
+/* Polices de la charte, servies par l'application (static/polices, licence OFL) : aucune requête vers
+   Google à l'ouverture d'une page, rien qui attende le réseau. Fichiers variables : une graisse par plage. */
+@font-face { font-family: "Nunito Sans"; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url("polices/nunito-sans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Nunito Sans"; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url("polices/nunito-sans-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: "Quicksand"; font-style: normal; font-weight: 500 700; font-display: swap;
+  src: url("polices/quicksand-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Quicksand"; font-style: normal; font-weight: 500 700; font-display: swap;
+  src: url("polices/quicksand-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
 /* Jetons Nexus aux couleurs de la charte Piston Douceur (Lin, Blanc, Sauge, Forêt, Mousse, Pêche, Beurre) :
-   valeurs des variables « couleur/… » de la maquette Figma « Recherche d'emploi — écrans clés ». */
+   valeurs des variables « couleur/… » de la maquette Figma « Recherche d'emploi — écrans clés ». Palette atténuée
+   (proposition P5 « Fond blanc, calme ») : fond gris très clair, bordures et fonds neutres d'un gris chaud ; la
+   couleur ne marque plus que l'action, le sens d'un statut et l'urgence. */
 :root {
   --vert: #2f4a3a; --vert-fonce: #2f4a3a; --vert-pale: #f4e3a1; --vert-survol: #243a2d;
   --marine: #2f4a3a; --marine-pale: #a9c2a0; --gris: #55695c;
-  --fond: #fbf8f2; --surface: #ffffff; --surface-2: #dce5d6; --bord: #dce5d6; --contour: #2f4a3a; --contour-champ: #55695c;
+  --fond: #f6f7f5; --surface: #ffffff; --surface-2: #f3f0e9; --bord: #ebe6dc; --contour: #2f4a3a; --contour-champ: #55695c;
   --texte: #2f4a3a; --texte-2: #4a5e51; --texte-3: #55695c; --lien: #2e6b45;
   --alerte: #a63a2b; --alerte-pale: #f9e1da; --attention: #6b4a00; --attention-pale: #f6c8a8;
   --sur-vert: #fbf8f2; --sur-alerte: #ffffff;
@@ -18,7 +35,7 @@
   :root {
     --vert: #f6c8a8; --vert-fonce: #f4e3a1; --vert-pale: #4a4630; --vert-survol: #f9d8c0;
     --marine: #f1ede3; --marine-pale: #3a4d40; --gris: #b4c2b6;
-    --fond: #1c2721; --surface: #27362d; --surface-2: #2e4035; --bord: #3a4d40; --contour: #b4c2b6; --contour-champ: #a3b3a7;
+    --fond: #111517; --surface: #27362d; --surface-2: #2b3a31; --bord: #34433a; --contour: #b4c2b6; --contour-champ: #a3b3a7;
     --texte: #f1ede3; --texte-2: #b4c2b6; --texte-3: #a3b3a7; --lien: #8fd3a6;
     --alerte: #f2a093; --alerte-pale: #4a2a24; --attention: #f4d58a; --attention-pale: #4d3a2e;
     --sur-vert: #1c2721; --sur-alerte: #1c2721;
@@ -60,25 +77,28 @@ h1, h2, h3, .marque, .chiffre b, .note-glob { font-family: var(--police-titres);
 
 main { max-width: 1120px; margin: 0 auto; padding: 1.25rem 16px 4rem; }
 
-.bandeau { border-radius: var(--rayon); padding: .7rem .9rem; margin-bottom: 1rem; display: flex; gap: .6rem; align-items: center; }
-.bandeau.ok { background: var(--ok-pale); color: var(--reussite); }
-.bandeau.attention { background: var(--attention-pale); color: var(--attention); }
-.bandeau.alerte { background: var(--alerte-pale); color: var(--alerte); font-weight: 600; }
-.bandeau.info { background: var(--surface-2); color: var(--texte-2); }
+/* Bandeau (Nexus Banner) : une ligne de texte, le sens tenu par son point ; seule l'erreur garde un fond. */
+.bandeau { border-radius: var(--rayon); padding: .15rem 0; margin-bottom: 1rem; display: flex; gap: .6rem; align-items: center;
+  color: var(--texte-2); }
+.bandeau.ok .point { background: var(--reussite); }
+.bandeau.attention .point { background: var(--attention); }
+.bandeau.alerte { background: var(--alerte-pale); color: var(--alerte); font-weight: 600; padding: .7rem .9rem; }
 .bandeau.info .point { background: var(--vert); }
 .bandeau .point { width: .55rem; height: .55rem; border-radius: 50%; background: currentColor; flex: none; }
 .flash { border-radius: var(--rayon); padding: .6rem .9rem; margin-bottom: 1rem; background: var(--ok-pale); color: var(--reussite); }
 .flash.ko { background: var(--alerte-pale); color: var(--alerte); }
 
 .chiffres { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: .6rem; margin: 1rem 0 0; }
-.chiffre { background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); padding: 1.25rem 1.5rem; }
+/* Chiffre clé (Nexus Stat) : sans cadre, le chiffre et son libellé posés sur le fond. */
+.chiffre { padding: .25rem 0; }
 .chiffre b { display: block; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
 .chiffre span { color: var(--texte-3); font-size: .82rem; }
 .chiffre.chaud b { color: var(--alerte); }
 .chiffre.atteint b { color: var(--vert-fonce); }
 /* Chiffre clé qui mène à sa section (tableau de bord) : il remplace le compteur du titre de la section. */
-a.chiffre { display: block; color: inherit; text-decoration: none; transition: border-color .15s ease-out, transform .15s ease-out; }
-a.chiffre:hover { border-color: var(--texte-3); text-decoration: none; transform: translateY(-1px); }
+a.chiffre { display: block; color: inherit; text-decoration: none; transition: transform .15s ease-out; }
+a.chiffre:hover { text-decoration: none; transform: translateY(-1px); }
+a.chiffre:hover span { color: var(--texte); text-decoration: underline; }
 a.chiffre:active { transform: translateY(0); }
 a.chiffre:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { a.chiffre { transition: none; } a.chiffre:hover { transform: none; } }
@@ -115,16 +135,17 @@ a.chiffre:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
 }
 .carte ul.exig { margin: .4rem 0 0; padding-left: 1.1rem; font-size: .9rem; color: var(--texte-2); }
 
-.puce { display: inline-block; padding: .05rem .5rem; border-radius: 999px; font-size: .75rem; font-weight: 700; background: var(--surface-2); color: var(--texte-2); white-space: nowrap; }
-.puce.A { background: var(--vert); color: var(--sur-vert); }
-/* En service, connecté, prêt : le vert « réussite » de la charte sur sauge, jamais le beurre de --vert-pale. */
-.puce.B { background: var(--ok-pale); color: var(--reussite); }
-.puce.nouvelle { background: var(--attention-pale); color: var(--attention); }
-.puce.retenue { background: var(--vert-pale); color: var(--vert-fonce); }
-.puce.candidature { background: var(--marine-pale); color: var(--marine); }
-.puce.entretien, .puce.offre { background: var(--vert); color: var(--sur-vert); }
-.puce.refus, .puce.C { background: var(--surface-2); color: var(--texte-3); }
-.puce.retard { background: var(--alerte-pale); color: var(--alerte); }
+/* Pilule de statut (Nexus Badge) : un texte court en gras, coloré selon le sens, sans aplat. */
+.puce { display: inline-block; padding: .05rem 0; border-radius: 999px; font-size: .75rem; font-weight: 700; color: var(--texte-3); white-space: nowrap; }
+.puce.A { color: var(--vert); }
+/* En service, connecté, prêt : le vert « réussite » de la charte, jamais le beurre de --vert-pale. */
+.puce.B { color: var(--reussite); }
+.puce.nouvelle { color: var(--attention); }
+.puce.retenue { color: var(--vert-fonce); }
+.puce.candidature { color: var(--marine); }
+.puce.entretien, .puce.offre { color: var(--vert); }
+.puce.refus, .puce.C { color: var(--texte-3); }
+.puce.retard { color: var(--alerte); }
 
 form.decision { margin-top: .75rem; border-top: 1px dashed var(--bord); padding-top: .65rem; }
 details.raisons summary { cursor: pointer; color: var(--texte-2); font-size: .88rem; }
@@ -237,11 +258,10 @@ dl.champs dd { margin: 0; overflow-wrap: anywhere; }
 code { font-size: .85em; background: var(--surface-2); padding: .05rem .3rem; border-radius: 4px; }
 
 .notes { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin-top: .6rem; }
-.note-glob { font-weight: 700; font-size: 1.05rem; font-variant-numeric: tabular-nums; padding: .05rem .55rem; border-radius: 999px; background: var(--surface-2); }
+.note-glob { font-weight: 700; font-size: 1.05rem; font-variant-numeric: tabular-nums; color: var(--texte-2); }
 .note-glob small { font-size: .7em; font-weight: 500; color: var(--texte-3); margin-left: 1px; }
-.note-glob.haute { background: var(--vert); color: var(--sur-vert); }
-.note-glob.haute small { color: var(--sur-vert); opacity: .8; }
-.note-glob.moyenne { background: var(--vert-pale); color: var(--vert-fonce); }
+.note-glob.haute, .note-glob.haute small { color: var(--lien); }
+.note-glob.moyenne { color: var(--texte-2); }
 .note-profil { font-size: .85rem; font-weight: 600; color: var(--texte-2); font-variant-numeric: tabular-nums; }
 .alertes { margin-top: .6rem; background: var(--alerte-pale); color: var(--alerte); border-radius: var(--rayon-champ); padding: .5rem .7rem; font-size: .86rem; }
 .alertes ul { margin: .3rem 0 0; padding-left: 1.1rem; }
@@ -257,11 +277,11 @@ select { max-width: 100%; text-overflow: ellipsis; }
 .boutons > select { flex: 1 1 200px; }
 
 .delais { display: flex; flex-wrap: wrap; gap: .35rem .6rem; align-items: center; margin-top: .45rem; font-size: .84rem; }
-.delai { font-weight: 600; padding: .1rem .5rem; border-radius: 999px; background: var(--surface-2); color: var(--texte-2); }
-.delai.proche { background: var(--attention-pale); color: var(--attention); }
-.delai.urgent { background: var(--alerte); color: var(--sur-alerte); }
-.delai.depasse { background: var(--surface-2); color: var(--texte-3); text-decoration: line-through; }
-.delai.sans { font-weight: 500; background: transparent; padding-left: 0; color: var(--texte-3); }
+.delai { font-weight: 600; color: var(--texte-3); }
+.delai.proche { color: var(--attention); }
+.delai.urgent { color: var(--alerte); }
+.delai.depasse { color: var(--texte-3); text-decoration: line-through; }
+.delai.sans { font-weight: 500; color: var(--texte-3); }
 .publiee { color: var(--texte-3); }
 .tri { font-size: .85rem; color: var(--texte-3); margin: -.35rem 0 .7rem; display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
 .tri a { color: var(--texte-2); padding: .1rem .5rem; border-radius: 999px; }
@@ -474,6 +494,19 @@ body.accueil main { max-width: 36rem; padding-top: .5rem; }
 .carte-accueil h1 { font-size: 1.3rem; line-height: 1.25; margin: 0; }
 .carte-accueil .intro { color: var(--texte-2); margin: .35rem 0 0; font-size: .95rem; line-height: 1.5; }
 .aide-accueil { color: var(--texte-3); font-size: .85rem; margin: .75rem 0 0; }
+/* Écran de démarrage (demarrage.html) : la découverte de l'application, puis l'avancement de la machine virtuelle. */
+.carte-accueil > .apercu-accueil { margin-top: 1.5rem; }
+.apercu-accueil .ligne-apercu { align-items: flex-start; margin-top: .85rem; }
+.apercu-accueil .ligne-apercu .fort { font-size: .92rem; }
+.preparation-vm { margin-top: 1.75rem; }
+.preparation-vm .section-base { margin-top: 0; }
+.avancement-vm { margin-top: 1.25rem; }
+.avancement-vm .stepper { margin-bottom: 1.25rem; }
+.avancement-vm .progression i { transition: width .22s ease-out; }
+.ligne-avancement { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .25rem .75rem; margin: 0; font-size: .88rem; color: var(--texte-2); }
+.carte-accueil > .plus-tard { margin-top: 1.5rem; }
+.plus-tard p:last-child { margin: .5rem 0 0; }
+@media (prefers-reduced-motion: reduce) { .avancement-vm .progression i { transition: none; } }
 
 .stepper { margin-bottom: 2rem; }
 .stepper ol { list-style: none; display: flex; padding: 0; margin: 0; }
@@ -705,6 +738,9 @@ body:has(> .menu-lateral) > main { width: 100%; max-width: 1200px; padding: 1.75
   gap: 1rem; padding: 1rem .75rem 1.5rem 0; background: var(--surface); border-right: 1px solid var(--bord); }
 .tete-menu { display: flex; flex-direction: column; gap: .5rem; }
 .tete-menu .marque { padding: .2rem .75rem .2rem 1.05rem; }
+/* Dans l'application Mac, le menu est natif (barre latérale SwiftUI) : la page garde les marges qu'elle a à côté du
+   menu latéral. Accueil et entretien gardent les leurs. */
+body.coquille:not(.accueil):not(.entretien-fixe) > main { max-width: 1200px; padding: 1.75rem 2.5rem 4rem; }
 .menu-lateral ul { list-style: none; margin: 0; padding: 0; }
 .menu-principal { flex: 1 1 auto; display: flex; flex-direction: column; }
 .menu-lateral ul.pied-menu { margin-top: auto; padding-top: .6rem; border-top: 1px solid var(--bord); }
@@ -719,7 +755,7 @@ body:has(> .menu-lateral) > main { width: 100%; max-width: 1200px; padding: 1.75
 .menu-lateral a .icone, .bouton-notifications .icone { width: 1.05rem; height: 1.05rem; flex: none; }
 .menu-lateral a:hover, .bouton-notifications:hover { text-decoration: none; background: var(--surface-2); color: var(--texte);
   border-left-color: var(--texte-3); }
-.menu-lateral a.actif { background: var(--vert-pale); color: var(--vert-fonce); border-left-color: var(--lien); font-weight: 600; }
+.menu-lateral a.actif { background: var(--surface-2); color: var(--texte); border-left-color: var(--lien); font-weight: 600; }
 .menu-lateral a:focus-visible, .bouton-notifications:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .menu-lateral a, .bouton-notifications { transition: none; } }
 .menu-lateral .tete-menu a.marque { display: inline-flex; align-self: flex-start; gap: .26em; border-left: 0; color: var(--marque-texte);
@@ -747,6 +783,7 @@ body:has(> .menu-lateral) > main { width: 100%; max-width: 1200px; padding: 1.75
 @media (max-width: 760px) {
   body:has(> .menu-lateral) { display: block; }
   body:has(> .menu-lateral) > main { padding: 1.25rem 16px 4rem; }
+  body.coquille:not(.accueil):not(.entretien-fixe) > main { padding: 1.25rem 16px 4rem; }
   .menu-lateral { position: sticky; z-index: 5; height: auto; overflow: visible; flex-direction: column; gap: .35rem;
     padding: .5rem 16px 0; border-right: 0; border-bottom: 1px solid var(--bord); }
   .tete-menu { flex-direction: row; align-items: center; justify-content: space-between; }
@@ -755,7 +792,7 @@ body:has(> .menu-lateral) > main { width: 100%; max-width: 1200px; padding: 1.75
   .bouton-notifications .libelle { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .actions-menu { display: flex; align-items: center; gap: .25rem; }
   .menu-lateral a.lien-reglages-etroit { display: flex; border-bottom: 0; border-radius: 8px; padding: .45rem .65rem; }
-  .menu-lateral a.lien-reglages-etroit.actif { background: var(--vert-pale); }
+  .menu-lateral a.lien-reglages-etroit.actif { background: var(--surface-2); }
   .menu-lateral ul.pied-menu { display: none; }
   .menu-lateral nav { flex-direction: row; overflow-x: auto; gap: .25rem; scrollbar-width: none; }
   .menu-lateral ul { display: flex; gap: .25rem; }

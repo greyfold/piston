@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone %}
+{% from "_macros.html" import icone, avancement_vm %}
 {% block titre %}Bienvenue · Piston{% endblock %}
 {% block contenu %}
 {# Accueil selon la spec Nexus « 03 Onboarding » : un écran par étape, une action principale,
@@ -30,6 +30,14 @@
   <div class="actions-accueil">
     <span></span>
     <a class="bouton go grand" href="/bienvenue/offres">Voir mes premières offres {{ icone("suivant") }}</a>
+  </div>
+  {% elif avancement %}
+  {# La connexion se fait dans la machine virtuelle : tant qu'elle se prépare, pas de bouton qui échouerait. #}
+  <div class="etat-tache"><span class="spinner" aria-hidden="true"></span><div><p class="fort">Ta machine virtuelle se prépare</p>
+    <p>Ton IA s'y connecte : les fournisseurs s'afficheront ici dès qu'elle sera prête. Tu peux aussi passer et y revenir plus tard.</p></div></div>
+  {{ avancement_vm(avancement, "recharger", etapes=false) }}
+  <div class="actions-accueil">
+    <a class="lien-neutre" href="/bienvenue/offres">Passer pour l'instant</a>
   </div>
   {% else %}
   {# Un bouton par fournisseur : la personne choisit l'IA de son abonnement. #}

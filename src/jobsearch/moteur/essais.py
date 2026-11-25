@@ -203,7 +203,7 @@ def coupure(ex):
     """Le travailleur a disparu pendant l'essai (VM ou application relancée) : panne de l'installation,
     pas du moteur. L'essai recommence une fois la VM revenue, sans rien changer à ses critères."""
     texte = str(ex)
-    return "travailleur injoignable" in texte or "interrupted" in texte
+    return "travailleur injoignable" in texte or "démarre encore" in texte or "interrupted" in texte
 
 
 def attendre_vm(attente_s=ATTENTE_VM_S, dire=print):

@@ -129,7 +129,11 @@ def cmd_connexion(a):
     from .travailleur import client as travailleur
     if travailleur.distant():
         from . import vm
-        return vm.connexion(a.fournisseur)
+        try:
+            return vm.connexion(a.fournisseur)
+        except vm.VMImpossible as e:
+            print(str(e)[:1].upper() + str(e)[1:] + ".")
+            return 1
     print("Les moteurs d'IA ne tournent que dans la machine virtuelle : régler travailleur.mode: distant, puis relancer.")
     return 1
 

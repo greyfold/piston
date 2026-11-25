@@ -2,7 +2,7 @@
 
 Toutes les tâches passent par la commande de code d'un fournisseur, connectée au compte de la
 personne qui utilise la plateforme (décision du 06.11 : chaque utilisateur se connecte à son
-propre abonnement ; aucune clé API) : Claude Code par défaut, ou Codex (OpenAI), Gemini CLI
+propre abonnement ; aucune clé API) : Claude Code par défaut, ou Codex (OpenAI), Antigravity CLI
 (Google), Grok Build (xAI), au choix de la personne (`fournisseurs.py`). Il n'y a aucun appel
 direct à l'API d'un fournisseur dans le code.
 
@@ -175,14 +175,18 @@ def etat(executer=subprocess.run, fournisseur_=None):
 
 
 def etats(executer=subprocess.run):
-    """{fournisseur: état} de tous les moteurs (le travailleur, pour le Mac)."""
-    out = {}
-    for fid, f in _TOUS.items():
+    """{fournisseur: état} de tous les moteurs (le travailleur, pour le Mac). Chaque état lance une
+    commande du moteur (une demi-seconde à plus d'une seconde) : elles tournent en même temps, et le Mac
+    attend la plus lente au lieu de leur somme."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def un(f):
         try:
-            out[fid] = f.etat(executer)
+            return f.etat(executer)
         except Exception as e:                      # un moteur en panne ne cache pas les autres
-            out[fid] = {"installe": False, "connecte": False, "abonnement": None, "message": str(e)[:200]}
-    return out
+            return {"installe": False, "connecte": False, "abonnement": None, "message": str(e)[:200]}
+    with ThreadPoolExecutor(max_workers=len(_TOUS) or 1) as fils:
+        return dict(zip(_TOUS, fils.map(un, _TOUS.values())))
 
 
 def etat_claude(executer=subprocess.run):

@@ -17,11 +17,31 @@ struct PageWeb: NSViewRepresentable {
         config.applicationNameForUserAgent = "RechercheEmploi"
         // Dictée des entretiens, sur l'ordinateur (Dictee.swift).
         config.userContentController.add(context.coordinator.dictee, name: "dictee")
+        // L'état de chaque page pour le cadre natif (Cadre.swift) : à la fin du document, et au retour du cache.
+        config.userContentController.add(context.coordinator.messages, name: "page")
+        config.userContentController.addUserScript(WKUserScript(source: PageWeb.scriptEtat,
+                                                                injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         let vue = WKWebView(frame: .zero, configuration: config)
         context.coordinator.dictee.vue = vue
         vue.navigationDelegate = context.coordinator
         vue.uiDelegate = context.coordinator
         vue.allowsBackForwardNavigationGestures = true
+        // Pas de page blanche le temps du premier chargement : le fond de la fenêtre, puis la page.
+        vue.isHidden = true
+        let pilote = Pilote.partage
+        pilote.vue = vue
+        pilote.etat = etat
+        context.coordinator.observations = [
+            vue.observe(\.canGoBack, options: [.initial, .new]) { v, _ in
+                DispatchQueue.main.async { pilote.peutReculer = v.canGoBack }
+            },
+            vue.observe(\.canGoForward, options: [.initial, .new]) { v, _ in
+                DispatchQueue.main.async { pilote.peutAvancer = v.canGoForward }
+            },
+            vue.observe(\.title, options: [.new]) { v, _ in
+                DispatchQueue.main.async { pilote.titreDeLaPage(v.title) }
+            },
+        ]
         // Le tableau de bord exige son jeton : posé en cookie avant le premier chargement. `ouverture=1` :
         // la fenêtre s'ouvre, ce qui reste à trancher passe d'abord (le tri), même si la vue a gardé son cookie.
         var adresse = URLComponents(url: url, resolvingAgainstBaseURL: false)
@@ -50,6 +70,18 @@ struct PageWeb: NSViewRepresentable {
         magasin.setCookie(cookie) { ensuite() }
     }
 
+    /// Envoie au cadre natif le JSON `#etat-page` de base.html (vide pour une page sans état).
+    static let scriptEtat = """
+    (function () {
+      var envoyer = function () {
+        var e = document.getElementById("etat-page");
+        window.webkit.messageHandlers.page.postMessage(e ? e.textContent : "");
+      };
+      envoyer();
+      window.addEventListener("pageshow", function (ev) { if (ev.persisted) envoyer(); });
+    })();
+    """
+
     func updateNSView(_ vue: WKWebView, context: Context) {
         // Hors de la mise à jour de la vue : changer un @Published ici est interdit.
         if etat.connexionDemandee, !vue.isLoading { DispatchQueue.main.async { context.coordinator.ouvrirConnexion(vue) } }
@@ -71,7 +103,13 @@ struct PageWeb: NSViewRepresentable {
         let base: URL
         let etat: Etat
         let dictee = Dictee()
-        init(base: URL, etat: Etat) { self.base = base; self.etat = etat }
+        let messages: MessagesPage
+        var observations: [NSKeyValueObservation] = []
+        init(base: URL, etat: Etat) {
+            self.base = base
+            self.etat = etat
+            messages = MessagesPage(base: base)
+        }
 
         /// La modale de connexion à l'IA du tableau de bord (_connexion_ia.html).
         @MainActor func ouvrirConnexion(_ vue: WKWebView) {
@@ -84,7 +122,16 @@ struct PageWeb: NSViewRepresentable {
         }
 
         func webView(_ vue: WKWebView, didFinish navigation: WKNavigation!) {
+            vue.isHidden = false
             MainActor.assumeIsolated { if etat.connexionDemandee { ouvrirConnexion(vue) } }
+        }
+
+        func webView(_ vue: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            vue.isHidden = false
+        }
+
+        func webView(_ vue: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            vue.isHidden = false
         }
 
         /// Le tableau de bord lui-même : l'hôte et le port de l'adresse de base, en http(s). Aucune
@@ -198,5 +245,21 @@ struct PageWeb: NSViewRepresentable {
             a.runModal()
             completionHandler()
         }
+    }
+}
+
+/// Les messages « page » de la vue web : l'état de la page ouverte, pour le cadre natif. Seuls ceux du cadre
+/// principal et du tableau de bord comptent ; un cadre de la page (l'écran de la machine virtuelle) est ignoré.
+final class MessagesPage: NSObject, WKScriptMessageHandler {
+    let base: URL
+    init(base: URL) { self.base = base }
+
+    func userContentController(_ controleur: WKUserContentController, didReceive message: WKScriptMessage) {
+        let origine = message.frameInfo.securityOrigin
+        guard message.frameInfo.isMainFrame, origine.host.lowercased() == base.host?.lowercased(),
+              origine.port == (base.port ?? 0) else { return }
+        let texte = message.body as? String ?? ""
+        let page = try? JSONDecoder().decode(EtatPage.self, from: Data(texte.utf8))
+        MainActor.assumeIsolated { Pilote.partage.recevoir(page) }
     }
 }

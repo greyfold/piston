@@ -1,5 +1,5 @@
 """Sessions d'IA en arrière-plan, dans le Chrome de la machine virtuelle (le moteur choisi :
-Claude Code, Codex, Gemini CLI ou Grok ; le nom du module date de Claude seul).
+Claude Code, Codex, Antigravity CLI ou Grok ; le nom du module date de Claude seul).
 
 Deux tâches :
 - « jobroom » : saisir les preuves Job-Room des candidatures parties. Lancée automatiquement

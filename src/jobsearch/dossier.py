@@ -496,8 +496,32 @@ def mettre_a_date(reg, emp):
     if apres != avant or not docx.exists():
         md.write_text(apres, encoding="utf-8")
         rendre_docx(apres, docx, "lettre")
+    if pdf_en_retard(docx):                       # aussi un PDF raté la fois d'avant (VM éteinte)
         en_pdf(docx, f.get("langue") or "fr")
     return cible
+
+
+def pdf_en_retard(docx):
+    """Le PDF de ce Word manque ou date d'avant lui."""
+    pdf = Path(docx).with_suffix(".pdf")
+    return Path(docx).exists() and (not pdf.exists() or pdf.stat().st_mtime < Path(docx).stat().st_mtime)
+
+
+def dater_lettres(reg):
+    """Chaque lettre à la date du jour (ou d'envoi), Word et PDF compris : l'échéance du matin le fait
+    pour que l'onglet Dossier n'ait pas à attendre le PDF de la machine virtuelle à l'ouverture.
+    Rend {"lettres": n, "pdf_en_retard": m} ; m > 0 : la VM ne répondait pas, à refaire plus tard."""
+    _schema(reg)
+    n = retard = erreurs = 0
+    for (emp,) in reg.cx.execute("SELECT empreinte FROM dossiers WHERE etat != 'en_cours'").fetchall():
+        try:
+            if mettre_a_date(reg, emp) is None:
+                continue
+            n += 1
+            retard += pdf_en_retard(Path(etat(reg, emp)["chemin"]) / nom_fichier(reg.get(emp), "lettre"))
+        except Exception:                         # un dossier abîmé n'arrête pas les autres (ni ne bloque la journée)
+            erreurs += 1
+    return {"lettres": n, "pdf_en_retard": retard, "erreurs": erreurs}
 
 
 def prevenir(reg, emp, suite="", fin=None):

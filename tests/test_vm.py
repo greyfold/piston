@@ -209,3 +209,89 @@ def test_agents_orphelins_termines(monkeypatch, tmp_path):
     monkeypatch.setattr(vm.time, "sleep", lambda s: None)
     vm._tuer_agents()
     assert not vivants and (101, 15) in signaux and (101, 9) in signaux and all(p != 200 for p, _ in signaux)
+
+
+def test_avancement_du_premier_demarrage(lima, monkeypatch):
+    """La première fois, l'avancement suit création, système, application et lancement ; les durées mesurées
+    servent d'estimation la fois suivante. Pendant une étape, la barre avance sans annoncer fini."""
+    etat, _ = lima
+    monkeypatch.setattr(vm, "code_installe", lambda: None)
+    monkeypatch.setattr(vm, "installer_code", lambda: None)
+    monkeypatch.setattr(vm, "travailleur_etat", lambda: {"version": "1", "code": vm.empreinte_code()})
+    vus = []
+    monkeypatch.setattr(vm, "creer", lambda: vus.append(vm.avancement()) or etat.update(
+        instance={"name": "jobsearch", "status": "Stopped"}))
+    monkeypatch.setattr(vm, "en_demarrage", lambda: True)
+    vm.demarrer(attente_s=1)
+    a = vus[0]
+    assert a["en_cours"] and a["premiere"] and a["detail"].startswith("Téléchargement d'Ubuntu")
+    assert [e["id"] for e in a["etapes"]] == ["creation", "systeme", "installation", "lancement"]
+    assert [e["etat"] for e in a["etapes"]] == ["en_cours", "a_faire", "a_faire", "a_faire"]
+    assert 0 <= a["pourcentage"] < 20 and a["reste_min"] >= 20
+    monkeypatch.setattr(vm, "en_demarrage", lambda: False)
+    fin = vm.avancement()
+    assert fin["fini"] and fin["pourcentage"] == 100 and not fin["erreur"]
+    assert all(e["etat"] == "faite" for e in fin["etapes"])
+    assert set(json.loads((vm.DATA / "vm" / "durees.json").read_text())) == {"creation", "systeme", "installation",
+                                                                            "lancement"}
+
+
+def test_avancement_plafonne_dans_une_etape(tmp_path, monkeypatch):
+    monkeypatch.setattr(vm, "DATA", tmp_path)
+    monkeypatch.setattr(vm, "en_demarrage", lambda: True)
+    a = vm.Avancement(["demarrage", "verification", "lancement"], False, lambda t: None)
+    a.etape("demarrage")
+    loin = vm.avancement(maintenant=a.etat["debut_etape"] + 3600)      # l'étape dure bien plus que prévu
+    total = sum(vm.ETAPES[i][2] for i in ("demarrage", "verification", "lancement"))
+    assert loin["pourcentage"] == int(100 * vm.ETAPES["demarrage"][2] * vm.PLAFOND_ETAPE / total)
+    a.etape("installation", remplace="verification")                 # le code a changé
+    assert [e["id"] for e in vm.avancement()["etapes"]] == ["demarrage", "installation", "lancement"]
+    a.finir(erreur="démarrage refusé par Lima")
+    monkeypatch.setattr(vm, "en_demarrage", lambda: False)
+    e = vm.avancement()
+    assert not e["en_cours"] and not e["fini"] and "Lima" in e["erreur"]
+
+
+def test_en_demarrage_suit_le_verrou(tmp_path, monkeypatch):
+    import fcntl
+    monkeypatch.setattr(vm, "DATA", tmp_path)
+    assert not vm.en_demarrage()
+    (tmp_path / "vm").mkdir()
+    with open(tmp_path / "vm" / "demarrer.lock", "w") as v:
+        fcntl.flock(v, fcntl.LOCK_EX)
+        assert vm.en_demarrage()
+    assert not vm.en_demarrage()
+
+
+def test_disque_plein_avant_la_creation(lima, monkeypatch):
+    """Disque du Mac presque plein : rien n'est créé ni démarré, et le message le dit en clair
+    (sinon la VM ne rend que des « Input/output error »)."""
+    etat, commandes = lima
+    monkeypatch.setattr(vm, "espace_libre_go", lambda: 0.2)
+    with pytest.raises(vm.VMImpossible, match="disque de ton Mac est presque plein \\(204 Mo libres\\).*15 Go"):
+        vm.demarrer(attente_s=1)
+    assert not any(c[0] in ("create", "start") for c in commandes)
+
+
+def test_creer_exige_plus_de_place_que_demarrer(lima, monkeypatch):
+    etat, commandes = lima
+    monkeypatch.setattr(vm, "espace_libre_go", lambda: 8.0)
+    with pytest.raises(vm.VMImpossible, match="15 Go"):
+        vm.demarrer(attente_s=1)
+    etat["instance"] = {"name": "jobsearch", "status": "Stopped"}
+    monkeypatch.setattr(vm, "travailleur_etat", lambda: {"version": "1"})
+    assert vm.demarrer(attente_s=1)["version"] == "1"          # 8 Go suffisent pour démarrer
+
+
+def test_connexion_refusee_disque_plein(lima, monkeypatch):
+    etat, commandes = lima
+    etat["instance"] = {"name": "jobsearch", "status": "Running"}
+    monkeypatch.setattr(vm, "espace_libre_go", lambda: 1.5)
+    with pytest.raises(vm.VMImpossible, match="1.5 Go libres"):
+        vm.connexion()
+    assert not any(c[0] == "shell" for c in commandes)
+
+
+def test_espace_inconnu_ne_bloque_rien(monkeypatch):
+    monkeypatch.setattr(vm, "espace_libre_go", lambda: None)
+    assert vm.disque_plein(15) is None

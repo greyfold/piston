@@ -440,6 +440,32 @@
 {% endcall %}
 {%- endmacro %}
 
+{# Avancement du démarrage de la machine virtuelle (Stepper et progression Nexus) : les étapes, la barre,
+   l'étape en cours et le temps qui reste, d'après `vm.avancement` (`a`). base.html le tient à jour toutes les
+   3 s ([data-avancement-vm]) ; `fin` dit quoi faire quand une étape se termine : « recharger » la page, ou
+   aller sur « accueil » (Aujourd'hui) une fois tout fini. Sans `etapes`, la barre seule (dans un assistant
+   qui a déjà son Stepper). Sur l'écran de démarrage et l'étape « Ton IA » de l'assistant. #}
+{% macro avancement_vm(a, fin="recharger", etapes=true) -%}
+<div class="avancement-vm" data-avancement-vm data-fin="{{ fin }}" data-faites="{{ a.etapes | selectattr('etat', 'equalto', 'faite') | list | length }}">
+  {% if etapes %}
+  <nav class="stepper" aria-label="Préparation de la machine virtuelle">
+    <ol>
+    {% for e in a.etapes %}
+      <li class="{{ e.etat }}"{% if e.etat == 'en_cours' %} aria-current="step"{% endif %}>
+        <span class="marqueur"><span class="cache">Étape {{ loop.index }} sur {{ a.etapes | length }}{{ ', faite' if e.etat == 'faite' }} : </span>
+          {% if e.etat == 'faite' %}{{ icone("coche") }}{% else %}<span aria-hidden="true">{{ loop.index }}</span>{% endif %}</span>
+        <span class="libelle">{{ e.libelle }}</span>
+      </li>
+    {% endfor %}
+    </ol>
+  </nav>
+  {% endif %}
+  <div class="progression" role="progressbar" aria-label="Préparation de la machine virtuelle" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ a.pourcentage }}"><i style="width: {{ a.pourcentage }}%"></i></div>
+  <p class="ligne-avancement"><span class="fort" role="status" data-detail>{{ a.detail or "Préparation" }}…</span>
+    <span class="muet"><span data-pourcentage>{{ a.pourcentage }}</span> % · encore environ <span data-reste>{{ a.reste_min }}</span> min</span></p>
+</div>
+{%- endmacro %}
+
 {# État vide (Nexus EmptyState) : centré, pictogramme dans un cercle neutre, titre court, une ou deux phrases
    de contexte, et les actions passées par {% call %} (sans {% call %}, pas d'actions). titre_balise garde
    l'ordre des titres de la page (h3 par défaut, comme Nexus) ; compact pour un petit espace. #}
