@@ -12,7 +12,7 @@ PERSONNELS = {
                       "sourcing.entreprises": [], "sourcing.linkedin_requetes": [],
                       "sourcing.linkedin_lieu": "", "familles_cibles": ""},
 }
-SOURCES_DE_BASE = {"job-room", "jobup", "jobs-ch", "indeed", "linkedin", "mails"}
+SOURCES_DE_BASE = {"job-room", "jobup", "jobs-ch", "indeed", "linkedin"}
 
 
 @pytest.fixture
@@ -197,12 +197,13 @@ def test_connexion_ia_un_bouton_par_fournisseur(neuve, monkeypatch, reg):
     from jobsearch import moteur
     from jobsearch.web import app as appmod
     monkeypatch.setattr(appmod, "_reg", lambda: type(reg)(reg.chemin))
-    monkeypatch.setattr(appmod, "etat_claude", lambda: {"connecte": False, "message": "pas connecté"})
+    monkeypatch.setattr(appmod, "etat_ia", lambda fid=None, etats_vm=None: {"connecte": False, "message": "pas connecté"})
     profil.enregistrer_recherche("fixe", "Product designer", ["GE"])
     profil.enregistrer_sources(["job-room"])
     page = TestClient(appmod.app).get("/bienvenue/ia").text
-    assert [f["id"] for f in moteur.FOURNISSEURS] == ["claude"]
-    assert page.count('class="fournisseur"') == 1 and "Se connecter avec Claude" in page
+    assert [f["id"] for f in moteur.FOURNISSEURS] == ["claude", "codex", "antigravity", "grok"]
+    assert page.count('class="fournisseur"') == 4 and "Se connecter avec Claude" in page
+    assert "Se connecter avec Codex" in page and "Se connecter avec Antigravity" in page and "Se connecter avec Grok" in page
     assert 'data-connexion-ia="claude"' in page and 'id="modale-ia"' in page and "Passer pour l'instant" in page
 
 
@@ -336,11 +337,11 @@ def test_bien_demarrer_disparait_une_fois_tout_fait_et_etat_vide(neuve, monkeypa
     assert profil.charger()[profil.PREMIERS_PAS] == "terminee" and profil.PREMIERS_PAS_FAITS not in profil.charger()
     # L'IA se déconnecte ensuite : la checklist ne revient pas, le bandeau de l'accueil prend le relais.
     monkeypatch.setattr(profil, "premiers_pas", lambda p=None, ia_connectee=False: faites(4))
-    monkeypatch.setattr(appmod, "etat_claude", lambda: {"installe": True, "connecte": False, "message": "pas connecté"})
+    monkeypatch.setattr(appmod, "etat_ia", lambda fid=None, etats_vm=None: {"installe": True, "connecte": False, "message": "pas connecté"})
     page = web.get("/").text
     assert "Bien démarrer" not in page and 'id="ia-deconnectee"' in page
     assert "Ton IA n'est plus connectée" in page and 'data-connexion-ia="claude"' in page
-    monkeypatch.setattr(appmod, "etat_claude", lambda: {"installe": True, "connecte": True, "message": "connecté"})
+    monkeypatch.setattr(appmod, "etat_ia", lambda fid=None, etats_vm=None: {"installe": True, "connecte": True, "message": "connecté"})
     page = web.get("/").text
     assert 'id="ia-deconnectee"' not in page
     assert "Aucun poste identifié pour le moment" in page and 'href="/offres">Voir les offres' in page

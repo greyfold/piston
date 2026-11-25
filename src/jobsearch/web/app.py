@@ -45,7 +45,7 @@ async def demarrage(app):
     yield
 
 
-app = FastAPI(title="Recherche d'emploi", docs_url=None, redoc_url=None, openapi_url=None, lifespan=demarrage)
+app = FastAPI(title="Piston", docs_url=None, redoc_url=None, openapi_url=None, lifespan=demarrage)
 app.mount("/static", StaticFiles(directory=ICI / "static"), name="static")
 tpl = Jinja2Templates(directory=ICI / "templates")
 
@@ -159,6 +159,9 @@ def _date_suisse(iso):
 
 
 tpl.env.globals["decomposer_tel"] = _decomposer_tel
+# Le moteur d'IA choisi (Claude, Codex, Antigravity, Grok) : les textes des pages le nomment.
+tpl.env.globals["ia_active"] = lambda: moteur_mod.fournisseur().vue
+tpl.env.globals["noms_ia"] = lambda: {f["id"]: f["nom"] for f in moteur_mod.FOURNISSEURS}
 tpl.env.filters["date_suisse"] = _date_suisse
 
 
@@ -360,7 +363,7 @@ def accueil(request: Request, ensuite: str = "", ouverture: str = ""):
         retenues = sorted(reg.liste(["retenue"]), key=lambda f: priorite(f, note(f)))
         postules = {f["empreinte"] for f in retenues if postuler_ouvert(reg, f["empreinte"])}
         p = profil_mod.charger()
-        claude = etat_claude()
+        claude = etat_ia()
         premiers = (profil_mod.premiers_pas(p, ia_connectee=bool(claude.get("connecte")))
                     if p.get(profil_mod.PREMIERS_PAS) == "affichee" else [])
         if premiers:                               # une étape faite le reste ; tout fait : « Bien démarrer » s'en va pour de bon
@@ -584,8 +587,9 @@ def _est_lettre(nom):
 def _document(f, d, nom):
     """Le fichier à servir. Une lettre est toujours à la bonne date : celle du jour, ou la
     date d'envoi une fois la candidature partie."""
-    chemin = Path(d["chemin"]) / nom
-    if not chemin.is_file():
+    racine = Path(d["chemin"]).resolve()
+    chemin = (racine / nom).resolve()
+    if not chemin.is_relative_to(racine) or not chemin.is_file():
         return None
     if _est_lettre(nom) and nom.endswith(".docx"):
         reg = _reg()
@@ -678,10 +682,11 @@ def annonce_claude(request: Request, emp: str, type_: str = Form("formulaire", a
     reg = _reg()
     try:
         agent_claude.lancer(reg, type_, emp if type_ == "formulaire" else None)
-        msg, ok = ("Claude remplit le formulaire dans ton Chrome (rien n'est envoyé sans toi)." if type_ == "formulaire"
-                   else "Claude saisit les preuves Job-Room dans ton Chrome."), True
+        nom = nom_ia()
+        msg, ok = ("%s remplit le formulaire dans ton Chrome (rien n'est envoyé sans toi)." % nom if type_ == "formulaire"
+                   else "%s saisit les preuves Job-Room dans ton Chrome." % nom), True
     except agent_claude.LancementImpossible as e:
-        msg, ok = "Claude n'a pas pu démarrer : %s" % e, False
+        msg, ok = "%s n'a pas pu démarrer : %s" % (nom_ia(), e), False
     finally:
         reg.fermer()
     if en_json:
@@ -693,7 +698,7 @@ def annonce_claude(request: Request, emp: str, type_: str = Form("formulaire", a
 
 @app.get("/tache/{tache}/etat")
 def tache_etat(tache: int):
-    """Avancement d'une session Claude, lu par la page tant que le bouton est bloqué."""
+    """Avancement d'une session de l'IA, lu par la page tant que le bouton est bloqué."""
     from .. import agent_claude
     reg = _reg()
     try:
@@ -813,12 +818,11 @@ def _sources_lignes(reg):
     repertoire = repertoire_mod.lister(reg)
     etats = {r["id"]: dict(r) for r in reg.cx.execute("SELECT * FROM sources")}
     compte = {}
-    for f in reg.toutes():
-        for s in f.get("sources") or []:
+    for srcs, st in reg.cx.execute("SELECT sources, statut FROM annonces"):
+        for s in json.loads(srcs or "[]"):
             c = compte.setdefault(s, {"vues": 0, "ab": 0, "go": 0, "envoyees": 0,
                                       "entretiens": 0, "refus": 0})
             c["vues"] += 1
-            st = f["statut"]
             c["ab"] += st in ("A", "B")
             c["go"] += st in ("retenue", "candidature", "entretien", "offre", "refus")
             c["envoyees"] += st in ENVOYEES
@@ -839,8 +843,10 @@ def _statut_source(s):
     etat = s.get("etat") or {}
     if s["id"] in examen.EN_COURS:
         return "nouvelle", "examen en cours"
-    if s.get("branchee") and not s.get("actif"):
+    if s.get("actif") is False:
         return "", "désactivée"
+    if etat.get("etat") == "à configurer":
+        return "nouvelle", "à configurer"
     if s["acces"] == "automatique":
         if not etat:
             return "", "pas encore interrogée"
@@ -858,7 +864,7 @@ def sources(request: Request, essai=None):
     from ..sources import examen
     reg = _reg()
     try:
-        return page(request, "sources.html", lignes=_sources_lignes(reg), acces=repertoire_mod.ACCES, essai=essai,
+        return page(request, "sources.html", lignes=_sources_lignes(reg), essai=essai,
                     examens_en_cours=examen.EN_COURS)
     finally:
         reg.fermer()
@@ -873,7 +879,11 @@ def source_detail(request: Request, sid: str):
         s = next((l for l in _sources_lignes(reg) if l["id"] == sid), None)
         if s is None:
             return _retour("/sources", "Source inconnue.", False)
+        from .. import connecteurs
         return page(request, "source.html", s=s, ex=examen.lire_tous(reg).get(sid),
+                    apify=_apify(request) if sid == "linkedin" else None,
+                    connecteur=connecteurs.CATALOGUE.get(sid) if s.get("connecteur") else None,
+                    moteur=etat_ia("claude") if s.get("connecteur") else None,
                     en_cours=sid in examen.EN_COURS, retour_cadre={"href": "/sources", "nom": "Sources"})
     finally:
         reg.fermer()
@@ -910,9 +920,54 @@ def sources_brancher(url: str = Form(""), entreprise: str = Form(""), rendu: str
         reg.fermer()
 
 
+def _apify(request):
+    """La page de LinkedIn : le jeton Apify (trousseau du Mac) et ce que le compte Apify permet,
+    lu à l'ouverture de la page (lecture seule, gratuite) : offre, crédit du mois, coût des
+    dernières recherches, et le plafond par recherche que l'application propose d'après eux."""
+    from ..sources import linkedin
+    from ..sources.base import Client, RouteCassee
+    r = reglages().get("linkedin") or {}
+    e = {"cle": cles.etat("apify"), "depuis_le_mac": depuis_le_mac(request), "actif": bool(r.get("actif")),
+         "plafond": float(r.get("plafond_usd_par_run", 1.0)),
+         "requetes": list(criteres()["sourcing"].get("linkedin_requetes") or []), "compte": None, "conseil": None,
+         "erreur": None}
+    if e["cle"]["presente"]:
+        client = Client(pause=0, timeout=10)
+        try:
+            e["compte"] = linkedin.compte(client, r.get("acteur") or "crawlworks~linkedin-jobs-scraper")
+            e["conseil"] = linkedin.conseil(e["compte"], len(e["requetes"]), e["plafond"])
+        except (RouteCassee, OSError) as ex:
+            e["erreur"] = str(ex)[:200]
+        finally:
+            client.fermer()
+    return e
+
+
+def _source_linkedin(action, plafond):
+    """LinkedIn depuis sa page : l'activer (jeton Apify exigé), la désactiver, poser le plafond par recherche."""
+    if action == "plafond":
+        try:
+            profil_mod.regler_linkedin(plafond_usd=float((plafond or "").replace(",", ".")))
+        except (ValueError, profil_mod.ProfilInvalide) as e:
+            return _retour("/sources/linkedin#compte-apify", "Refusé : %s." % str(e).rstrip("."), False)
+        return _retour("/sources/linkedin#compte-apify", "Plafond par recherche : %s $." % plafond, True)
+    if action not in ("activer", "desactiver"):
+        return HTMLResponse("Action inconnue.", status_code=404)
+    if action == "activer" and not cles.etat("apify")["presente"]:
+        return _retour("/sources/linkedin#jeton", "Ajoute d'abord ton jeton Apify.", False)
+    profil_mod.regler_linkedin(actif=action == "activer")
+    return _retour("/sources/linkedin", "LinkedIn %s." % ("activé : interrogé à chaque passage" if action == "activer"
+                                                       else "désactivé"), True)
+
+
 @app.post("/sources/{sid}/{action}")
-def sources_activer(sid: str, action: str):
+def sources_activer(sid: str, action: str, plafond: str = Form("")):
+    from .. import connecteurs
     from ..sources import ajoutees
+    if sid == "linkedin":
+        return _source_linkedin(action, plafond)
+    if sid in connecteurs.CATALOGUE and connecteurs.CATALOGUE[sid]["role"] == "source":
+        return _source_connecteur(sid, action)
     if action not in ("activer", "desactiver"):
         return HTMLResponse("Action inconnue.", status_code=404)
     reg = _reg()
@@ -923,6 +978,26 @@ def sources_activer(sid: str, action: str):
         return _retour("/sources", "Refusé : %s" % e, False)
     finally:
         reg.fermer()
+
+
+def _source_connecteur(sid, action):
+    """Une source lue par un connecteur du compte Claude (Indeed) : l'activer, la désactiver ou
+    tester le connecteur, depuis sa page de source. Un test réussi lève l'état « à configurer »."""
+    from .. import connecteurs
+    if action not in ("activer", "desactiver", "tester"):
+        return HTMLResponse("Action inconnue.", status_code=404)
+    nom = connecteurs.CATALOGUE[sid]["nom"]
+    if action == "tester":
+        ok, msg = connecteurs.tester(sid)
+        reg = _reg()
+        try:
+            connecteurs.noter_test(reg, sid, ok)
+        finally:
+            reg.fermer()
+        return _retour("/sources/%s" % sid, "%s : %s" % (nom, msg), bool(ok))
+    connecteurs.activer(sid, action == "activer")
+    return _retour("/sources/%s" % sid, "%s %s." % (nom, "activé : interrogé à chaque passage" if action == "activer"
+                                                    else "désactivé"), True)
 
 
 def _retour(url, msg, ok):
@@ -1005,34 +1080,43 @@ def navigateur_vm(request: Request):
 
 @app.get("/api/etat")
 def api_etat():
-    """Ce que l'application Mac montre dans la barre des menus : passage, Claude, machine virtuelle."""
+    """Ce que l'application Mac montre dans la barre des menus : passage, IA, machine virtuelle. La
+    clé « claude » garde son nom (l'application Mac la lit) : c'est l'état du moteur choisi."""
     from .. import vm
     from ..travailleur import client as travailleur
+    distant = travailleur.distant()
     reg = _reg()
     try:
+        if distant:
+            from .. import agent_claude
+            try:
+                agent_claude.relever(reg)        # ce que les sessions de la VM ont noté depuis la dernière fois
+            except Exception:
+                pass
         p = etat_passage(reg)
-        a_trancher = len(reg.liste(["A", "B", "nouvelle"]))
+        a_trancher = reg.cx.execute(
+            "SELECT COUNT(*) FROM annonces WHERE statut IN ('A', 'B', 'nouvelle')").fetchone()[0]
     finally:
         reg.fermer()
-    distant = travailleur.distant()
-    etat_vm = None
+    etat_vm, etats_vm = None, None
     if distant:
-        from .. import agent_claude
-        reg = _reg()
-        try:
-            agent_claude.relever(reg)        # ce que les sessions de la VM ont noté depuis la dernière fois
-        except Exception:
-            pass
-        finally:
-            reg.fermer()
         try:
             e = vm.etat()
             etat_vm = {"existe": e["existe"], "statut": e["statut"]}
+            tr = e.get("travailleur")
+            if isinstance(tr, dict) and "erreur" not in tr:
+                etats_vm = dict(tr.get("moteurs") or {})
+                etats_vm.setdefault("claude", tr.get("moteur") or {})
+            elif e.get("statut") != "Running":
+                msg = "machine virtuelle arrêtée" if e.get("existe") else "machine virtuelle absente"
+                etats_vm = {f["id"]: {"installe": False, "connecte": False, "abonnement": None, "message": msg}
+                            for f in moteur_mod.FOURNISSEURS}
         except Exception as ex:
             etat_vm = {"existe": False, "statut": None, "erreur": str(ex)}
-    c = etat_claude()
+    c = etat_ia(etats_vm=etats_vm)
     return {"passage": {"niveau": p["niveau"], "texte": p["texte"]}, "a_trancher": a_trancher,
-            "claude": {"connecte": bool(c.get("connecte")), "message": c.get("message", "")},
+            "claude": {"connecte": bool(c.get("connecte")), "message": c.get("message", ""),
+                       "id": moteur_mod.fournisseur_actif(), "nom": nom_ia()},
             "mode": "distant" if distant else "local", "vm": etat_vm, "donnees": str(DATA),
             # pour que l'application Mac reconnaisse un serveur périmé (autre processus, autre copie du code)
             "pid": os.getpid(), "racine": str(Path(jobsearch.__file__).resolve().parent)}
@@ -1043,8 +1127,9 @@ def connecteurs_page(request: Request):
     from .. import connecteurs
     from ..travailleur import client as travailleur
     a_faire = _a_configurer()
+    # Gmail et Indeed : connecteurs du compte Claude
     return page(request, "connecteurs.html", connecteurs=connecteurs.liste(), roles=connecteurs.ROLES,
-                moteur=etat_claude(), distant=travailleur.distant(), a_configurer=a_faire,
+                moteur=etat_ia("claude"), distant=travailleur.distant(), a_configurer=a_faire,
                 etats={c["id"]: c for c in a_faire}, comptes_mail=profil_mod.comptes_courrier())
 
 
@@ -1061,30 +1146,48 @@ def _connecteurs_comptes_mail(request, form):
     return RedirectResponse("/connecteurs?msg=%s&ok=1#apple-mail" % quote(msg), status_code=303)
 
 
-_ETAT_CLAUDE = {"t": 0.0, "v": None}
+_ETAT_IA = {"t": 0.0, "v": None}
 
 
 def ia_connectee():
-    """Pour l'interface (fonctions débloquées) : l'état de Claude, relu au plus toutes les 15 s."""
+    """Pour l'interface (fonctions débloquées) : l'état du moteur d'IA, relu au plus toutes les 15 s."""
     import time
-    if _ETAT_CLAUDE["v"] is None or time.monotonic() - _ETAT_CLAUDE["t"] > 15:
-        _ETAT_CLAUDE.update(t=time.monotonic(), v=bool(etat_claude().get("connecte")))
-    return _ETAT_CLAUDE["v"]
+    if _ETAT_IA["v"] is None or time.monotonic() - _ETAT_IA["t"] > 15:
+        _ETAT_IA.update(t=time.monotonic(), v=bool(etat_ia().get("connecte")))
+    return _ETAT_IA["v"]
 
 
-def etat_claude():
-    """La connexion de Claude Code là où il tourne : dans la machine virtuelle, ou sur ce Mac."""
+def _etats_vm():
+    """{fournisseur: état} tel que le travailleur de la VM le voit ; une erreur pour tous s'il ne répond pas."""
     from ..travailleur import client as travailleur
-    if not travailleur.distant():
-        return moteur_mod.etat()
     try:
-        e = dict(travailleur.Distant.depuis_reglages().etat()["moteur"])
-        e["message"] += " (machine virtuelle)"
-        if not e.get("connecte"):
-            e["message"] = "Claude Code n'est pas connecté dans la machine virtuelle : « Se connecter à Claude… » dans le menu de l'application"
-        return e
+        e = travailleur.Distant.depuis_reglages().etat()
     except Exception as ex:
-        return {"installe": False, "connecte": False, "abonnement": None, "message": str(ex)}
+        return {f["id"]: {"installe": False, "connecte": False, "abonnement": None, "message": str(ex)}
+                for f in moteur_mod.FOURNISSEURS}
+    out = dict(e.get("moteurs") or {})
+    out.setdefault("claude", e.get("moteur") or {})
+    return out
+
+
+def etat_ia(fid=None, etats_vm=None):
+    """La connexion d'un moteur d'IA (par défaut celui de l'application) là où il tourne : dans la
+    machine virtuelle, ou sur ce Mac. `etats_vm` : l'état déjà lu du travailleur."""
+    from ..travailleur import client as travailleur
+    f = moteur_mod.fournisseur(fid)
+    if not travailleur.distant():
+        return moteur_mod.etat() if f.id == "claude" else f.etat()
+    e = dict((etats_vm if etats_vm is not None else _etats_vm()).get(f.id) or {"installe": False, "connecte": False, "message": "état inconnu"})
+    if e.get("connecte"):
+        e["message"] = (e.get("message") or "Connecté") + " (machine virtuelle)"
+    elif e.get("installe", True):
+        e["message"] = "%s n'est pas connecté dans la machine virtuelle : « Se connecter » sur la page IA" % f.nom
+    return e
+
+
+def nom_ia():
+    """Le nom du moteur d'IA de l'application (Claude, Codex, Antigravity, Grok), pour les textes des pages."""
+    return moteur_mod.fournisseur().nom
 
 
 @app.get("/ia", response_class=HTMLResponse)
@@ -1098,7 +1201,10 @@ def ia_page(request: Request):
 
 def etats_fournisseurs():
     """Chaque fournisseur d'IA avec l'état de sa connexion. Un seul peut être connecté à la fois."""
-    return [dict(f, etat=etat_claude() if f["id"] == "claude" else {}) for f in moteur_mod.FOURNISSEURS]
+    from ..moteur.fournisseurs import TOUS
+    from ..travailleur import client as travailleur
+    vus = _etats_vm() if travailleur.distant() else None          # un seul appel au travailleur
+    return [dict(f, etat=etat_ia(f["id"], vus) if f["id"] in TOUS else {}) for f in moteur_mod.FOURNISSEURS]
 
 
 @app.post("/ia/{fournisseur}/deconnecter")
@@ -1112,11 +1218,11 @@ def ia_deconnecter(fournisseur: str):
     try:
         if not travailleur.distant():
             raise vm.VMImpossible("%s ne tourne que dans la machine virtuelle" % f["nom"])
-        vm.deconnexion()
+        vm.deconnexion(f["id"])
         msg, ok = "%s est déconnecté. Tu peux te reconnecter quand tu veux." % f["nom"], 1
     except (vm.VMImpossible, subprocess.TimeoutExpired) as e:
         msg, ok = "La déconnexion n'a pas abouti : %s." % str(e).rstrip("."), 0
-    _ETAT_CLAUDE["v"] = None
+    _ETAT_IA["v"] = None
     return RedirectResponse("/ia?msg=%s&ok=%d" % (quote(msg), ok), status_code=303)
 
 
@@ -1152,9 +1258,7 @@ def sante(request: Request):
         sauvegardes = sorted((DATA / "sauvegardes").glob("jobsearch-*.db"))
         return page(request, "sante.html", jours=jours,
                     derniere_sauvegarde=_moment_sauvegarde(sauvegardes[-1].name) if sauvegardes else None,
-                    nb_sauvegardes=len(sauvegardes),
-                    depuis_le_mac=depuis_le_mac(request), cles=[cles.etat(n) for n in cles.SERVICES],
-                    moteur=etat_claude())
+                    nb_sauvegardes=len(sauvegardes), moteur=etat_ia())
     finally:
         reg.fermer()
 
@@ -1188,7 +1292,7 @@ def confidentialite_page(request: Request):
                 extrait=[l for l in masque.splitlines() if confidentialite.BALISE.search(l)][:16],
                 balises=[(b, confidentialite.LIBELLES[b], m.valeurs[b]) for b in confidentialite.ORDRE if b in m.valeurs],
                 tiers=sum(1 for b in vu.valeurs if "_" in b and b.rsplit("_", 1)[-1].isdigit()),
-                profil_present=bool(texte), moteur=etat_claude())
+                profil_present=bool(texte))
 
 
 # Pages de réglage : listées par la page Réglages, hors du menu latéral (elles gardent leur adresse) ;
@@ -1200,13 +1304,13 @@ GROUPES_REGLAGES = (
         ("/profil", "Ma recherche", "identite", "Identité, poste recherché, pré-tri, critères, formation, langues et objectifs."),
         ("/reglages/parcours", "Ton parcours", "base", "Expériences, formations et compétences ; export et import d'un fichier."),
     )),
-    ("Recherche et IA", (
+    ("Services connectés", (
         ("/sources", "Sources", "globe", "Les sites et pages carrière interrogés à chaque passage."),
         ("/ia", "Fournisseur d'IA", "ia", "L'IA qui note les annonces et écrit tes dossiers."),
-        ("/connecteurs", "Connecteurs", "prise", "Ce que l'application peut lire pour toi : courrier, sites d'emploi, navigateur."),
-        ("/confidentialite", "Confidentialité", "cadenas", "Ce que l'IA voit de toi, et ce qui lui est masqué."),
+        ("/connecteurs", "Connecteurs", "prise", "Ce que l'application peut lire pour toi : courrier et navigateur."),
     )),
     ("Application", (
+        ("/confidentialite", "Confidentialité", "cadenas", "Ce que l'IA voit de toi, et ce qui lui est masqué."),
         ("/sante", "Système", "systeme", "Les 30 derniers matins, les sauvegardes et les clés d'accès."),
     )),
 )
@@ -1286,9 +1390,9 @@ def _retour_parcours(msg, ok):
 def cles_action(request: Request, nom: str, action: str, cle: str = Form("")):
     # Une clé ne se saisit que sur le Mac : depuis le téléphone, elle traverserait le
     # réseau local en clair (le tableau de bord n'est pas en HTTPS).
+    # La clé Apify sert à LinkedIn : elle se règle sur la page de la source.
     if not depuis_le_mac(request):
-        return RedirectResponse("/sante?msg=%s&ok=0#cles" % quote("Les clés se saisissent sur ton Mac uniquement."),
-                                status_code=303)
+        return _retour("/sources/linkedin#jeton", "Les clés se saisissent sur ton Mac uniquement.", False)
     try:
         if action == "enregistrer":
             msg = cles.enregistrer(nom, cle)
@@ -1299,7 +1403,7 @@ def cles_action(request: Request, nom: str, action: str, cle: str = Form("")):
         ok = True
     except cles.CleRefusee as e:
         msg, ok = "Refusé : %s" % e, False
-    return RedirectResponse("/sante?msg=%s&ok=%d#cles" % (quote(msg), int(ok)), status_code=303)
+    return _retour("/sources/linkedin#jeton", msg, ok)
 
 
 # --- Profil : l'assistant de configuration ----------------------------------------
@@ -1436,7 +1540,7 @@ def _sources_faites(p=None):
 
 def _page_accueil(request, ecran, **ctx):
     """Les trois étapes, toujours montrées en entier ; une étape passée sans être faite reste à faire."""
-    claude = ctx.pop("claude", None) or etat_claude()
+    claude = ctx.pop("claude", None) or etat_ia()
     faites = {"recherche": _recherche_faite() and ecran != "recherche",
               "sources": _sources_faites() and ecran not in ("recherche", "sources"),
               "ia": bool(claude.get("connecte")), "offres": ctx.pop("offres_vues", False)}
@@ -1462,7 +1566,7 @@ def bienvenue_ia(request: Request):
         return RedirectResponse("/", status_code=303)
     if not _recherche_faite() or not _sources_faites():
         return RedirectResponse("/bienvenue", status_code=303)
-    claude = etat_claude()
+    claude = etat_ia()
     if claude.get("connecte") and request.query_params.get("etape") != "ia":
         return RedirectResponse("/bienvenue/offres", status_code=303)          # étape déjà faite
     return _page_accueil(request, "ia", claude=claude, fournisseurs=moteur_mod.FOURNISSEURS)
@@ -1597,7 +1701,7 @@ def ia_connexion_etat():
     from .. import connexion_ia
     e = connexion_ia.etat()
     if e.get("etat") == "connecte":
-        _ETAT_CLAUDE["v"] = None                  # l'interface se rouvre tout de suite
+        _ETAT_IA["v"] = None                      # l'interface se rouvre tout de suite
     return e
 
 
@@ -1633,7 +1737,7 @@ def _page_tache(request, tache, saisi=None, **ctx):
     t = profil_mod.TACHES[tache]
     p = profil_mod.charger()
     etapes = [profil_mod.etape(e) for e in t["etapes"]]
-    pas = profil_mod.premiers_pas(p, ia_connectee=bool(etat_claude().get("connecte"))) if p.get(profil_mod.PREMIERS_PAS) else []
+    pas = profil_mod.premiers_pas(p, ia_connectee=bool(etat_ia().get("connecte"))) if p.get(profil_mod.PREMIERS_PAS) else []
     rang = next((i for i, x in enumerate(pas) if x[0] == tache), None)
     return page(request, "premiers_pas.html", tache=tache, t=t, champs=_champs(etapes, p, saisi),
                 regles=profil_mod.regles_au_choix(), rang=rang, total=len(pas), **_ctx_champs(), **ctx)
@@ -2082,7 +2186,7 @@ def _action(request, form):
             dossier.mettre_a_date(reg, emp)        # la lettre prend la date d'envoi, et la garde
             from .. import agent_claude
             if agent_claude.apres_envoi(reg, emp):
-                msg += " · preuve Job-Room : Claude s'en occupe (connecte-toi si Chrome le demande)"
+                msg += " · preuve Job-Room : %s s'en occupe (connecte-toi si Chrome le demande)" % nom_ia()
         if type_ == "go" and not (reg.get(emp) or {}).get("cv_genere"):
             try:
                 dossier.produire_en_tache(emp, reg)     # le dossier démarre tout de suite

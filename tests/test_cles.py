@@ -91,13 +91,15 @@ def test_page_sante_et_saisie_sur_le_mac(monkeypatch, reg):
     vues = []
     monkeypatch.setattr(cles, "enregistrer", lambda nom, cle: vues.append((nom, cle)) or "Clé enregistrée.")
     web = TestClient(appmod.app)
-    page = web.get("/sante").text
-    assert "Clés d'accès" in page and 'type="password"' in page and "absente" in page
+    assert "Clés d'accès" not in web.get("/sante").text and 'type="password"' not in web.get("/sante").text
+    page = web.get("/sources/linkedin").text                   # le jeton Apify sert à LinkedIn : sur sa page
+    assert 'type="password"' in page and "à ajouter" in page and "Settings › API &amp; Integrations" in page
     assert "API Claude" not in page and "sk-ant-" not in page
     ia = web.get("/ia").text
     assert "Fournisseur d'IA" in ia and "Connecté au compte Claude" in ia and "Clés d'accès" not in ia
     r = web.post("/cles/apify/enregistrer", data={"cle": CLE}, follow_redirects=False)
     assert r.status_code == 303 and "ok=1" in r.headers["location"] and vues == [("apify", CLE)]
+    assert r.headers["location"].startswith("/sources/linkedin?")
     assert CLE not in r.headers["location"]
 
 
@@ -110,7 +112,7 @@ def test_saisie_refusee_depuis_le_telephone(monkeypatch, reg):
     vues = []
     monkeypatch.setattr(cles, "enregistrer", lambda nom, cle: vues.append(cle))
     web = TestClient(appmod.app)
-    assert 'type="password"' not in web.get("/sante").text
+    assert 'type="password"' not in web.get("/sources/linkedin").text
     r = web.post("/cles/apify/enregistrer", data={"cle": CLE}, follow_redirects=False)
     assert "ok=0" in r.headers["location"] and vues == []
 
@@ -133,14 +135,14 @@ def test_ia_deconnexion_et_un_seul_fournisseur(monkeypatch, reg):
 
     vues = []
     monkeypatch.setattr(travailleur, "distant", lambda: True)
-    monkeypatch.setattr(vm, "deconnexion", lambda: vues.append("logout") or "ok")
+    monkeypatch.setattr(vm, "deconnexion", lambda f="claude": vues.append("logout " + f) or "ok")
     r = web.post("/ia/claude/deconnecter", follow_redirects=False)
-    assert r.status_code == 303 and "ok=1" in r.headers["location"] and vues == ["logout"]
+    assert r.status_code == 303 and "ok=1" in r.headers["location"] and vues == ["logout claude"]
     assert web.post("/ia/autre/deconnecter", follow_redirects=False).headers["location"].endswith("ok=0")
 
     # Un seul fournisseur à la fois : un second ne se connecte pas tant que Claude l'est.
     monkeypatch.setattr(moteur, "FOURNISSEURS", moteur.FOURNISSEURS + [{"id": "autre", "nom": "Autre", "detail": "Test"}])
-    monkeypatch.setattr(appmod, "etat_claude", lambda: {"connecte": True, "message": "Connecté"})
+    monkeypatch.setattr(appmod, "etat_ia", lambda fid=None, etats_vm=None: {"connecte": True, "message": "Connecté"})
     page = web.get("/ia").text
     assert "déconnecte d'abord Claude" in page and 'data-connexion-ia="autre"' not in page
     r = web.post("/ia/connexion/autre/demarrer")

@@ -47,7 +47,7 @@ def test_alerter_envoie_et_note_la_periode(reg):
     annonce(reg, entreprise="Nexthink", titre="Product Manager", cree_le="2099-01-01 06:40")
     envois = []
     r = matin.alerter(reg, envoyer=lambda t, x, **k: envois.append((t, x)), attendre_min=0)
-    assert r["nouvelles"] == 1 and envois[0][0] == "Recherche d'emploi · 1 nouvelle offre ce matin"
+    assert r["nouvelles"] == 1 and envois[0][0] == "Piston · 1 nouvelle offre ce matin"
     assert "aucun passage ce matin" in envois[0][1]
     assert reg.meta("alerte_matin_le")
     # Le lendemain, la même annonce n'est plus comptée : la période part de l'alerte.

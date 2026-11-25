@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import confirmation, entete_reglage, icone %}
+{% from "_macros.html" import entete_reglage, icone %}
 {% block contenu %}
 {% call entete_reglage(reglage) %}Chaque passage s'affiche dans les <button type="button" class="lien-neutre" data-ouvrir-notifications aria-haspopup="dialog" aria-controls="notifications">notifications</button>, avec le détail de ses étapes.{% endcall %}
 
@@ -18,37 +18,5 @@
 
 <h2>Sauvegardes</h2>
 <p class="muet">{% if nb_sauvegardes %}{{ nb_sauvegardes }} sauvegarde{{ 's' if nb_sauvegardes > 1 }}{% if derniere_sauvegarde %}, la dernière {{ derniere_sauvegarde | moment_fr }}{% endif %}.{% else %}Aucune sauvegarde pour l'instant : la première se fait au prochain passage.{% endif %}</p>
-
-<h2 id="cles">Clés d'accès</h2>
-<p class="muet">Rangées dans le trousseau macOS et essayées avant d'être enregistrées ; seuls leurs quatre derniers caractères s'affichent.</p>
-<div class="cartes deux">
-{% for c in cles %}
-  <div class="carte">
-    <div class="tete"><b>{{ c.nom }}</b>
-      {% if c.presente %}<span class="puce B">enregistrée · …{{ c.fin }}</span>{% else %}<span class="puce">absente</span>{% endif %}</div>
-    <div class="meta">{{ c.usage }}</div>
-    {% if depuis_le_mac %}
-    <form method="post" action="/cles/{{ c.id }}/enregistrer" class="ligne-carte" autocomplete="off">
-      <div class="champ">
-        <label for="cle-{{ c.id }}">{{ "Nouvelle clé" if c.presente else "Clé" }}</label>
-        <input type="password" id="cle-{{ c.id }}" name="cle" placeholder="{{ c.prefixe }}…" autocomplete="off" spellcheck="false" required aria-describedby="cle-{{ c.id }}-aide">
-        <div class="aide" id="cle-{{ c.id }}-aide">Où la trouver : {{ c.ou }}</div>
-      </div>
-      <div class="boutons">
-        <button class="go">{{ "Remplacer" if c.presente else "Enregistrer" }}</button>
-        {% if c.presente %}<button type="button" class="lien-danger" form="retirer-cle-{{ c.id }}" data-confirmer-modale="confirmer-retirer-cle-{{ c.id }}">Retirer</button>{% endif %}
-      </div>
-    </form>
-    {% if c.presente %}
-    <form method="post" action="/cles/{{ c.id }}/retirer" id="retirer-cle-{{ c.id }}"></form>
-    {{ confirmation("confirmer-retirer-cle-" ~ c.id, "Retirer cette clé ?", "La clé " ~ c.nom ~ " sera effacée du trousseau macOS.",
-         "Retirer la clé", "retirer-cle-" ~ c.id, "confirme", "1") }}
-    {% endif %}
-    {% else %}
-    <div class="petit muet ligne-carte">À saisir depuis ton Mac (pas depuis le téléphone : le réseau local n'est pas chiffré).</div>
-    {% endif %}
-  </div>
-{% endfor %}
-</div>
 
 {% endblock %}

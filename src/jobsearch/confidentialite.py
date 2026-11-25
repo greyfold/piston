@@ -348,9 +348,10 @@ class Masque:
 
     def demasquer(self, texte):
         """Chaque balise connue reprend sa valeur ; une balise inconnue reste telle quelle."""
-        if not isinstance(texte, str) or "{" not in texte:
+        if not isinstance(texte, str) or ("{" not in texte and ABRI_OUVRANT not in texte):
             return texte
-        texte = BALISE.sub(lambda m: self.valeurs.get(m.group(1).upper(), m.group(0)), texte)
+        if "{" in texte:
+            texte = BALISE.sub(lambda m: self.valeurs.get(m.group(1).upper(), m.group(0)), texte)
         return texte.replace(ABRI_OUVRANT, "{").replace(ABRI_FERMANT, "}")
 
     def demasquer_objet(self, o):

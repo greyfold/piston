@@ -88,7 +88,7 @@ Règles :
 def tache():
     from . import moteur
     return moteur.Tache("lecture d'une annonce", CONSIGNE, schema=Lecture,
-                        modele=moteur.reglage("modele_lecture", "claude-sonnet-5-5"), effort="medium", delai_s=300)
+                        niveau="leger", effort="medium", delai_s=300)
 
 
 def _plat(t):

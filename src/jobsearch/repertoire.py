@@ -5,8 +5,8 @@ départ) et les sources ajoutées à la main par la personne, depuis le tableau 
 bord ou en conversation (`jobsearch source ajouter`), rangées dans la base.
 Une source ajoutée n'est jamais interrogée automatiquement : il faut pour
 cela écrire son connecteur, comme pour Job-Room et jobup. Une source dont le
-connecteur existe (`sources/employeurs.py`, Indeed s'il est actif dans les
-réglages) s'affiche « automatique ».
+connecteur existe (`sources/employeurs.py`, Indeed, LinkedIn) s'affiche « automatique »,
+et « désactivée » (`actif` faux) quand la personne l'a éteinte.
 """
 
 import json
@@ -59,11 +59,14 @@ def lister(reg):
             out[r["id"]].update(branchee=True, type=conn.get("type"), actif=bool(r["actif"] if r["actif"] is not None else 1),
                                 acces="automatique" if (r["actif"] is None or r["actif"]) else "désactivée")
     from . import connecteurs
-    branchees = BRANCHEES | {"jobs-ch"} | {s for s in ("linkedin",) if (reglages().get(s) or {}).get("actif")}
-    if connecteurs.actif("indeed"):
-        branchees.add("indeed")
-    for sid in branchees & set(out):
+    for sid in (BRANCHEES | {"jobs-ch"}) & set(out):
         out[sid]["acces"] = "automatique"
+    # Indeed (connecteur du compte Claude) et LinkedIn (Apify) sont interrogés à chaque passage
+    # quand ils sont actifs : « automatique » eux aussi, et « désactivée » tant qu'ils ne le sont pas.
+    if "indeed" in out:
+        out["indeed"].update(acces="automatique", connecteur=True, actif=connecteurs.actif("indeed"))
+    if "linkedin" in out:
+        out["linkedin"].update(acces="automatique", actif=bool((reglages().get("linkedin") or {}).get("actif")))
     return out
 
 

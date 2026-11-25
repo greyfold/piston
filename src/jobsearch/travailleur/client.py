@@ -1,7 +1,7 @@
 """Ce que le Mac utilise pour parler au travailleur.
 
 `Distant` a la même interface que le moteur local (`executer(tache, message)`) :
-évaluation et dossiers ne savent pas où tourne Claude. `SourceDistante` a celle
+évaluation et dossiers ne savent ni où tourne le moteur, ni lequel c'est. `SourceDistante` a celle
 d'une source (`tester`, `offres`, `detail`) : le passage ne sait pas où elle tourne.
 
 Réglages `travailleur:` de config/settings.yaml : `mode` (local ou distant),
@@ -54,7 +54,10 @@ class Distant:
 
     def _appel(self, methode, chemin, delai=30, erreur=moteur.MoteurImpossible, **kw):
         try:
-            r = self.http.request(methode, self.adresse + chemin, headers=self.entetes, timeout=delai, **kw)
+            # TestClient (Starlette) déprécie `timeout=` par requête ; httpx.Client l'accepte.
+            if type(self.http).__name__ != "TestClient":
+                kw["timeout"] = delai
+            r = self.http.request(methode, self.adresse + chemin, headers=self.entetes, **kw)
         except httpx.HTTPError as e:
             raise erreur("travailleur injoignable (%s) : la machine virtuelle est-elle démarrée ?"
                          % type(e).__name__, **({"bloquant": True} if erreur is moteur.MoteurImpossible else {})) from e
@@ -74,20 +77,31 @@ class Distant:
     def etat(self):
         return self._appel("GET", "/etat")
 
-    def verifie(self):
-        """Lève si le travailleur ne répond pas ou si Claude Code n'y est pas connecté."""
+    def verifie(self, fournisseur=None):
+        """Lève si le travailleur ne répond pas ou si le moteur choisi n'y est pas connecté.
+        Le moteur vérifié est ensuite celui de chaque tâche confiée par ce Distant."""
+        f = moteur.fournisseur(fournisseur)
         e = self.etat()
-        if not (e.get("moteur") or {}).get("connecte"):
-            raise moteur.MoteurImpossible("Claude Code n'est pas connecté dans la machine virtuelle : "
-                                          "« Se connecter à Claude… » dans le menu de l'application",
-                                          bloquant=True)
+        etat_ = (e.get("moteurs") or {}).get(f.id) or (e.get("moteur") if f.id == "claude" else None) or {}
+        if not etat_.get("connecte"):
+            raise moteur.MoteurImpossible("%s n'est pas connecté dans la machine virtuelle : « Se connecter » "
+                                          "sur la page IA de l'application" % f.nom, bloquant=True)
+        self.fournisseur = f.id
         return self
 
+    fournisseur = None
+
+    def _fournisseur(self):
+        return self.fournisseur or moteur.fournisseur_actif()
+
     def executer(self, tache, message):
+        import dataclasses
+        if not tache.fournisseur:
+            tache = dataclasses.replace(tache, fournisseur=self._fournisseur())
         d = self._appel("POST", "/moteur", delai=tache.delai_s + 60,
                         json={"tache": tache.vers_dict(), "message": message})
         r = moteur.Resultat(texte=d.get("texte") or "", brut=d.get("brut"), usage=d.get("usage") or {},
-                            cout_usd=d.get("cout_usd"), session=d.get("session"))
+                            cout_usd=d.get("cout_usd"), session=d.get("session"), modele=d.get("modele"))
         return moteur.valider(tache, r)
 
     def connecteur(self, nom):
@@ -101,11 +115,12 @@ class Distant:
                            json={"mots": list(mots), "depuis": depuis, "limite": limite, "longueur": longueur})
 
     def session(self, tache, consigne):
-        """Lance une session Claude dans le Chrome de la VM (en arrière-plan)."""
-        return self._appel("POST", "/sessions", delai=60, json={"tache": tache, "consigne": consigne})
+        """Lance une session du moteur choisi dans le Chrome de la VM (en arrière-plan)."""
+        return self._appel("POST", "/sessions", delai=60,
+                           json={"tache": tache, "consigne": consigne, "fournisseur": self._fournisseur()})
 
     def preremplir(self, tache):
-        """Lance le pré-remplissage sans Claude dans le Chrome de la VM (en arrière-plan)."""
+        """Lance le pré-remplissage sans IA dans le Chrome de la VM (en arrière-plan)."""
         return self._appel("POST", "/preremplir", delai=60, json={"tache": tache})
 
     def rendre(self, url, attente_ms=4000, delai_ms=30000):

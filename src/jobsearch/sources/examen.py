@@ -4,7 +4,8 @@ Avant de brancher une source (site d'annonces, réseau, page carrière), il faut
 si ses conditions générales permettent qu'une application la lise automatiquement,
 et s'il existe une voie prévue pour cela : une API publique, un serveur MCP (Model
 Context Protocol), un flux, des alertes e-mail. Le moteur fait la recherche sur le web
-(seuls outils permis : WebSearch et WebFetch) et rend le schéma `Examen`.
+(seuls outils permis : la recherche web et la lecture d'une page, la sienne ou `lire_page` de
+l'application, selon le moteur) et rend le schéma `Examen`.
 
 Python ne croit pas l'IA sur parole : une adresse qui n'est pas en http(s) tombe, des
 conditions non lues ne peuvent pas « permettre », et une source dont les conditions
@@ -40,7 +41,7 @@ EN_COURS = set()
 
 class Examen(BaseModel):
     nature: str = Field(description="ce qu'est la source, en une phrase")
-    conditions_url: str = Field(default="", description="adresse des conditions générales lues (WebFetch) ; vide si introuvables")
+    conditions_url: str = Field(default="", description="adresse des conditions générales que tu as ouvertes et lues ; vide si introuvables")
     conditions_lues: bool = Field(description="vrai seulement si tu as lu toi-même le texte des conditions")
     automatisation: Literal["permise", "sous conditions", "interdite", "inconnue"] = Field(
         description="ce que les conditions disent d'une lecture automatisée des offres publiques")
@@ -62,16 +63,16 @@ class Examen(BaseModel):
 
 CONSIGNE = """Tu examines une source d'offres d'emploi pour une application personnelle de recherche d'emploi. L'application voudrait lire automatiquement, chaque matin, les offres publiques de cette source : lecture seule, sans compte personnel, sans rien publier ni envoyer. Tu établis, preuves à l'appui, si c'est permis et par quelle voie.
 
-Démarche (outils : WebSearch et WebFetch) :
+Démarche (tes outils : une recherche web, et la lecture d'une page, avec ton propre outil ou `lire_page` s'il t'est donné) :
 1. Ce qu'est la source.
-2. Ses conditions générales d'utilisation : trouve la page (WebSearch), lis-la (WebFetch) et repère ce qu'elle dit des robots, de l'extraction (« scraping »), de l'accès automatisé, de la réutilisation des annonces, de l'usage personnel. Lis aussi le robots.txt du site si tu peux.
+2. Ses conditions générales d'utilisation : trouve la page (recherche web), ouvre-la et lis-la (lecture de page), puis repère ce qu'elle dit des robots, de l'extraction (« scraping »), de l'accès automatisé, de la réutilisation des annonces, de l'usage personnel. Lis aussi le robots.txt du site si tu peux.
 3. Une API des offres : documentée publiquement ? ouverte à tous, sur clé gratuite, réservée aux partenaires, payante ?
 4. Un serveur MCP (Model Context Protocol) pour cette source : officiel (publié par le site) ou communautaire (registres MCP, GitHub).
 5. Les autres voies : flux RSS, alertes e-mail, export.
 
 Règles :
 - « permise » seulement si tu as lu les conditions et qu'elles n'interdisent pas l'accès automatisé. Interdiction explicite des robots ou de l'extraction : « interdite ». Permis avec des limites (usage personnel seulement, API obligatoire, accord écrit) : « sous conditions ». Conditions introuvables ou illisibles : « inconnue ».
-- Les extraits sont recopiés mot pour mot depuis les conditions lues, 40 mots au plus chacun, trois au plus.
+- Les extraits sont recopiés mot pour mot depuis la page des conditions que tu as ouverte, 40 mots au plus chacun, trois au plus ; jamais depuis un résumé de recherche. Si tu as cité des extraits, c'est que tu as lu les conditions : conditions_lues est vrai et conditions_url est l'adresse de cette page.
 - Toute adresse que tu donnes est une page que tu as vue. N'en devine jamais une ; vide si tu ne l'as pas.
 - acces_conseille : « à brancher » si un accès automatique est permis et possible (API ouverte, serveur MCP, pages publiques que les conditions n'interdisent pas) ; « alertes e-mail » si la seule voie permise est l'alerte par e-mail ou le flux ; « en session » si la personne doit la consulter elle-même ; « interdit à la plateforme » si les conditions interdisent l'accès automatisé et qu'il n'y a ni API ni alerte.
 - Tu rapportes ce que disent les textes : pas d'avis juridique, pas de contournement.
@@ -113,6 +114,9 @@ def verifier(e):
     e = e.model_copy(update={
         "conditions_url": _url(e.conditions_url), "api_url": _url(e.api_url), "mcp_url": _url(e.mcp_url),
         "extraits": [_court(x) for x in e.extraits if x.strip()][:EXTRAITS_MAX]})
+    if not (e.conditions_lues and e.conditions_url):
+        # Pas de page des conditions ouverte : des « extraits » ne viendraient que d'un résumé de recherche.
+        e = e.model_copy(update={"extraits": []})
     if e.automatisation in ("permise", "sous conditions") and not (e.conditions_lues and e.conditions_url):
         e = e.model_copy(update={"automatisation": "inconnue"})       # pas lues : rien n'est établi
     # Interdite : seule une voie que le site ouvre lui-même (API publique, serveur MCP officiel) permet de

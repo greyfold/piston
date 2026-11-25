@@ -9,7 +9,7 @@
   <li class="reglage-ligne" id="{{ d.id }}">
     <span class="texte"><span class="titre">{{ d.titre }}
         <span class="puce {{ 'B' if ouvert }}">{{ "ouverte" if ouvert else "fermée" }}</span></span>
-      <span class="description">{% if ouvert %}{{ d.description }}{% else %}S'ouvre avec : {% for i, libelle, lien in fonctions.manque[d.id] %}<a href="{{ lien }}"{% if i == 'ia' %} data-connexion-ia="claude" data-nom="Claude"{% endif %}>{{ libelle[:1] | lower }}{{ libelle[1:] }}</a>{{ ", " if not loop.last }}{% endfor %}.{% endif %}</span></span>
+      <span class="description">{% if ouvert %}{{ d.description }}{% else %}S'ouvre avec : {% for i, libelle, lien in fonctions.manque[d.id] %}<a href="{{ lien }}"{% if i == 'ia' %} data-connexion-ia="{{ ia_active().id }}" data-nom="{{ ia_active().nom }}"{% endif %}>{{ libelle[:1] | lower }}{{ libelle[1:] }}</a>{{ ", " if not loop.last }}{% endfor %}.{% endif %}</span></span>
   </li>
   {% endfor %}
   {% for o in options %}{% set actif = fonctions[o.id] %}

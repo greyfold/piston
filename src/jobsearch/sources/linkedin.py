@@ -151,3 +151,55 @@ class LinkedIn:
         if not isinstance(res, dict) or "data" not in res:
             raise RouteCassee("linkedin : l'acteur Apify %s ne répond plus" % self.acteur)
         return 1
+
+
+# --- Le compte Apify de la personne : de quoi régler LinkedIn sur sa page --------------------------
+
+
+def compte(client, acteur="crawlworks~linkedin-jobs-scraper", jeton=None):
+    """Ce que le compte Apify dit de lui (lecture seule, gratuit) : l'offre, le crédit du mois et
+    le coût des dernières recherches LinkedIn faites avec ce jeton.
+
+    `users/me` (offre, crédit inclus), `users/me/limits` (cycle, limite, dépense du mois) et les
+    derniers runs réussis de l'acteur (`usageTotalUsd`). Lève RouteCassee si Apify ne répond pas."""
+    jeton = jeton or jeton_trousseau()
+    lire = lambda chemin, **kw: (client.requete("GET", API + chemin, headers={"Authorization": "Bearer %s" % jeton},
+                                                **kw) or {}).get("data") or {}
+    moi, limites = lire("/users/me"), lire("/users/me/limits")
+    runs = lire("/acts/%s/runs" % acteur, params={"desc": "1", "limit": "20", "status": "SUCCEEDED"}).get("items") or []
+    couts = [float(r["usageTotalUsd"]) for r in runs if isinstance(r.get("usageTotalUsd"), (int, float))]
+    plan = moi.get("plan") or {}
+    nombre = lambda v: float(v) if isinstance(v, (int, float)) else None
+    return {"offre": plan.get("description") or plan.get("id") or "",
+            "credit_inclus": nombre(plan.get("monthlyUsageCreditsUsd")),
+            "limite": nombre((limites.get("limits") or {}).get("maxMonthlyUsageUsd")),
+            "utilise": nombre((limites.get("current") or {}).get("monthlyUsageUsd")) or 0.0,
+            "fin_cycle": str((limites.get("monthlyUsageCycle") or {}).get("endAt") or "")[:10],
+            "cout_moyen": sum(couts) / len(couts) if couts else None, "runs": len(couts)}
+
+
+def conseil(c, n_requetes, plafond_actuel, aujourdhui=None):
+    """Ce que le compte permet d'ici la fin de son cycle, à un passage par jour et une recherche
+    Apify par poste visé : la dépense prévue, si le crédit suffit, et le plafond par recherche
+    (`maxTotalChargeUsd`) à proposer : de quoi couvrir une recherche habituelle (coût moyen et une
+    marge), sans dépasser la part du crédit restant qui revient à chaque recherche."""
+    import datetime as dt
+    import math
+    aujourdhui = aujourdhui or dt.date.today()
+    try:
+        jours = max(1, (dt.date.fromisoformat(c["fin_cycle"]) - aujourdhui).days)
+    except (TypeError, ValueError):
+        jours = 30
+    budget = min(x for x in (c.get("limite"), c.get("credit_inclus")) if x is not None) \
+        if c.get("limite") is not None or c.get("credit_inclus") is not None else None
+    reste = max(0.0, budget - c.get("utilise", 0.0)) if budget is not None else None
+    n = max(0, int(n_requetes or 0))
+    part = reste / (n * jours) if reste is not None and n else None
+    prevu = c["cout_moyen"] * n * jours if c.get("cout_moyen") is not None else None
+    utile = max(0.10, c["cout_moyen"] * 1.5) if c.get("cout_moyen") is not None else float(plafond_actuel or 1.0)
+    plafond = min(utile, part) if part is not None else utile
+    plafond = max(0.05, math.floor(plafond * 20) / 20)          # par pas de 5 centimes, vers le bas
+    return {"jours": jours, "budget": budget, "reste": reste, "requetes": n, "prevu": prevu,
+            "suffisant": None if prevu is None or reste is None else prevu <= reste,
+            "part": part, "plafond": round(plafond, 2), "serre": part is not None and part < utile,
+            "a_changer": abs(round(plafond, 2) - float(plafond_actuel or 0)) >= 0.01}

@@ -124,19 +124,19 @@ def cmd_travailleur(a):
 
 
 def cmd_connexion(a):
-    """Connexion de Claude Code au compte Claude, dans la machine virtuelle (le Mac ne lance jamais
-    `claude`). Interactif : l'adresse s'affiche, le code se colle."""
+    """Connexion d'un moteur d'IA à son compte, dans la machine virtuelle (le Mac ne lance jamais de
+    moteur). Interactif : l'adresse s'affiche, le code se colle ou se tape chez le fournisseur."""
     from .travailleur import client as travailleur
     if travailleur.distant():
         from . import vm
-        return vm.connexion()
-    print("Claude Code ne tourne que dans la machine virtuelle : régler travailleur.mode: distant, puis relancer.")
+        return vm.connexion(a.fournisseur)
+    print("Les moteurs d'IA ne tournent que dans la machine virtuelle : régler travailleur.mode: distant, puis relancer.")
     return 1
 
 
 def cmd_vm(a):
     from . import vm
-    return vm.commande(a.action)
+    return vm.commande(a.action, a.fournisseur)
 
 
 def cmd_doublons(a):
@@ -401,6 +401,17 @@ def cmd_claude(a):
         return 1
 
 
+def cmd_moteur_essais(a):
+    """Banc d'essai du moteur d'IA connecté (moteur/essais.py) : rien n'est écrit dans la base."""
+    from .moteur import MoteurImpossible, essais
+    try:
+        r = essais.lancer(a.fournisseur, set(a.essais.split(",")) if a.essais else None)
+    except MoteurImpossible as e:
+        print("Banc d'essai impossible : %s" % e)
+        return 1
+    return 0 if r["couverture"] == 100 else 2
+
+
 def cmd_jeton(a):
     from .web.auth import jeton
     print(jeton())
@@ -432,13 +443,22 @@ def main(argv=None):
     s.add_argument("--port", type=int)
     s.set_defaults(f=cmd_web)
     sp.add_parser("jeton", help="affiche le jeton d'accès du tableau de bord").set_defaults(f=cmd_jeton)
+    s = sp.add_parser("moteur-essais", help="banc d'essai du moteur d'IA connecté (structure, refus, évaluation, "
+                                            "web, dossier) ; rien n'est écrit dans la base")
+    s.add_argument("--fournisseur", help="claude, codex, antigravity ou grok (par défaut : celui choisi)")
+    s.add_argument("--essais", help="liste séparée par des virgules (par défaut : tous)")
+    s.set_defaults(f=cmd_moteur_essais)
     s = sp.add_parser("travailleur", help="lance le travailleur (dans la machine virtuelle)")
     s.add_argument("--hote", default="127.0.0.1")   # la VM le passe explicitement (vm.py)
     s.add_argument("--port", type=int, default=8776)
     s.set_defaults(f=cmd_travailleur)
-    sp.add_parser("connexion", help="connecte Claude Code au compte Claude (dans la VM)").set_defaults(f=cmd_connexion)
+    from .moteur.fournisseurs import TOUS as moteurs
+    s = sp.add_parser("connexion", help="connecte un moteur d'IA à son compte (dans la VM)")
+    s.add_argument("--fournisseur", choices=list(moteurs), default="claude")
+    s.set_defaults(f=cmd_connexion)
     s = sp.add_parser("vm", help="machine virtuelle : creer, demarrer, arreter, etat, connexion, deconnexion, supprimer")
     s.add_argument("action", choices=["creer", "demarrer", "arreter", "etat", "connexion", "deconnexion", "supprimer"])
+    s.add_argument("--fournisseur", choices=list(moteurs), default="claude")
     s.set_defaults(f=cmd_vm)
     s = sp.add_parser("jobroom-attente", help="JSON des preuves Job-Room à saisir")
     s.set_defaults(f=cmd_jobroom_attente)

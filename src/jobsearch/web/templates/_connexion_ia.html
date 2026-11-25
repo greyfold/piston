@@ -1,10 +1,11 @@
 {# Connexion à l'IA dans une modale (Nexus Modal) : s'ouvre depuis un bouton [data-connexion-ia],
    depuis l'adresse (?connexion=claude) ou depuis l'app Mac (window.ouvrirConnexionIA), et se ferme
-   seule une fois connecté. Le tableau de bord pilote la connexion (jobsearch connexion). #}
+   seule une fois connecté. Le tableau de bord pilote la connexion (jobsearch connexion). Deux façons,
+   selon le fournisseur : un code à coller ici (Claude, Antigravity), ou un code à taper chez lui (Codex, Grok). #}
 {% from "_macros.html" import icone %}
 <dialog class="modale" id="modale-ia" aria-labelledby="modale-ia-titre">
   <div class="modale-tete">
-    <h2 id="modale-ia-titre">Se connecter avec <span data-nom-fournisseur>Claude</span></h2>
+    <h2 id="modale-ia-titre">Se connecter avec <span data-nom-fournisseur>{{ ia_active().nom }}</span></h2>
   </div>
 
   <div data-pour="preparation">
@@ -14,7 +15,7 @@
 
   <div data-pour="attente_code">
     <ol class="etapes-modale">
-      <li><p>Ouvre la page de connexion de <span data-nom-fournisseur>Claude</span> et connecte-toi à ton compte.</p>
+      <li><p>Ouvre la page de connexion de <span data-nom-fournisseur>{{ ia_active().nom }}</span> et connecte-toi à ton compte.</p>
         <a class="bouton go" target="_blank" rel="noopener" data-lien-connexion href="#">Ouvrir la page de connexion</a></li>
       <li><form data-form-code>
           <label for="code-ia">Colle ici le code affiché à la fin</label>
@@ -26,6 +27,16 @@
     </ol>
   </div>
 
+  <div data-pour="attente_appareil">
+    <ol class="etapes-modale">
+      <li><p>Ouvre la page de <span data-nom-fournisseur>{{ ia_active().nom }}</span> et connecte-toi à ton compte.</p>
+        <a class="bouton go" target="_blank" rel="noopener" data-lien-connexion href="#">Ouvrir la page de connexion</a></li>
+      <li><p>Tape ce code quand la page le demande : <code class="fort" data-code-appareil></code></p></li>
+    </ol>
+    <div class="etat-tache" role="status"><span class="spinner" aria-hidden="true"></span>
+      <div><p>La connexion se termine toute seule une fois le code confirmé.</p></div></div>
+  </div>
+
   <div data-pour="verification">
     <div class="etat-tache"><span class="spinner" aria-hidden="true"></span>
       <div><p class="fort">Vérification du code…</p></div></div>
@@ -34,7 +45,7 @@
   <div data-pour="connecte">
     <div class="etat-tache ok">
       {{ icone("fin") }}
-      <div><p class="fort">Connecté à <span data-nom-fournisseur>Claude</span></p><p>Cette fenêtre se ferme.</p></div></div>
+      <div><p class="fort">Connecté à <span data-nom-fournisseur>{{ ia_active().nom }}</span></p><p>Cette fenêtre se ferme.</p></div></div>
   </div>
 
   <div data-pour="echec">
@@ -42,20 +53,22 @@
     <div class="actions-modale"><button type="button" class="go" data-reessayer>Réessayer</button></div>
   </div>
 
-  <p class="aide-accueil">Tu te connectes directement chez Claude : l'application ne voit jamais tes identifiants.</p>
+  <p class="aide-accueil">Tu te connectes directement chez le fournisseur : l'application ne voit jamais tes identifiants.</p>
   <div class="pied-modale"><button type="button" class="lien-neutre" data-annuler>Annuler</button></div>
 </dialog>
 <script>
 (function () {
   var modale = document.getElementById("modale-ia");
   if (!modale || !modale.showModal) return;
-  var fournisseur = "claude", minuterie = null;
+  var fournisseur = {{ ia_active().id | tojson }}, minuterie = null;
+  var noms = {{ noms_ia() | tojson }};
   var poster = function (url, corps) {
     return fetch(url, {method: "POST", credentials: "same-origin", body: corps || null}).then(function (r) { return r.json(); });
   };
   function montrer(e) {
     modale.querySelectorAll("[data-pour]").forEach(function (b) { b.hidden = b.dataset.pour !== e.etat; });
-    if (e.url) modale.querySelector("[data-lien-connexion]").href = e.url;
+    if (e.url) modale.querySelectorAll("[data-lien-connexion]").forEach(function (a) { a.href = e.url; });
+    if (e.code) modale.querySelector("[data-code-appareil]").textContent = e.code;
     if (e.etat === "echec") modale.querySelector("[data-message-echec]").textContent = e.message || "";
     if (e.etat === "attente_code" && !modale.dataset.codeFocus) { modale.dataset.codeFocus = "1"; }
     if (e.etat === "connecte") {
@@ -76,8 +89,8 @@
   }
   function arreter() { if (minuterie) clearInterval(minuterie); minuterie = null; }
   function ouvrir(id, nom) {
-    fournisseur = id || "claude";
-    modale.querySelectorAll("[data-nom-fournisseur]").forEach(function (s) { s.textContent = nom || "Claude"; });
+    fournisseur = id || fournisseur;
+    modale.querySelectorAll("[data-nom-fournisseur]").forEach(function (s) { s.textContent = nom || noms[fournisseur] || fournisseur; });
     delete modale.dataset.codeFocus;
     modale.querySelector("#code-ia").value = "";
     montrer({etat: "preparation"});
@@ -88,7 +101,7 @@
   document.querySelectorAll("[data-connexion-ia]").forEach(function (b) {
     b.addEventListener("click", function (ev) { ev.preventDefault(); ouvrir(b.dataset.connexionIa, b.dataset.nom); });
   });
-  modale.querySelector("[data-lien-connexion]").addEventListener("click", function () {
+  modale.querySelector("[data-pour=attente_code] [data-lien-connexion]").addEventListener("click", function () {
     setTimeout(function () { modale.querySelector("#code-ia").focus(); }, 300);
   });
   modale.querySelector("[data-form-code]").addEventListener("submit", function (ev) {
@@ -97,11 +110,11 @@
     montrer({etat: "verification"});
     poster("/ia/connexion/code", corps).then(montrer);
   });
-  modale.querySelector("[data-reessayer]").addEventListener("click", function () { ouvrir(fournisseur); });
+  modale.querySelector("[data-reessayer]").addEventListener("click", function () { ouvrir(fournisseur, noms[fournisseur]); });
   function annuler() { arreter(); poster("/ia/connexion/annuler"); if (modale.open) modale.close(); }
   modale.querySelector("[data-annuler]").addEventListener("click", annuler);
   modale.addEventListener("cancel", function (ev) { ev.preventDefault(); annuler(); });   // Échap
   var demande = new URLSearchParams(location.search).get("connexion");
-  if (demande) ouvrir(demande, demande === "claude" ? "Claude" : demande);
+  if (demande && noms[demande]) ouvrir(demande, noms[demande]);
 })();
 </script>

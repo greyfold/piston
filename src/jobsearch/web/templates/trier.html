@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import icone, meta, delais, adequation %}
-{% block titre %}À trancher · Recherche d'emploi{% endblock %}
+{% block titre %}À trancher · Piston{% endblock %}
 {# Tri en mode concentré : à l'ouverture de l'application, s'il y a des annonces à trancher, elles passent avant
    tout le reste. Pas de barre de menu : une carte à la fois (pile de tri, tri.js), oui, non ou peut-être en bas.
    Après la dernière, droit au tableau de bord (« À faire aujourd'hui »), sans écran de fin. Sans JavaScript,
@@ -74,7 +74,7 @@
       <button class="discret" name="type" value="attendre" title="Peut-être, à revoir plus tard (flèche bas)">{{ icone("horloge") }}<span>Peut-être</span></button>
       <span class="raccourci raccourcis-tri" aria-hidden="true"><kbd>←</kbd> Non <kbd>→</kbd> Oui <kbd>↓</kbd> Peut-être</span>
     </form>
-    {% if not fonctions.postuler %}<p class="verrou" id="verrou-tri">Pour postuler, il reste : {% for i, libelle, lien in fonctions.manque.postuler %}<a href="{{ lien }}"{% if i == 'ia' %} data-connexion-ia="claude" data-nom="Claude"{% endif %}>{{ libelle[:1] | lower }}{{ libelle[1:] }}</a>{{ ", " if not loop.last }}{% endfor %}.</p>{% endif %}
+    {% if not fonctions.postuler %}<p class="verrou" id="verrou-tri">Pour postuler, il reste : {% for i, libelle, lien in fonctions.manque.postuler %}<a href="{{ lien }}"{% if i == 'ia' %} data-connexion-ia="{{ ia_active().id }}" data-nom="{{ ia_active().nom }}"{% endif %}>{{ libelle[:1] | lower }}{{ libelle[1:] }}</a>{{ ", " if not loop.last }}{% endfor %}.</p>{% endif %}
   </div></div>
 </div>
 <script src="/static/tri.js?v={{ version_css() }}" defer></script>

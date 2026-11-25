@@ -76,7 +76,11 @@ struct PageWeb: NSViewRepresentable {
         /// La modale de connexion à l'IA du tableau de bord (_connexion_ia.html).
         @MainActor func ouvrirConnexion(_ vue: WKWebView) {
             etat.connexionDemandee = false
-            vue.evaluateJavaScript("window.ouvrirConnexionIA && window.ouvrirConnexionIA('claude', 'Claude')")
+            let id = (try? JSONSerialization.data(withJSONObject: [etat.iaId]))
+                .flatMap { String(data: $0, encoding: .utf8) }.map { String($0.dropFirst().dropLast()) } ?? "\"claude\""
+            let nom = (try? JSONSerialization.data(withJSONObject: [etat.iaNom]))
+                .flatMap { String(data: $0, encoding: .utf8) }.map { String($0.dropFirst().dropLast()) } ?? "\"Claude\""
+            vue.evaluateJavaScript("window.ouvrirConnexionIA && window.ouvrirConnexionIA(\(id), \(nom))")
         }
 
         func webView(_ vue: WKWebView, didFinish navigation: WKNavigation!) {

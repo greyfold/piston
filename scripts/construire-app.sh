@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Construit l'application Mac « Recherche d'emploi » dans dist/ (signature locale, pas de notarisation).
+# Construit l'application Mac « Piston » dans dist/ (signature locale, pas de notarisation).
 #   scripts/construire-app.sh            construit
 #   scripts/construire-app.sh --ouvrir   construit et lance
 #
@@ -25,14 +25,16 @@ for a in "$@"; do
     *) print -u2 "Option inconnue : $a"; exit 2 ;;
   esac
 done
-APP="$RACINE/dist/Recherche emploi.app"
+APP="$RACINE/dist/Piston.app"
+# Nom d'avant « Piston » : retiré de dist/ une fois la nouvelle en place.
+ANCIEN_NOM="$RACINE/dist/Recherche emploi.app"
 mkdir -p "$RACINE/dist"
 TMP="$(mktemp -d)"
 # Dossier de construction à côté de la destination (même volume : le `mv` final est un renommage).
 # Le nom du bundle y est le même qu'à la fin : rien (.pth relatif, signature) ne dépend du dossier.
 STAGE="$(mktemp -d "$RACINE/dist/.construction.XXXXXX")"
 trap 'rm -rf "$TMP" "$STAGE"' EXIT
-NOUVELLE="$STAGE/Recherche emploi.app"
+NOUVELLE="$STAGE/Piston.app"
 RES="$NOUVELLE/Contents/Resources"
 
 LIMA_VERSION=2.3.0
@@ -101,8 +103,8 @@ cat > "$NOUVELLE/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>CFBundleName</key><string>Recherche emploi</string>
-  <key>CFBundleDisplayName</key><string>Recherche d'emploi</string>
+  <key>CFBundleName</key><string>Piston</string>
+  <key>CFBundleDisplayName</key><string>Piston</string>
   <key>CFBundleIdentifier</key><string>app.rechercheemploi.mac</string>
   <key>CFBundleExecutable</key><string>RechercheEmploi</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -124,7 +126,8 @@ codesign --verify --strict "$NOUVELLE"
 # Tout a réussi : on quitte l'application en cours (elle ne doit pas tourner pendant le
 # remplacement), puis l'ancienne cède la place par un renommage. Elle reste dans $STAGE, que le
 # trap n'efface qu'à la sortie : si la nouvelle ne se met pas en place, l'ancienne est remise.
-osascript -e 'quit app "Recherche emploi"' 2>/dev/null || true
+# Quittée par son identifiant, qui ne change pas : celle d'avant le nom « Piston » l'est aussi.
+osascript -e 'quit app id "app.rechercheemploi.mac"' 2>/dev/null || true
 for _ in {1..50}; do pgrep -x RechercheEmploi >/dev/null || break; sleep 0.2; done
 if [[ -e "$APP" ]]; then mv "$APP" "$STAGE/ancienne.app"; fi
 if ! mv "$NOUVELLE" "$APP"; then
@@ -132,6 +135,7 @@ if ! mv "$NOUVELLE" "$APP"; then
   print -u2 "La nouvelle application n'a pas pu être mise en place ; l'ancienne est restée à sa place."
   exit 1
 fi
+if [[ -e "$ANCIEN_NOM" ]]; then mv "$ANCIEN_NOM" "$STAGE/ancien-nom.app"; fi
 print "Application construite : $APP ($(du -sh "$APP" | cut -f1))"
 if [[ -n "$OUVRIR" ]]; then
   open "$APP"

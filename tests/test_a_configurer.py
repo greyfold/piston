@@ -59,7 +59,7 @@ def test_connecteur_absent_ne_rend_pas_le_passage_partiel(reg, notes):
     assert "⚠" not in r["resume"] and "À configurer : Indeed" in r["resume"]
     assert _etat(reg) == "à configurer"
     a_brancher = [a for a, k in notes if "à brancher" in a[0]]
-    assert len(a_brancher) == 1 and notes[-1][1]["lien"] == "/connecteurs"
+    assert len(a_brancher) == 1 and notes[-1][1]["lien"] == "/sources/indeed"      # Indeed se règle sur sa page de source
 
 
 def test_prevenu_une_seule_fois_puis_reprise_toute_seule(reg, notes):
@@ -104,12 +104,16 @@ def web(reg, monkeypatch):
 def test_bandeau_et_carte_disent_quoi_faire(reg, notes, web, monkeypatch):
     _passage(reg, IndeedAbsent())
     accueil = web.get("/?ensuite=1").text                # le tableau de bord, une fois le tri passé
-    assert "Indeed n'est pas branché" in accueil and 'href="/connecteurs#indeed"' in accueil
-    page = web.get("/connecteurs").text
+    assert "Indeed n'est pas branché" in accueil and 'href="/sources/indeed"' in accueil
+    from jobsearch.web import app as appmod
+    monkeypatch.setattr(appmod, "etat_ia", lambda fid=None: {"connecte": True, "message": ""})
+    page = web.get("/sources/indeed").text
     assert "à configurer" in page and "Pas encore branché" in page and "activer Indeed" in page
+    connecteurs_page = web.get("/connecteurs").text                               # Indeed seulement dans Sources
+    assert 'id="indeed"' not in connecteurs_page and "/connecteurs/indeed/" not in connecteurs_page
     # Un test réussi lève l'état sans attendre le passage suivant.
     monkeypatch.setattr(connecteurs, "tester", lambda nom: (True, "Indeed connecté au compte Claude"))
-    web.post("/connecteurs/indeed/tester", headers={"origin": "http://testserver"})
+    web.post("/sources/indeed/tester", headers={"origin": "http://testserver"})
     assert _etat(reg) == "en service" and "n'est pas branché" not in web.get("/").text
 
 

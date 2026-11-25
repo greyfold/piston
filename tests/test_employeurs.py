@@ -92,13 +92,13 @@ def test_johdi_sans_cle():
 
 
 def test_repertoire_affiche_les_sources_branchees(reg, monkeypatch):
-    repertoire.ajouter(reg, "Indeed", acces="à brancher")
+    """Indeed est toujours « automatique » : son connecteur (réglé sur sa page de source) l'allume ou l'éteint."""
     from jobsearch import connecteurs
-    connecteurs.activer("indeed", False)              # Indeed suit son connecteur (page Connecteurs)
+    connecteurs.activer("indeed", False)
     fiches = repertoire.lister(reg)
-    assert fiches["indeed"]["acces"] == "à brancher"
+    assert fiches["indeed"]["acces"] == "automatique" and fiches["indeed"]["actif"] is False
     connecteurs.activer("indeed", True)
-    assert repertoire.lister(reg)["indeed"]["acces"] == "automatique"
+    assert repertoire.lister(reg)["indeed"]["actif"] is True
 
 
 def test_aucune_page_carriere_dans_le_code():

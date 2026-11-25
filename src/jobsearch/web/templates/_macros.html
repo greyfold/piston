@@ -56,7 +56,7 @@
     <button name="type" value="attendre">Peut-être</button>
     <button class="non" name="type" value="pasgo">Non</button>
   </div>
-  {% if not peut_postuler %}<p class="verrou" id="verrou-{{ f.empreinte }}">Pour postuler, il reste : {% for i, libelle, lien in fonctions.manque.postuler %}<a href="{{ lien }}"{% if i == 'ia' %} data-connexion-ia="claude" data-nom="Claude"{% endif %}>{{ libelle[:1] | lower }}{{ libelle[1:] }}</a>{{ ", " if not loop.last }}{% endfor %}.</p>{% endif %}
+  {% if not peut_postuler %}<p class="verrou" id="verrou-{{ f.empreinte }}">Pour postuler, il reste : {% for i, libelle, lien in fonctions.manque.postuler %}<a href="{{ lien }}"{% if i == 'ia' %} data-connexion-ia="{{ ia_active().id }}" data-nom="{{ ia_active().nom }}"{% endif %}>{{ libelle[:1] | lower }}{{ libelle[1:] }}</a>{{ ", " if not loop.last }}{% endfor %}.</p>{% endif %}
 </form>
 {%- endmacro %}
 
@@ -131,20 +131,20 @@
 {# Tant que la session tourne (`tache.active`), le bouton reste bloqué avec son indicateur et
    la page suit l'état ; après un échec il redevient cliquable, l'échec étant dit à côté. #}
 {% macro claude(f, type, libelle, retour, classe="", tache=none) -%}
-<form method="post" action="/annonce/{{ f.empreinte if f else 'tous' }}/claude" style="display:inline" data-occupe="Claude démarre…">
+<form method="post" action="/annonce/{{ f.empreinte if f else 'tous' }}/claude" style="display:inline" data-occupe="{{ ia_active().nom }} démarre…">
   <input type="hidden" name="type" value="{{ type }}"><input type="hidden" name="retour" value="{{ retour }}">
   {% if tache and tache.active %}
   <button class="{{ classe }} occupe" disabled aria-busy="true" data-suivi-tache="{{ tache.id }}">{{ tache.libelle }}</button>
   {% else %}
-  <button class="{{ classe }}" title="Claude travaille dans ton Chrome habituel ; tu ne fais que te connecter si un site le demande">{{ libelle }}</button>
+  <button class="{{ classe }}" title="{{ ia_active().nom }} travaille dans le Chrome de la machine virtuelle ; tu ne fais que te connecter si un site le demande">{{ libelle }}</button>
   {% endif %}
 </form>
 {%- endmacro %}
 
 {% macro etat_tache(t, etats) -%}
-{% if t and t.etat == "arret" %}<span class="echec-tache" role="alert">Échec de Claude{% if t.message %} : {{ t.message[:160] }}{% endif %}</span>
+{% if t and t.etat == "arret" %}<span class="echec-tache" role="alert">Échec de {{ ia_active().nom }}{% if t.message %} : {{ t.message[:160] }}{% endif %}</span>
 {% elif t and not t.active %}<span class="puce etat-tache {{ 'retard' if t.etat in ('arret', 'connexion') else 'nouvelle' if t.etat == 'envoi_a_confirmer' else 'B' if t.etat in ('fait', 'a_envoyer') else '' }}"
-  title="{{ t.message or '' }}">Claude : {{ etats.get(t.etat, t.etat) }}{% if t.message %} · {{ t.message[:60] }}{% endif %}</span>{% endif %}
+  title="{{ t.message or '' }}">{{ ia_active().nom }} : {{ etats.get(t.etat, t.etat) }}{% if t.message %} · {{ t.message[:60] }}{% endif %}</span>{% endif %}
 {%- endmacro %}
 
 {# Menu d'actions (Nexus DropdownMenu) : un bouton rond à trois points, à droite d'un statut, qui déplie une
@@ -313,15 +313,27 @@
   "accueil": '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   "candidatures": '<path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/>',
 } %}
+{# Marque (Nexus Logo) : les deux ronds de la charte devant le mot « piston ». Avec href, un lien vers
+   Aujourd'hui (menu latéral) ; sans, un simple titre (accueil). Les ronds sont décor : aria-hidden. #}
+{% macro marque(href=none) -%}
+{% if href %}<a class="marque" href="{{ href }}">{% else %}<span class="marque">{% endif %}<span class="logo-marque" aria-hidden="true"></span>piston{% if href %}</a>{% else %}</span>{% endif %}
+{%- endmacro %}
 {% macro icone(nom, classe="icone") -%}
 <svg class="{{ classe }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ ICONES.get(nom, "") | safe }}</svg>
 {%- endmacro %}
 
 {# En-tête d'une page de réglage : le h1 porte le nom de la ligne de la page Réglages (`reglage`, donné par
-   app.page), l'introduction passe par {% call %} en un seul paragraphe. Sur toutes les pages de réglage. #}
-{% macro entete_reglage(reglage) -%}
-<h1>{{ reglage.nom }}</h1>
-{% if caller is defined %}<p class="muet">{{ caller() }}</p>{% endif %}
+   app.page), l'introduction passe par {% call %} en un seul paragraphe. Sur toutes les pages de réglage.
+   Le bouton de la page (`actions`, préparé par {% set actions %}…{% endset %}) va à droite du titre, dans
+   l'en-tête de page (Nexus PageHeader) : jamais en rangée sous l'introduction. #}
+{% macro entete_reglage(reglage, actions=none) -%}
+{% if actions %}<header class="entete-page"><div class="ligne-entete-page">
+  <div class="titre-entete-page"><h1>{{ reglage.nom }}</h1>
+    {% if caller is defined %}<p class="muet">{{ caller() }}</p>{% endif %}</div>
+  <div class="actions-entete">{{ actions }}</div>
+</div></header>
+{% else %}<h1>{{ reglage.nom }}</h1>
+{% if caller is defined %}<p class="muet">{{ caller() }}</p>{% endif %}{% endif %}
 {%- endmacro %}
 
 {# Ligne de réglage qui ouvre une page (liste de la page Réglages, étapes de « Ma recherche ») : icône, nom,

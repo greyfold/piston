@@ -167,3 +167,16 @@ def test_avis_non_ecarte_la_nouvelle_mais_pas_le_peut_etre(reg):
     lue = evaluation.lire(reg, doute)
     assert lue["avis"]["cle"] == "peut-etre" and lue["avis"]["divergence"]
     assert lue["resultat"]["pour"] == ["Poste produit et IA"] and lue["resultat"]["arbitrage"]
+
+
+def test_empreinte_et_modele_suivent_le_fournisseur(reg, monkeypatch):
+    from jobsearch import moteur
+    e = annonce(reg, statut="A", texte="We are looking for a Product Manager.")
+    f = reg.get(e)
+    emp_claude = evaluation.empreinte_entree(f, "P")
+    monkeypatch.setattr(moteur, "fournisseur_actif", lambda: "codex")
+    emp_codex = evaluation.empreinte_entree(f, "P")
+    assert emp_codex != emp_claude
+    c = FauxMoteur([_ev()])
+    evaluation.evaluer_lot(reg, [f], c=c, texte_profil="P")
+    assert evaluation.lire(reg, e)["modele"].startswith("codex:")

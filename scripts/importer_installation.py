@@ -321,7 +321,7 @@ def main():
     if not (cible / "jobsearch.db").exists():
         sys.exit(f"Pas de base dans {cible} : lancer l'application une fois d'abord.")
     if a.appliquer and app_ouverte():
-        sys.exit("L'application Recherche emploi est ouverte : la quitter d'abord (menu de la barre des menus).")
+        sys.exit("L'application Piston est ouverte : la quitter d'abord (menu de la barre des menus).")
     rapport = {}
     if a.appliquer:
         print("Sauvegarde :", sauvegarder(cible / "jobsearch.db", cible))

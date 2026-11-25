@@ -572,9 +572,14 @@ def mesurer(dossier, entreprise=""):
 _NOMBRE = re.compile(r"(?<![\w.])\d{1,3}(?:[’' ]\d{3})+(?![\w])|(?<![\w.])\d+(?:[.,]\d+)?\s?%|(?<![\w.])\d{2,}(?![\w./-])")
 
 
+_LIGNE_NPA = re.compile(r"^\s*(?:[A-Z]{1,2}-)?\d{4,5}\s+\w[^\n]*$", re.M)
+
+
 def _chiffres_sans_preuve(texte, fixe):
-    """Nombres du CV ou de la lettre absents du profil (hors années et dates)."""
+    """Nombres du CV ou de la lettre absents du profil (hors années, dates et ligne « NPA Lieu »
+    d'une adresse : « 1400 Yverdon-les-Bains » est un code postal, pas un chiffre à prouver)."""
     ref = re.sub(r"[’' ]", "", fixe)
+    texte = _LIGNE_NPA.sub("", texte)
     douteux = []
     for m in _NOMBRE.finditer(texte):
         n = m.group(0)
@@ -615,8 +620,9 @@ def controler(f, dossier, pieces, couverture, fixe, pages=None):
     ajouter("CQ-06 couverture ≥ 80 % ou écarts listés",
             (couverture or 0) >= 80 or "## Écarts assumés" in pieces["analyse"],
             "%s %%" % couverture if couverture is not None else "non mesurée")
-    sans_preuve = _chiffres_sans_preuve(rendu, fixe)
-    ajouter("CQ-07 chiffres rattachés au profil", not sans_preuve, ", ".join(sans_preuve)[:200])
+    # Un chiffre de l'employeur repris de l'annonce (« plus de 300 collaborateurs ») n'est pas inventé.
+    sans_preuve = _chiffres_sans_preuve(rendu, fixe + "\n" + (f.get("texte") or ""))
+    ajouter("CQ-07 chiffres rattachés au profil ou à l'annonce", not sans_preuve, ", ".join(sans_preuve)[:200])
     ajouter("CQ-09 pas de nom du test de caractère", not re.search(r"\bVIA\b", rendu))
     ajouter("CQ-11 fiche d'envoi complète (6 rubriques)",
             len(re.findall(r"^## [0-5]\.", pieces["envoi"], re.M)) >= 6)

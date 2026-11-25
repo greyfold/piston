@@ -113,3 +113,70 @@ def test_passage_branche_linkedin_selon_reglage(monkeypatch, reg):
     assert "linkedin" in pipeline.Passage(reg).sources()
     monkeypatch.setattr("jobsearch.sources.catalogue.reglages", lambda: {"linkedin": {"actif": False}})
     assert "linkedin" not in pipeline.Passage(reg).sources()
+
+
+def faux_compte(couts=(0.06, 0.10), limite=5.0, credit=5.0, utilise=1.2):
+    """Le compte Apify vu par l'API : offre, limites du mois, derniers runs de l'acteur."""
+    vus = []
+
+    def gerer(req):
+        vus.append((req.url.path, dict(req.url.params)))
+        p = req.url.path
+        if p.endswith("/users/me"):
+            return httpx.Response(200, json={"data": {"plan": {"id": "FREE", "description": "Free plan",
+                                                                "monthlyUsageCreditsUsd": credit}}})
+        if p.endswith("/users/me/limits"):
+            return httpx.Response(200, json={"data": {
+                "monthlyUsageCycle": {"startAt": "2026-11-10T00:00:00.000Z", "endAt": "2026-12-10T00:00:00.000Z"},
+                "limits": {"maxMonthlyUsageUsd": limite}, "current": {"monthlyUsageUsd": utilise}}})
+        if p.endswith("/runs"):
+            return httpx.Response(200, json={"data": {"items": [{"status": "SUCCEEDED", "usageTotalUsd": c} for c in couts]}})
+        return httpx.Response(404, json={})
+    return Client(pause=0, transport=httpx.MockTransport(gerer)), vus
+
+
+def test_compte_apify_lu_sans_rien_lancer():
+    client, vus = faux_compte()
+    c = linkedin.compte(client, jeton="apify_api_x")
+    assert c["offre"] == "Free plan" and c["limite"] == 5.0 and c["utilise"] == 1.2 and c["fin_cycle"] == "2026-12-10"
+    assert c["cout_moyen"] == pytest.approx(0.08) and c["runs"] == 2
+    assert all(not p.endswith("/runs") or q.get("status") == "SUCCEEDED" for p, q in vus)   # lecture seule
+
+
+def test_conseil_selon_le_compte():
+    import datetime as dt
+    client, _ = faux_compte()
+    c = linkedin.compte(client, jeton="apify_api_x")
+    k = linkedin.conseil(c, 2, 1.0, aujourdhui=dt.date(2026, 11, 25))
+    # 3.80 $ restants, 2 recherches par jour pendant 15 jours : 0.12 $ chacune au plus ;
+    # une recherche coûte 0.08 $ en moyenne, 0.12 $ avec la marge : le crédit suffit.
+    assert k["jours"] == 15 and k["reste"] == pytest.approx(3.8) and k["suffisant"] is True
+    assert k["plafond"] == 0.1 and k["a_changer"]
+    serre = linkedin.conseil(c, 6, 1.0, aujourdhui=dt.date(2026, 11, 25))
+    assert serre["suffisant"] is False and serre["plafond"] == 0.05 and serre["serre"]   # borné par le crédit restant
+    assert not k["serre"]
+    neuf = linkedin.conseil(dict(c, cout_moyen=None, runs=0), 2, 1.0, aujourdhui=dt.date(2026, 11, 25))
+    assert neuf["prevu"] is None and neuf["plafond"] == 0.1              # sans historique : la part du crédit
+
+
+def test_page_linkedin_guide_puis_compte(monkeypatch, reg):
+    from fastapi.testclient import TestClient
+    from jobsearch import cles, profil
+    from jobsearch.web import app as appmod
+    monkeypatch.setattr(appmod, "_reg", lambda: type(reg)(reg.chemin))
+    web = TestClient(appmod.app)
+    page = web.get("/sources/linkedin").text
+    assert "Ajouter le jeton" in page and "Ton compte Apify" not in page
+    r = web.post("/sources/linkedin/activer", follow_redirects=False)          # pas sans jeton
+    assert "ok=0" in r.headers["location"] and not profil.lire(profil.charger(), "sources.linkedin.actif")
+
+    monkeypatch.setattr(cles, "etat", lambda nom: dict(cles.SERVICES[nom], id=nom, presente=True, fin="abcd"))
+    monkeypatch.setattr(linkedin, "jeton_trousseau", lambda: "apify_api_x")
+    monkeypatch.setattr("jobsearch.sources.base.Client", lambda **kw: faux_compte()[0])
+    page = web.get("/sources/linkedin").text
+    assert "Ton compte Apify · Free plan" in page and "enregistré · …abcd" in page and "Appliquer" in page
+    web.post("/sources/linkedin/activer")
+    web.post("/sources/linkedin/plafond", data={"plafond": "0.10"})
+    from jobsearch.config import reglages
+    assert reglages()["linkedin"]["actif"] is True and reglages()["linkedin"]["plafond_usd_par_run"] == 0.1
+    assert "ok=0" in web.post("/sources/linkedin/plafond", data={"plafond": "abc"}, follow_redirects=False).headers["location"]

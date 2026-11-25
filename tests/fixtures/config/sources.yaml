@@ -12,6 +12,11 @@ jobup:
   nature: "Site d'annonces, Suisse romande (même base que jobs.ch)"
   acces: "automatique"
   remarques: "Recherche canton par canton ; le filtre « Lausanne » de l'ancienne chaîne ne voyait que Lausanne et ses environs."
+indeed:
+  nom: "Indeed"
+  nature: "Site d'annonces international"
+  acces: "automatique"
+  remarques: "Lu par le connecteur Indeed du compte Claude."
 linkedin:
   nom: "LinkedIn"
   nature: "Réseau social, offres d'emploi"

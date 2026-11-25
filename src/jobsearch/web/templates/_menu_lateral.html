@@ -4,12 +4,12 @@
    ouverte porte la bordure verte et aria-current. Sous 760 px, il devient une barre en haut, en ligne,
    et Réglages passe en icône à côté de la cloche.
    Pour un nouvel utilisateur, Offres s'ouvre avec la recherche et Candidatures avec la possibilité de postuler. #}
-{% from "_macros.html" import icone %}
+{% from "_macros.html" import icone, marque %}
 {% set travail = [("/", "Aujourd'hui", "accueil", none), ("/offres", "Offres", "recherche", "offres"),
                   ("/candidatures", "Candidatures", "candidatures", "postuler")] %}
 <aside class="menu-lateral">
   <div class="tete-menu">
-    <a class="marque" href="/">Recherche <span>d'emploi</span></a>
+    {{ marque("/") }}
     <div class="actions-menu">
       <button type="button" class="bouton-notifications" data-ouvrir-notifications aria-haspopup="dialog" aria-controls="notifications">
         {{ icone("cloche") }}<span class="libelle">Notifications</span>

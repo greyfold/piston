@@ -70,11 +70,13 @@ def test_interdite_ne_se_branche_pas_sans_voie_prevue():
 
 
 def test_adresses_et_extraits_verifies():
-    e = examen.verifier(un_examen(conditions_url="javascript:alert(1)", api_url="pas une adresse",
-                                  extraits=["mot " * 80, "", "a", "b", "c"]))
-    assert (e.conditions_url, e.api_url) == ("", "")
-    assert e.automatisation == "interdite"                # une interdiction reste, même sans adresse
+    e = examen.verifier(un_examen(api_url="pas une adresse", extraits=["mot " * 80, "", "a", "b", "c"]))
+    assert e.api_url == "" and e.conditions_url == "https://www.exemple-emplois.ch/cgu"
     assert len(e.extraits) == 3 and e.extraits[0].endswith("…") and len(e.extraits[0].split()) == examen.MOTS_MAX + 1
+    e = examen.verifier(un_examen(conditions_url="javascript:alert(1)"))
+    assert e.conditions_url == "" and e.automatisation == "interdite"   # une interdiction reste, même sans adresse
+    assert e.extraits == []                                # sans page des conditions lue : pas d'extraits
+    assert examen.verifier(un_examen(conditions_lues=False)).extraits == []   # tirés d'un résumé de recherche
 
 
 def test_changer_acces(reg):
@@ -104,7 +106,7 @@ def test_page_sources_examen(web, reg, monkeypatch):
                                            "examiner": "1"}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].startswith("/sources/exemple-emplois?")
     assert lances == ["exemple-emplois"]
-    assert "Faire examiner la source par l'IA" in web.get("/sources").text
+    assert "Faire examiner la source par l'IA" not in web.get("/sources").text      # plus de formulaire « Noter une source »
 
     examen.noter(reg, "exemple-emplois", resultat=examen.verifier(un_examen()))
     page = web.get("/sources/exemple-emplois").text
@@ -154,7 +156,8 @@ def test_sources_par_defaut_et_leur_statut(web, reg, monkeypatch):
         assert 'href="/sources/%s"' % sid in liste
     assert "non répertoriée" not in liste
     assert '<span class="puce ">pas encore interrogée</span>' in liste          # Job-Room avant tout passage
-    assert '<span class="puce nouvelle">à brancher</span>' in liste             # Indeed, connecteur inactif
+    assert '<span class="puce ">désactivée</span>' in liste                    # Indeed, connecteur inactif
+    assert "à brancher" not in liste and "automatique" not in liste              # plus d'accès affiché
     reg.cx.execute("INSERT INTO sources (id, etat, dernier_test_le, dernier_test_ok) VALUES ('jobup', 'en service', '2026-11-16', 1)")
     reg.cx.commit()
     assert '<span class="puce B">en service</span>' in web.get("/sources").text

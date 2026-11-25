@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import icone, fil_entretien, compositeur %}
-{% block titre %}Ton parcours · Recherche d'emploi{% endblock %}
+{% block titre %}Ton parcours · Piston{% endblock %}
 {# Mode concentré : pas de barre de menu. Pendant l'entretien, la page prend toute la fenêtre ; le message
    du passage précédent s'affiche au-dessus de la saisie plutôt qu'en haut. #}
 {% block barre %}{% endblock %}
@@ -117,7 +117,7 @@
       {% if not ia %}
       <div class="bandeau attention"><span class="point"></span>
         <span>L'entretien demande ton IA.
-          <button type="button" class="lien-neutre" data-connexion-ia="claude" data-nom="Claude">Connecter Claude</button></span></div>
+          <button type="button" class="lien-neutre" data-connexion-ia="{{ ia_active().id }}" data-nom="{{ ia_active().nom }}">Connecter {{ ia_active().nom }}</button></span></div>
       {% endif %}
       <form data-repondre data-de="{{ de }}">
         {{ compositeur("Réponds avec tes mots : ils sont gardés tels quels.", "L'IA range ta réponse…",
@@ -148,7 +148,7 @@
   {% if not ia %}
   <div class="bandeau attention"><span class="point"></span>
     <span>L'import du CV et l'entretien demandent ton IA.
-      <button type="button" class="lien-neutre" data-connexion-ia="claude" data-nom="Claude">Connecter Claude</button></span></div>
+      <button type="button" class="lien-neutre" data-connexion-ia="{{ ia_active().id }}" data-nom="{{ ia_active().nom }}">Connecter {{ ia_active().nom }}</button></span></div>
   {% endif %}
 
   {% if vide %}

@@ -11,6 +11,9 @@ Une tâche ne reçoit que les outils de lecture du connecteur qu'elle utilise :
 `outils(nom)` les donne, préfixés comme Claude Code les nomme. Rien n'est jamais
 envoyé, déplacé ni effacé par un connecteur.
 
+Un connecteur de rôle « source » (Indeed) est une source d'annonces : il se règle sur sa
+page de source (/sources/<id>), pas sur la page Connecteurs, qui ne montre que les autres.
+
 L'activation vit dans le profil (`connecteurs.actifs`) ; sans profil, l'état par
 défaut reprend les réglages d'avant (Apple Mail et Chrome actifs, Indeed selon
 `indeed.actif`, Gmail inactif).
@@ -35,7 +38,7 @@ CATALOGUE = {
         "nom": "Indeed", "role": "source", "lieu": "compte", "prefixe": "mcp__claude_ai_Indeed",
         "outils": ["search_jobs", "get_job_details"],
         "usage": "Recherches Indeed du passage du matin (le site refuse les scripts).",
-        "activer": "Sur claude.ai › Réglages › Connecteurs : activer Indeed.",
+        "activer": "Sur claude.ai › Réglages › Connecteurs : activer Indeed, avec le compte Claude connecté à l'application.",
     },
     "chrome": {
         "nom": "Chrome", "role": "navigateur", "lieu": "vm",
@@ -44,7 +47,7 @@ CATALOGUE = {
     },
 }
 
-ROLES = {"courrier": "Courrier", "source": "Source d'annonces", "navigateur": "Navigateur"}
+ROLES = {"courrier": "Courrier", "navigateur": "Navigateur"}     # ceux de la page Connecteurs (pas les sources)
 LIEUX = {"mac": "sur ton Mac", "vm": "machine virtuelle", "compte": "compte Claude"}
 
 
@@ -83,10 +86,16 @@ def outils(nom):
     return ["%s__%s" % (c["prefixe"], o) for o in c.get("outils", [])]
 
 
+def lien(nom):
+    """Là où le connecteur se règle : sa page de source pour une source, sinon la page Connecteurs."""
+    return "/sources/%s" % nom if CATALOGUE[nom]["role"] == "source" else "/connecteurs#%s" % nom
+
+
 def liste(p=None):
+    """Les connecteurs de la page Connecteurs : les sources d'annonces (Indeed) sont sur la page Sources."""
     a = actifs(p)
     return [dict(c, id=n, actif=n in a, role_libelle=ROLES[c["role"]], lieu_libelle=LIEUX[c["lieu"]])
-            for n, c in CATALOGUE.items()]
+            for n, c in CATALOGUE.items() if c["role"] in ROLES]
 
 
 # --- Test --------------------------------------------------------------------------------
@@ -157,14 +166,14 @@ def a_configurer(reg):
     que seule la personne peut faire (Indeed pas activé sur claude.ai, par exemple)."""
     a = actifs()
     return [dict(id=r["id"], nom=CATALOGUE[r["id"]]["nom"], message=r["remarques"] or "",
-                 activer=CATALOGUE[r["id"]]["activer"], le=r["dernier_test_le"])
+                 activer=CATALOGUE[r["id"]]["activer"], le=r["dernier_test_le"], lien=lien(r["id"]))
             for r in reg.cx.execute("SELECT id, remarques, dernier_test_le FROM sources WHERE etat=? ORDER BY id",
                                     (A_CONFIGURER,))
             if r["id"] in CATALOGUE and r["id"] in a]
 
 
 def noter_test(reg, nom, ok):
-    """Un test réussi sur la page Connecteurs lève l'état « à configurer » sans attendre le passage."""
+    """Un test réussi (page Connecteurs, ou page de la source) lève l'état « à configurer » sans attendre le passage."""
     if ok:
         reg.cx.execute("UPDATE sources SET etat='en service', dernier_test_ok=1, remarques=NULL "
                        "WHERE id=? AND etat=?", (nom, A_CONFIGURER))

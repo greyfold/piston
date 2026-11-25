@@ -1,30 +1,39 @@
 """L'application du travailleur : `jobsearch travailleur`, dans la machine virtuelle.
 
 Les routes, toutes derrière le jeton partagé :
-- GET  /etat                     version, connexion de Claude Code, sources confiées ;
+- GET  /etat                     version, connexion de chaque moteur (Claude Code, Codex,
+                                 Gemini CLI, Grok), sources confiées ;
 - POST /moteur                   une tâche du moteur (dict de Tache + message) ;
 - POST /sources/{nom}/tester     test de route d'une source confiée ;
 - POST /sources/{nom}/offres     ses offres, avec les annonces déjà connues du Mac ;
 - POST /sources/{nom}/detail     le texte complet d'une annonce ;
 - POST /connecteurs/{nom}/tester état d'un connecteur du compte Claude (Gmail, Indeed) ;
 - POST /courrier/gmail           le courrier lu dans Gmail ;
-- POST /sessions                 une session Claude dans le Chrome de la VM (preuves Job-Room,
-                                 formulaire), lancée en arrière-plan ; elle note son avancement
-                                 dans le dossier partagé (session_vm.py) ;
+- POST /sessions                 une session du moteur choisi dans le Chrome de la VM (preuves
+                                 Job-Room, formulaire), lancée en arrière-plan, avec les deux
+                                 seuls serveurs MCP de l'application (mcp_vm.py) ; elle note son
+                                 avancement dans le dossier partagé ;
 - POST /chrome/rendre            le HTML d'une page, rendue par le Chrome de la VM ;
 - POST /chrome/pdf               un PDF imprimé par le Chrome de la VM à partir d'un HTML.
 
 Le travailleur n'a pas la base : ce qu'il doit savoir du registre (annonces déjà
 connues) lui est envoyé, et il ne rend que des données. Rien n'est écrit ici,
-sinon les journaux des sessions Claude.
+sinon les journaux des sessions.
+
+Une route qui attend un moteur ou un site (minutes avec un moteur lent) tourne dans un fil à part
+(`run_in_threadpool`), jamais sur la boucle : sinon le travailleur ne répond plus à rien pendant ce
+temps (/etat, PDF), l'application le croit arrêté et tente de le relancer (constaté le 25.11.2026).
 """
 
 import hmac
+import tempfile
 from dataclasses import asdict
 from functools import lru_cache
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from .. import moteur
 from ..config import reglages
@@ -70,9 +79,21 @@ def _refus(e, **k):
     return JSONResponse(dict({"erreur": str(e)}, **k), status_code=422)
 
 
+@lru_cache
+def _code():
+    """L'empreinte du code installé (calculée une fois : il ne change pas sans relance)."""
+    from ..vm import empreinte_code
+    return empreinte_code()
+
+
+_code()          # dès le lancement : le code sur disque peut changer ensuite (réinstallation)
+
 @app.get("/etat")
 def etat():
-    return {"version": VERSION, "moteur": moteur.etat(), "sources": confiees()}
+    tous = moteur.etats()
+    actif = tous.get(moteur.fournisseur_actif()) or moteur.etat()
+    return {"version": VERSION, "code": _code(), "moteur": actif, "moteurs": tous,
+            "sources": confiees()}
 
 
 @app.post("/moteur")
@@ -80,10 +101,11 @@ async def executer(request: Request):
     d = await request.json()
     t = moteur.Tache.depuis_dict(d["tache"])
     try:
-        r = moteur.executer(t, d.get("message") or "")
+        r = await run_in_threadpool(moteur.executer, t, d.get("message") or "")
     except moteur.MoteurImpossible as e:
         return _refus(e, bloquant=e.bloquant)
-    return {"texte": r.texte, "brut": r.brut, "usage": r.usage, "cout_usd": r.cout_usd, "session": r.session}
+    return {"texte": r.texte, "brut": r.brut, "usage": r.usage, "cout_usd": r.cout_usd, "session": r.session,
+            "modele": r.modele}
 
 
 @app.post("/connecteurs/{nom}/tester")
@@ -100,8 +122,8 @@ async def courrier_gmail(request: Request):
     from .. import gmail
     d = await request.json()
     try:
-        return gmail.lire(d.get("mots") or [], d["depuis"], int(d.get("limite") or 40),
-                          longueur=int(d.get("longueur") or 1500))
+        return await run_in_threadpool(gmail.lire, d.get("mots") or [], d["depuis"], int(d.get("limite") or 40),
+                                       longueur=int(d.get("longueur") or 1500))
     except Exception as e:
         return _refus(e)
 
@@ -141,7 +163,7 @@ async def offres(nom: str, request: Request):
     if d.get("jours") is not None and getattr(src, "selon_fenetre", False):
         kw["jours"] = d["jours"]
     try:
-        return [asdict(a) for a in src.offres(**kw)]
+        return [asdict(a) for a in await run_in_threadpool(lambda: list(src.offres(**kw)))]
     except Exception as e:
         return _refus(e)
 
@@ -151,7 +173,7 @@ async def detail(nom: str, request: Request):
     from ..sources.base import Annonce
     a = Annonce(**await request.json())
     try:
-        return asdict(_source(nom).detail(a))
+        return asdict(await run_in_threadpool(_source(nom).detail, a))
     except Exception as e:
         return _refus(e)
 
@@ -159,31 +181,12 @@ async def detail(nom: str, request: Request):
 # --- Chrome de la VM --------------------------------------------------------------------
 
 PORT_DEVTOOLS = 9222
-# Outils du serveur MCP de Chrome refusés aux sessions : rien qui exécute du code dans la page,
-# installe quelque chose ou lit au-delà de la page (le reste suffit pour lire, cliquer, remplir).
-# Liste de refus et non d'outils permis : la liste exacte des outils de la version figée
-# (vm.MCP_CHROME) reste à relever dans son paquet avant d'en faire une liste d'outils permis.
-OUTILS_REFUSES = ["evaluate_script", "install_extension", "install_pwa", "launch_pwa", "execute_webmcp_tool",
-                  "get_network_request", "list_network_requests", "get_console_message", "list_console_messages",
-                  "lighthouse_audit", "performance_start_trace", "performance_stop_trace", "take_heapsnapshot"]
-
-
-def commande_session(consigne):
-    """`claude -p` avec le seul serveur MCP de Chrome (celui de la VM) et la commande
-    `jobsearch-session`, sans réglages de l'utilisateur."""
-    import json as _json
-    mcp = {"mcpServers": {"chrome": {"command": "/opt/node/bin/chrome-devtools-mcp",
-                                     "args": ["--browserUrl", "http://127.0.0.1:%d" % PORT_DEVTOOLS]}}}
-    modele = (reglages().get("moteur") or {}).get("modele")
-    return [moteur.executable(), "-p", consigne, *(["--model", modele] if modele else []),
-            "--mcp-config", _json.dumps(mcp), "--strict-mcp-config",
-            "--allowedTools", "mcp__chrome,Bash(jobsearch-session:*)",
-            "--disallowedTools", ",".join("mcp__chrome__" + o for o in OUTILS_REFUSES),
-            "--permission-mode", "dontAsk", "--output-format", "stream-json", "--verbose"]
 
 
 @app.post("/sessions")
 async def session(request: Request):
+    """La session du moteur demandé (`fournisseur`), avec pour seuls outils le filtre devant le
+    serveur MCP de Chrome et les commandes de la tâche (mcp_vm.py) : ni terminal, ni fichiers."""
     import os
     import subprocess
     from ..config import DATA
@@ -193,15 +196,27 @@ async def session(request: Request):
         return _refus("tâche ou consigne manquante")
     dossier = DATA / "taches" / tache
     dossier.mkdir(parents=True, exist_ok=True)
-    env = dict(moteur.environnement(), JOBSEARCH_TACHE=tache, DISPLAY=":1")
+    try:
+        f = moteur.fournisseur(d.get("fournisseur") or "claude")
+        reglages_session = Path(tempfile.mkdtemp(prefix="session-%s-" % tache))
+        commande, env, cwd, entree = f.session(d["consigne"], tache, str(DATA), reglages_session)
+    except (moteur.MoteurImpossible, OSError) as e:
+        return _refus(e, bloquant=True)
+    env = dict(env, JOBSEARCH_TACHE=tache, JOBSEARCH_DATA=str(DATA), DISPLAY=":1")
     env["PATH"] = os.path.expanduser("~/.local/bin") + ":/opt/node/bin:" + env.get("PATH", "/usr/bin:/bin")
     try:
-        with open(dossier / "journal.jsonl", "a", encoding="utf-8") as journal:
-            p = subprocess.Popen(commande_session(d["consigne"]), cwd=str(dossier), env=env, stdin=subprocess.DEVNULL,
+        if entree is not None:           # la consigne par l'entrée standard (Antigravity) : rien dans la liste des processus
+            fichier = reglages_session / "entree.jsonl"
+            fd = os.open(fichier, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(entree)
+        with open(dossier / "journal.jsonl", "a", encoding="utf-8") as journal, \
+                (open(fichier, encoding="utf-8") if entree is not None else open(os.devnull)) as source:
+            p = subprocess.Popen(commande, cwd=cwd or str(dossier), env=env, stdin=source,
                                  stdout=journal, stderr=subprocess.STDOUT, start_new_session=True)
     except OSError as e:
         return _refus(e)
-    return {"ok": True, "pid": p.pid}
+    return {"ok": True, "pid": p.pid, "fournisseur": f.id}
 
 
 @app.post("/preremplir")
@@ -240,25 +255,13 @@ def _chrome():
 @app.post("/chrome/rendre")
 def rendre(corps: dict):
     """Le HTML d'une page, rendue dans un contexte isolé (sans les cookies du profil)."""
+    from ..mcp_vm import rendre_isole, verifier_url_publique
     url = str(corps.get("url") or "")
-    if not url.startswith(("http://", "https://")):
-        return _refus("adresse refusée")
     try:
-        p, b = _chrome()
-    except Exception as e:
-        return _refus("Chrome de la VM injoignable : %s" % e)
-    try:
-        ctx = b.new_context()
-        page = ctx.new_page()
-        page.goto(url, wait_until="domcontentloaded", timeout=int(corps.get("delai_ms", 30000)))
-        page.wait_for_timeout(int(corps.get("attente_ms", 4000)))
-        html, texte = page.content(), page.inner_text("body")
-        ctx.close()
-        return {"html": html, "texte": texte}
+        verifier_url_publique(url, resoudre=False)
+        return rendre_isole(url, int(corps.get("attente_ms", 4000)), int(corps.get("delai_ms", 30000)))
     except Exception as e:
         return _refus(e)
-    finally:
-        p.stop()
 
 
 @app.post("/chrome/pdf")
@@ -271,8 +274,11 @@ def pdf(corps: dict):
         return _refus("Chrome de la VM injoignable : %s" % e)
     try:
         ctx = b.new_context()
+        # Impression locale : aucune requête réseau sortante pendant le rendu PDF.
+        ctx.route("**/*", lambda route: route.abort("blockedbyclient")
+                  if route.request.url.startswith(("http://", "https://")) else route.continue_())
         page = ctx.new_page()
-        page.set_content(str(corps.get("html") or ""), wait_until="networkidle")
+        page.set_content(str(corps.get("html") or ""), wait_until="load")
         donnees = page.pdf(format="A4", print_background=True, prefer_css_page_size=True)
         ctx.close()
         return {"pdf": base64.b64encode(donnees).decode()}

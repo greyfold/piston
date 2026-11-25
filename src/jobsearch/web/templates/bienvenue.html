@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros.html" import icone %}
-{% block titre %}Bienvenue · Recherche d'emploi{% endblock %}
+{% block titre %}Bienvenue · Piston{% endblock %}
 {% block contenu %}
 {# Accueil selon la spec Nexus « 03 Onboarding » : un écran par étape, une action principale,
    « Passer » neutre, toutes les étapes montrées d'emblée, la valeur montrée avant d'être racontée. #}
@@ -25,7 +25,7 @@
   <p class="intro">Ta première recherche tourne déjà, sans IA. Ton abonnement d'IA servira ensuite à noter les annonces et à écrire tes dossiers. Rien n'est facturé en plus.</p>
 
   {% if claude.connecte %}
-  <div class="etat-tache ok">{{ icone("fin") }}<div><p class="fort">Connecté à Claude{% if claude.abonnement %} · abonnement {{ claude.abonnement }}{% endif %}</p>
+  <div class="etat-tache ok">{{ icone("fin") }}<div><p class="fort">Connecté à {{ ia_active().nom }}{% if claude.abonnement %} · abonnement {{ claude.abonnement }}{% endif %}</p>
     <p>Tu peux voir ce que ta recherche a trouvé.</p></div></div>
   <div class="actions-accueil">
     <span></span>
@@ -42,7 +42,7 @@
     </button>
     {% endfor %}
   </div>
-  <p class="aide-accueil" data-apres-connexion="/bienvenue/offres">Tu te connectes directement chez Claude : l'application ne voit jamais tes identifiants.</p>
+  <p class="aide-accueil" data-apres-connexion="/bienvenue/offres">Tu te connectes directement chez le fournisseur : l'application ne voit jamais tes identifiants.</p>
   <p class="aide-accueil lien-confidentialite">{{ icone("cadenas") }}<span>Ton nom, ton adresse et ton téléphone ne partent jamais vers l'IA : elle reçoit des balises à leur place. <a href="/confidentialite" target="_blank">Voir ce qu'elle reçoit</a></span></p>
   <div class="actions-accueil">
     <a class="lien-neutre" href="/bienvenue/offres">Passer pour l'instant</a>

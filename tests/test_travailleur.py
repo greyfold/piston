@@ -33,6 +33,8 @@ def test_jeton_du_seul_compte_et_exige(jeton_, tmp_path):
     assert web.get("/etat", headers={"Authorization": "Bearer faux"}).status_code == 401
     e = web.get("/etat", headers={"Authorization": "Bearer " + jeton_}).json()
     assert e["moteur"]["connecte"] and e["sources"] == ["indeed"]
+    from jobsearch import vm
+    assert e["code"] == vm.empreinte_code()          # le Mac reconnaît un travailleur sur un code périmé
 
 
 def test_tache_executee_par_le_travailleur(distant, monkeypatch):
@@ -70,8 +72,9 @@ def test_travailleur_eteint_bloque(jeton_):
 
 
 def test_verifie_la_connexion_dans_la_vm(distant, monkeypatch):
-    monkeypatch.setattr(moteur, "etat", lambda executer=None: {"installe": True, "connecte": False,
-                                                               "message": "pas connecté"})
+    pas = {"installe": True, "connecte": False, "message": "pas connecté"}
+    monkeypatch.setattr(moteur, "etat", lambda executer=None, fournisseur_=None: pas)
+    monkeypatch.setattr(moteur, "etats", lambda executer=None: {f: pas for f in ("claude", "codex", "gemini", "grok")})
     with pytest.raises(moteur.MoteurImpossible, match="dans la machine virtuelle"):
         distant.verifie()
 
@@ -159,3 +162,46 @@ def test_dossier_des_donnees(tmp_path):
     vide = tmp_path / "app"
     vide.mkdir()
     assert config.dossier_donnees({}, vide) == config.APPLICATION            # application installée
+
+
+def test_le_travailleur_repond_pendant_une_tache(jeton_, monkeypatch):
+    """Une tâche du moteur (minutes avec un moteur lent) ne bloque pas le travailleur : /etat répond
+    pendant qu'elle tourne. Sinon l'application le croit arrêté et tente de le relancer."""
+    import threading
+    en_cours, liberer, fini = threading.Event(), threading.Event(), threading.Event()
+
+    def executer(t, message):
+        en_cours.set()
+        liberer.wait(3)
+        fini.set()
+        return moteur.Resultat(texte="ok")
+    monkeypatch.setattr(moteur, "executer", executer)
+    entetes = {"Authorization": "Bearer " + jeton_}
+    t = moteur.Tache("essai", "Consigne.", effort="low")
+    with TestClient(serveur.app) as web:
+        fil = threading.Thread(target=lambda: web.post("/moteur", headers=entetes,
+                                                       json={"tache": t.vers_dict(), "message": "x"}))
+        fil.start()
+        assert en_cours.wait(5)
+        try:
+            assert web.get("/etat", headers=entetes).status_code == 200
+            assert not fini.is_set()                     # /etat a répondu pendant la tâche, pas après
+        finally:
+            liberer.set()
+            fil.join(10)
+
+
+def test_chrome_rendre_refuse_les_adresses_internes(jeton_):
+    web = TestClient(serveur.app)
+    r = web.post("/chrome/rendre", headers={"Authorization": "Bearer " + jeton_},
+                 json={"url": "http://127.0.0.1:9222/json"})
+    assert r.status_code == 422
+
+
+def test_etat_ne_duplique_pas_l_appel_moteur(jeton_, monkeypatch):
+    appels = []
+    ok = {"installe": True, "connecte": True, "abonnement": "pro", "message": "ok"}
+    monkeypatch.setattr(moteur, "etats", lambda executer=None: appels.append("etats") or {"claude": ok})
+    monkeypatch.setattr(moteur, "etat", lambda *a, **k: appels.append("etat") or ok)
+    e = TestClient(serveur.app).get("/etat", headers={"Authorization": "Bearer " + jeton_}).json()
+    assert e["moteur"] == ok and appels == ["etats"]

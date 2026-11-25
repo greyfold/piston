@@ -1,14 +1,14 @@
-"""Moteur IA : le seul passage vers Claude.
+"""Moteur IA : le seul passage vers l'IA.
 
-Toutes les tâches passent par Claude Code (la commande `claude`), connecté au
-compte Claude de la personne qui utilise la plateforme (décision du 06.11 :
-chaque utilisateur se connecte à son propre abonnement, en version personnelle
-comme en version distribuée ; aucune clé API). Il n'y a plus d'appel direct à
-l'API Anthropic dans le code.
+Toutes les tâches passent par la commande de code d'un fournisseur, connectée au compte de la
+personne qui utilise la plateforme (décision du 06.11 : chaque utilisateur se connecte à son
+propre abonnement ; aucune clé API) : Claude Code par défaut, ou Codex (OpenAI), Gemini CLI
+(Google), Grok Build (xAI), au choix de la personne (`fournisseurs.py`). Il n'y a aucun appel
+direct à l'API d'un fournisseur dans le code.
 
 Une `Tache` est cadrée dans le code : consigne fixe, contexte, schéma de la
 réponse, outils permis, modèle, effort et délai. `executer()` lance une session
-`claude -p` sans tête et sans réglages de l'utilisateur (`--safe-mode` : ni
+`claude -p` (ou son équivalent chez le moteur choisi) sans tête et sans réglages de l'utilisateur (`--safe-mode` : ni
 CLAUDE.md, ni plugins, ni crochets, ni serveurs MCP), sans aucun outil sauf
 ceux que la tâche nomme, et rend le texte ou l'objet validé par le schéma.
 Rien n'est écrit dans la base ici : c'est le rôle de l'appelant, après
@@ -16,7 +16,7 @@ validation.
 
 Les coordonnées de la personne ne partent jamais : `ouvrir()` rend un moteur `Protege`,
 qui les remplace par des balises avant l'envoi et les remet à la réception
-(`confidentialite.py`). Claude Code ne tourne que dans la machine virtuelle.
+(`confidentialite.py`). Le moteur ne tourne que dans la machine virtuelle.
 
 La consigne et le contexte passent par un fichier temporaire lisible du seul
 compte (`--system-prompt-file`), la demande par l'entrée standard : rien du
@@ -36,12 +36,6 @@ from ..config import reglages
 
 MODELE = "claude-opus-5-5"
 
-# Les fournisseurs d'IA proposés à la connexion (accueil, checklist). Chacun se branche avec
-# l'abonnement de la personne ; Claude d'abord, les autres viendront avec leur moteur.
-FOURNISSEURS = [
-    {"id": "claude", "nom": "Claude", "detail": "Avec ton abonnement Claude Pro ou Max",
-     "commande": "jobsearch connexion"},
-]
 
 
 class MoteurImpossible(Exception):
@@ -75,6 +69,8 @@ class Tache:
     delai_s: int = 900
     schema_json: dict | None = None  # le schéma déjà converti (tâche reçue par le travailleur)
     masquer: bool = True             # coordonnées remplacées par des balises (Protege) ; reste sur le Mac
+    niveau: str = "principal"        # principal : évaluation, dossiers ; leger : lecture d'une page
+    fournisseur: str | None = None   # claude, codex, gemini, grok ; None : celui des réglages
 
     def json_schema(self):
         if self.schema_json is not None:
@@ -86,12 +82,13 @@ class Tache:
         return {"nom": self.nom, "consigne": self.consigne, "contexte": self.contexte,
                 "schema_json": self.json_schema(), "modele": self.modele, "effort": self.effort,
                 "outils": list(self.outils), "autorises": list(self.autorises), "mcp": self.mcp,
-                "sans_reglages": self.sans_reglages, "delai_s": self.delai_s}
+                "sans_reglages": self.sans_reglages, "delai_s": self.delai_s, "niveau": self.niveau,
+                "fournisseur": self.fournisseur}
 
     @classmethod
     def depuis_dict(cls, d):
         champs = {"nom", "consigne", "contexte", "schema_json", "modele", "effort", "outils", "autorises", "mcp",
-                  "sans_reglages", "delai_s"}
+                  "sans_reglages", "delai_s", "niveau", "fournisseur"}
         return cls(**{k: v for k, v in d.items() if k in champs})
 
 
@@ -99,14 +96,25 @@ class Tache:
 class Resultat:
     texte: str
     objet: object = None
-    brut: object = None              # la sortie structurée telle que Claude l'a rendue
+    brut: object = None              # la sortie structurée telle que le moteur l'a rendue
     usage: dict = field(default_factory=dict)
     cout_usd: float | None = None
     session: str | None = None
+    modele: str | None = None        # le modèle qui a répondu, quand le moteur le dit
 
 
 def reglage(cle, defaut=None):
     return (reglages().get("moteur") or {}).get(cle, defaut)
+
+
+def fournisseur_actif():
+    """Le moteur choisi par la personne (profil : ia.fournisseur) ; Claude par défaut."""
+    f = reglage("fournisseur") or "claude"
+    return f if f in _TOUS else "claude"
+
+
+def fournisseur(fid=None):
+    return _TOUS[fid if fid in _TOUS else fournisseur_actif()]
 
 
 def dans_la_vm():
@@ -161,8 +169,24 @@ def connecte(executer=subprocess.run):
         return False
 
 
-def etat(executer=subprocess.run):
-    """Ce que le tableau de bord montre de la connexion : installé, connecté, abonnement."""
+def etat(executer=subprocess.run, fournisseur_=None):
+    """Ce que le tableau de bord montre de la connexion d'un moteur : installé, connecté, abonnement."""
+    return fournisseur(fournisseur_).etat(executer)
+
+
+def etats(executer=subprocess.run):
+    """{fournisseur: état} de tous les moteurs (le travailleur, pour le Mac)."""
+    out = {}
+    for fid, f in _TOUS.items():
+        try:
+            out[fid] = f.etat(executer)
+        except Exception as e:                      # un moteur en panne ne cache pas les autres
+            out[fid] = {"installe": False, "connecte": False, "abonnement": None, "message": str(e)[:200]}
+    return out
+
+
+def etat_claude(executer=subprocess.run):
+    """Claude Code : installé, connecté, abonnement."""
     try:
         exe = executable()
     except LancementImpossible as e:
@@ -184,9 +208,17 @@ def etat(executer=subprocess.run):
             "message": message}
 
 
+def modele_claude(t):
+    if t.modele:
+        return t.modele
+    if t.niveau == "leger":
+        return reglage("modele_lecture", "claude-sonnet-5-5")
+    return reglage("modele", MODELE)
+
+
 def commande(t, fichier_consigne):
     c = [executable(), "-p", "--output-format", "json", "--no-session-persistence",
-         "--model", t.modele or reglage("modele", MODELE), "--effort", t.effort,
+         "--model", modele_claude(t), "--effort", t.effort,
          "--system-prompt-file", fichier_consigne,
          "--tools", ",".join(t.outils), "--strict-mcp-config", "--permission-mode", "dontAsk"]
     if t.sans_reglages:
@@ -218,7 +250,12 @@ def _erreur(t, texte, code=None):
 
 
 def executer(t, message, executer_=None):
-    """Lance la tâche `t` sur `message` ; renvoie un Resultat ou lève MoteurImpossible."""
+    """Lance la tâche `t` sur `message`, avec le moteur qu'elle nomme (ou celui des réglages) ;
+    renvoie un Resultat ou lève MoteurImpossible."""
+    return fournisseur(t.fournisseur).executer(t, message, executer_)
+
+
+def executer_claude(t, message, executer_=None):
     executer_ = executer_ or EXECUTER
     with tempfile.TemporaryDirectory(prefix="jobsearch-") as dossier:
         fichier = os.path.join(dossier, "consigne.txt")
@@ -250,7 +287,7 @@ def executer(t, message, executer_=None):
     usage = {k: (d.get("usage") or {}).get(k) for k in
              ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")}
     r = Resultat(texte=d.get("result") or "", brut=brut, usage=usage, cout_usd=d.get("total_cost_usd"),
-                 session=d.get("session_id"))
+                 session=d.get("session_id"), modele=modele_claude(t))
     return valider(t, r)
 
 
@@ -260,12 +297,28 @@ def valider(t, r):
         try:
             r.objet = t.schema.model_validate(r.brut)
         except Exception as e:
-            raise MoteurImpossible("%s : réponse hors format (%s)" % (t.nom, str(e)[:200])) from e
+            # Un moteur au schéma strict (Codex) rend null pour un champ facultatif : sans ces
+            # null, le champ prend sa valeur par défaut.
+            sans = _sans_nuls(r.brut)
+            try:
+                if sans == r.brut:
+                    raise
+                r.objet = t.schema.model_validate(sans)
+            except Exception:
+                raise MoteurImpossible("%s : réponse hors format (%s)" % (t.nom, str(e)[:200])) from e
     return r
 
 
+def _sans_nuls(v):
+    if isinstance(v, dict):
+        return {k: _sans_nuls(x) for k, x in v.items() if x is not None}
+    if isinstance(v, list):
+        return [_sans_nuls(x) for x in v]
+    return v
+
+
 class Moteur:
-    """Ce que les modules reçoivent pour appeler Claude ; les tests le remplacent par FauxMoteur."""
+    """Ce que les modules reçoivent pour appeler l'IA ; les tests le remplacent par FauxMoteur."""
 
     def executer(self, tache, message):
         return executer(tache, message)
@@ -301,18 +354,28 @@ class Protege:
         return valider(tache, r) if tache.schema is not None else r
 
 
-def ouvrir(verifier=connecte):
-    """Le moteur, après avoir vérifié que Claude Code est là et connecté : celui du
-    travailleur (machine virtuelle), derrière `Protege`, qui garde les coordonnées sur le Mac.
-    Le Mac ne lance jamais `claude` : hors de la VM et sans travailleur distant, c'est une erreur ;
-    dans la VM, le moteur est local."""
+def ouvrir(verifier=None):
+    """Le moteur choisi, après avoir vérifié qu'il est là et connecté : celui du travailleur
+    (machine virtuelle), derrière `Protege`, qui garde les coordonnées sur le Mac. Le Mac ne lance
+    jamais de moteur : hors de la VM et sans travailleur distant, c'est une erreur ; dans la VM,
+    le moteur est local."""
     from ..travailleur import client as travailleur
+    f = fournisseur()
     if travailleur.distant():
-        return Protege(travailleur.Distant.depuis_reglages().verifie())
-    executable()                     # LancementImpossible hors de la machine virtuelle
-    if not verifier():
-        raise MoteurImpossible("Claude Code n'est pas connecté : se connecter à son compte Claude", bloquant=True)
+        return Protege(travailleur.Distant.depuis_reglages().verifie(f.id))
+    f.executable()                   # LancementImpossible hors de la machine virtuelle
+    ok = verifier() if verifier is not None else (connecte() if f.id == "claude" else f.etat().get("connecte"))
+    if not ok:
+        raise MoteurImpossible("%s n'est pas connecté : te connecter à ton compte %s" % (
+            "Claude Code" if f.id == "claude" else f.nom, f.nom if f.id == "claude" else f.editeur), bloquant=True)
     return Protege(Moteur())
+
+
+from .fournisseurs import TOUS as _TOUS  # noqa: E402  (après ce que les moteurs reprennent d'ici)
+
+# Les fournisseurs d'IA proposés à la connexion (page IA, accueil, checklist), chacun avec
+# l'abonnement de la personne.
+FOURNISSEURS = [f.vue for f in _TOUS.values()]
 
 
 class FauxMoteur:

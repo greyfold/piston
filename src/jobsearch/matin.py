@@ -150,7 +150,7 @@ def alerter(reg, envoyer=None, attendre_min=90):
     debut = depuis(reg)
     b = bilan(reg, debut)
     titre, texte = message(reg, b, passage or {"statut": "absent", "resume": "aucun passage ce matin"})
-    envoyer("Recherche d'emploi · " + titre, texte, lien="/")
+    envoyer("Piston · " + titre, texte, lien="/")
     reg.poser_meta("alerte_matin_le", maintenant())
     reg.commit()
     return {"titre": titre, "texte": texte, "nouvelles": len(b["nouvelles"]),

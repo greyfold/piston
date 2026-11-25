@@ -1,5 +1,5 @@
 // swift-tools-version:5.10
-// L'application Mac « Recherche d'emploi » : une fenêtre sur le tableau de bord, une icône
+// L'application Mac « Piston » : une fenêtre sur le tableau de bord, une icône
 // dans la barre des menus, le pilotage de la machine virtuelle et la connexion à Claude.
 // Construite par scripts/construire-app.sh (paquet .app signé localement).
 import PackageDescription

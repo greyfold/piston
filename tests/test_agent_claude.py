@@ -36,8 +36,10 @@ def test_lancer_une_seule_session_jobroom(reg, sans_preparation):
     assert t1 == t2 and len(agent_claude.LANCEES) == 1
     tache, type_, consigne = agent_claude.LANCEES[0]
     assert tache == t1 and type_ == "jobroom"
-    assert "jobsearch-session jobroom-attente" in consigne and "jobsearch-session tache %d " % t1 in consigne
-    assert "mot de passe" in consigne and "mcp__chrome__" in consigne and "claude-in-chrome" not in consigne
+    # Les outils des deux serveurs MCP de l'application, mêmes noms pour tous les moteurs ; aucune commande.
+    assert "preuves_en_attente" in consigne and "etat_tache" in consigne and "Tâche %d " % t1 in consigne
+    assert "jobsearch-session" not in consigne and "`" not in consigne
+    assert "mot de passe" in consigne and "serveur « chrome »" in consigne and "claude-in-chrome" not in consigne
     assert agent_claude.derniere(reg, "jobroom")["session"] == "vm"
 
 
@@ -76,7 +78,7 @@ def test_formulaire_consigne_ne_pas_envoyer(reg, sans_preparation):
     e = annonce(reg, statut="retenue", entreprise="ACG")
     agent_claude.lancer(reg, "formulaire", e)
     consigne = agent_claude.LANCEES[0][2]
-    assert "SANS L'ENVOYER" in consigne and "N'envoie pas" in consigne and "jobsearch-session envoyee %s" % e in consigne
+    assert "SANS L'ENVOYER" in consigne and "N'envoie pas" in consigne and "envoyee avec l'annonce %s" % e in consigne
     assert "upload_file" in consigne
 
 
@@ -90,7 +92,7 @@ def test_connecte_lit_auth_status(monkeypatch):
 
 def test_tache_active_puis_perdue(reg, sans_preparation):
     t = agent_claude.lire(reg, agent_claude.lancer(reg, "jobroom"))
-    assert agent_claude.active(t) and agent_claude.vue(t)["libelle"] == "Claude travaille…"
+    assert agent_claude.active(t) and agent_claude.vue(t)["libelle"] == "L'IA travaille…"
     assert not agent_claude.active({**t, "etat": "arret"}) and not agent_claude.active(None)
     assert not agent_claude.active({**t, "debut": "2026-01-01 08:00"})          # session perdue : le bouton se libère
 
@@ -118,7 +120,7 @@ def test_consigne_un_seul_onglet(reg, sans_preparation):
     agent_claude.lancer(reg, "jobroom")
     c = agent_claude.LANCEES[0][2]
     assert "UN SEUL onglet" in c and "new_page" in c and "toujours dans ce même onglet" in c
-    assert "toutes les minutes" in c and "RECHARGE la page" in c and "en_cours`, et reprends" in c
+    assert "toutes les minutes" in c and "RECHARGE la page" in c and "etat_tache « en_cours », et reprends" in c
 
 
 def test_file_relancee_si_l_occupante_a_disparu(reg, sans_preparation):

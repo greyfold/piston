@@ -185,7 +185,8 @@ class Indeed:
         return min(180.0, conseil + 5.0) if conseil is not None else float(defaut)
 
     def _ouvrir_et_chercher(self, paquet, delai):
-        """Ouvre une session et lance le premier paquet de recherches.
+        """Ouvre une session et lance le premier paquet de recherches : (session, recherches abouties,
+        toutes les réponses du tour).
 
         Indeed limite l'usage du connecteur par compte, pour toutes les sessions
         Claude à la fois (« Rate limit exceeded for account … on toolset claude.
@@ -203,7 +204,7 @@ class Indeed:
                 raise
             recherches = [r for r in reponses if r["outil"].endswith("search_jobs") and not r["erreur"]]
             if recherches:
-                return s, recherches
+                return s, recherches, reponses         # toutes les réponses : leurs refus pour limite seront refaits
             etat = self._etat_connecteur(s)
             s.fermer()
             if etat == "needs-auth":
@@ -227,6 +228,36 @@ class Indeed:
         raise RouteCassee("indeed : aucune recherche n'a abouti en %d essais (connecteur Indeed : %s)"
                           % (essais, etat or "état inconnu"))
 
+    def _reprendre(self, s, reponses, outil, consigne, delai, debut):
+        """Les appels qu'Indeed a refusés pour limite de débit (« Rate limit exceeded … Try again in
+        N seconds ») sont refaits une fois, après l'attente demandée. Sans cela, un paquet à moitié
+        refusé perdait ses dernières recherches, et les détails refusés laissaient les annonces sans
+        texte (constaté le 24.11 : la limite tombe vers le seizième appel). `consigne(entrees)` écrit
+        le tour à refaire. Rend les réponses abouties de la reprise."""
+        cle = lambda e: tuple(sorted((k, str(v)) for k, v in (e or {}).items()))
+        abouties = {cle(r["entree"]) for r in reponses if r["outil"].endswith(outil) and not r["erreur"]}
+        refusees = []
+        for r in reponses:
+            if (r["outil"].endswith(outil) and r["erreur"] and "rate limit" in (r["texte"] or "").lower()
+                    and cle(r["entree"]) not in abouties and r["entree"] not in refusees):
+                refusees.append(r["entree"])
+        if not refusees:
+            return []
+        time.sleep(self._pause(s, self.r.get("pause_tours_s", 20)))
+        reste = delai - (time.monotonic() - debut)
+        if reste < 30:
+            return []
+        return [r for r in s.tour(consigne(refusees), reste) if r["outil"].endswith(outil) and not r["erreur"]]
+
+    @staticmethod
+    def _consigne_recherches(entrees):
+        return CONSIGNE_RECHERCHES.format(lignes="\n".join(
+            "- search: %s ; location: %s" % (e.get("search") or "", e.get("location") or "") for e in entrees))
+
+    @staticmethod
+    def _consigne_details(entrees):
+        return CONSIGNE_DETAILS.format(ids="\n".join("- " + str(e.get("job_id") or "") for e in entrees))
+
     def _rechercher(self, delai):
         """Toutes les recherches, par paquets espacés : cinquante appels d'affilée
         ont suffi à déclencher la limite d'Indeed (premier essai réel, 26.10)."""
@@ -237,23 +268,26 @@ class Indeed:
             raise ConfigurationRequise("Indeed n'a rien à chercher : aucun poste visé dans ton profil")
         taille = max(1, int(self.r.get("recherches_par_tour", 10)))
         paquets = ["\n".join(lignes[i:i + taille]) for i in range(0, len(lignes), taille)]
-        s, recherches = self._ouvrir_et_chercher(paquets[0], delai)
+        s, recherches, reponses = self._ouvrir_et_chercher(paquets[0], delai)
         try:
+            recherches += self._reprendre(s, reponses, "search_jobs", self._consigne_recherches, delai, debut)
             for paquet in paquets[1:]:
                 time.sleep(float(self.r.get("pause_tours_s", 20)))
                 reste = delai - (time.monotonic() - debut)
                 if reste < 60:
                     break
-                lot = [r for r in s.tour(CONSIGNE_RECHERCHES.format(lignes=paquet), reste)
-                       if r["outil"].endswith("search_jobs") and not r["erreur"]]
-                if not lot:
-                    # Limite atteinte en cours de route : on attend ce qu'Indeed demande, une fois.
+                reponses = s.tour(CONSIGNE_RECHERCHES.format(lignes=paquet), reste)
+                lot = [r for r in reponses if r["outil"].endswith("search_jobs") and not r["erreur"]]
+                if not lot and not any(r["outil"].endswith("search_jobs") for r in reponses):
+                    # Rien d'appelé (limite au niveau de la connexion) : on attend ce qu'Indeed demande, une fois.
                     time.sleep(self._pause(s, 60))
                     reste = delai - (time.monotonic() - debut)
                     if reste < 60:
                         break
-                    lot = [r for r in s.tour(CONSIGNE_RECHERCHES.format(lignes=paquet), reste)
-                           if r["outil"].endswith("search_jobs") and not r["erreur"]]
+                    reponses = s.tour(CONSIGNE_RECHERCHES.format(lignes=paquet), reste)
+                    lot = [r for r in reponses if r["outil"].endswith("search_jobs") and not r["erreur"]]
+                # Limite atteinte en cours de paquet : les recherches refusées, refaites après l'attente.
+                lot += self._reprendre(s, reponses, "search_jobs", self._consigne_recherches, delai, debut)
                 recherches += lot
         except RouteCassee:
             pass                                  # on garde ce qui a déjà été trouvé
@@ -293,7 +327,9 @@ class Indeed:
                     if i:
                         time.sleep(float(self.r.get("pause_tours_s", 20)))
                     lot = choisies[i:i + paquet]
-                    for r in s.tour(CONSIGNE_DETAILS.format(ids="\n".join("- " + x for x in lot)), reste):
+                    reponses = s.tour(CONSIGNE_DETAILS.format(ids="\n".join("- " + x for x in lot)), reste)
+                    reponses += self._reprendre(s, reponses, "get_job_details", self._consigne_details, delai, debut)
+                    for r in reponses:
                         if not r["outil"].endswith("get_job_details") or r["erreur"]:
                             continue
                         ident, texte = lire_detail(r["texte"])

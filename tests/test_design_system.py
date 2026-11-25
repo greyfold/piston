@@ -133,7 +133,7 @@ def test_un_seul_fichier_css_et_pas_de_ressource_externe():
             url = re.search(r"""(?:href|src)\s*=\s*["'](https?:)?//([^/"']+)""", balise)
             if url and url.group(2) not in ("fonts.googleapis.com", "fonts.gstatic.com"):
                 externes.append(f"{f.name} : {balise}")
-    assert not externes, f"Ni bibliothèque ni CDN : seule la police Figtree vient de l'extérieur. {externes}"
+    assert not externes, f"Ni bibliothèque ni CDN : seules les polices (Quicksand, Nunito Sans) viennent de l'extérieur. {externes}"
 
 
 def test_icones_par_la_macro():
@@ -164,8 +164,8 @@ ECHELLE = {".72", ".75", ".78", ".8", ".82", ".85", ".88", ".9", ".92", ".95", "
 
 def test_tailles_de_texte_sur_l_echelle():
     hors = [t for t in re.findall(r"font-size:\s*([0-9.]+)rem", CSS) if t not in ECHELLE]
-    # Dette : .7 (×3), .76 (×2), .84 (×3), .86, .98, 1.1, 1.35 (avant ces règles).
-    _comparer(Counter({"style.css": len(hors)}) - Counter(), {"style.css": 12},
+    # Dette : .7 (×3), .84 (×3), .86, .98, 1.1, 1.35 (avant ces règles).
+    _comparer(Counter({"style.css": len(hors)}) - Counter(), {"style.css": 10},
               "taille de texte hors de l'échelle (%s)" % ", ".join(sorted(set(hors))),
               "Prendre la valeur voisine de l'échelle.")
 

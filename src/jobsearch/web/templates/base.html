@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>{% block titre %}{% if reglage %}{{ reglage.nom }} · Réglages · {% endif %}Recherche d'emploi{% endblock %}</title>
+<title>{% block titre %}{% if reglage %}{{ reglage.nom }} · Réglages · {% endif %}Piston{% endblock %}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
-{% from "_macros.html" import icone, flash_message %}
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;700&family=Nunito+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+{% from "_macros.html" import icone, flash_message, marque %}
 <link rel="stylesheet" href="/static/style.css?v={{ version_css() }}">
 <script src="/static/champs.js?v={{ version_css() }}" defer></script>
 <script src="/static/compositeur.js?v={{ version_css() }}" defer></script>
@@ -18,7 +18,7 @@
    n'a que la marque, centrée. #}
 {% block barre %}
 {% if accueil %}
-<header class="barre-accueil"><span class="marque">Recherche <span>d'emploi</span></span></header>
+<header class="barre-accueil">{{ marque() }}</header>
 {% else %}
 {% include "_menu_lateral.html" %}
 {% include "_notifications.html" %}
@@ -26,7 +26,7 @@
 {% endblock %}
 <main>
 {% if profil_manquants and not accueil and not concentre and not premiers_pas_affiches and not nav.startswith(('/profil', '/connexion')) %}<div class="bandeau attention"><span class="point"></span><span>Profil incomplet ({{ profil_manquants | map('last') | join(', ') }}) : <a href="/profil">le compléter</a>.</span></div>{% endif %}
-{% if a_configurer and not accueil and nav in ('/', '/sante') %}{% for c in a_configurer %}<div class="bandeau attention"><span class="point"></span><span>{{ c.nom }} n'est pas branché : {{ c.message }}. Les autres sources tournent normalement, et {{ c.nom }} reprendra de lui-même une fois le réglage fait. <a href="/connecteurs#{{ c.id }}">Que faire</a></span></div>{% endfor %}{% endif %}
+{% if a_configurer and not accueil and nav in ('/', '/sante') %}{% for c in a_configurer %}<div class="bandeau attention"><span class="point"></span><span>{{ c.nom }} n'est pas branché : {{ c.message }}. Les autres sources tournent normalement, et {{ c.nom }} reprendra de lui-même une fois le réglage fait. <a href="{{ c.lien }}">Que faire</a></span></div>{% endfor %}{% endif %}
 {# Réglages : la page ouverte sur une seule colonne, de la largeur d'un formulaire, avec un retour vers la
    page Réglages (sauf sur celle-ci), ou vers `retour_cadre` pour une sous-page (le détail d'une source). #}
 {% set cadre_reglages = dans_reglages and not accueil %}

@@ -138,6 +138,11 @@ class Passage:
             self._sources = construire(Client(pause=float(self.p.get("pause_requetes_s", 0.8))), self.reg)
             from .travailleur import client as travailleur
             if travailleur.distant():
+                from . import vm
+                try:
+                    vm.assurer_a_jour()          # la VM reste allumée : son code peut dater d'avant la mise à jour
+                except Exception as e:
+                    self.echecs.append(("machine virtuelle", "mise à jour du code impossible : %s" % str(e)[:200]))
                 d = travailleur.Distant.depuis_reglages()
                 for nom in travailleur.confiees():
                     if nom in self._sources:
@@ -434,7 +439,8 @@ class Passage:
             lignes.append("⚠ " + " ; ".join("%s : %s" % e for e in self.echecs)[:300])
         for nom, message, _ in self.a_configurer:
             lignes.append("À configurer : %s, %s. La source reprendra d'elle-même une fois le "
-                          "réglage fait (page Connecteurs)." % (_libelle(nom), message))
+                          "réglage fait (page %s)." % (_libelle(nom), message,
+                                                       "Sources" if _lien_reglage(nom).startswith("/sources") else "Connecteurs"))
         lignes.append("%d nouvelles annonces, %d écartées au pré-tri (dont %d limites), %d à trancher."
                       % (ing.get("nouvelles", 0), pt.get("ecartees", 0), pt.get("limites", 0),
                          pt.get("a_trier", 0)))
@@ -464,15 +470,21 @@ class Passage:
         self.reg.commit()
         (self.dossier / "resume.txt").write_text(texte, encoding="utf-8")
         if self.notifier_fin:
-            notifier("Recherche d'emploi · passage %s" % ("complet" if statut == "complet" else "partiel"),
+            notifier("Piston · passage %s" % ("complet" if statut == "complet" else "partiel"),
                      texte, urgent=bool(self.echecs), lien="/sante#notifications",
                      telephone=False)    # le téléphone reçoit l'alerte du matin, pas ce bilan technique
         for nom, message, nouveau in self.a_configurer:
             if nouveau and self.notifier_fin:        # une seule fois, pas à chaque passage
-                notifier("Recherche d'emploi · %s à brancher" % _libelle(nom),
+                notifier("Piston · %s à brancher" % _libelle(nom),
                          "%s n'a pas pu être lu : %s. Le reste du passage s'est fait normalement."
-                         % (_libelle(nom), message), lien="/connecteurs")
+                         % (_libelle(nom), message), lien=_lien_reglage(nom))
         return {"id": self.id, "statut": statut, "resume": texte, "dossier": str(self.dossier)}
+
+
+def _lien_reglage(nom):
+    """Là où se fait le réglage qui manque : la page de la source pour Indeed, sinon Connecteurs."""
+    from . import connecteurs
+    return connecteurs.lien(nom) if nom in connecteurs.CATALOGUE else "/connecteurs"
 
 
 def sauvegarder(reg, garder=None):
@@ -506,7 +518,7 @@ def surveiller(reg, maintenant_dt=None):
     texte = ("Aucun passage terminé depuis %d h. Le Mac était-il éteint, en veille, ou l'application "
              "fermée ? Voir la page Santé du tableau de bord." % age) if age else \
         "Aucun passage n'a encore eu lieu. Lance un passage depuis l'application (barre des menus)."
-    notifier("Recherche d'emploi · passage manquant", texte, urgent=True)
+    notifier("Piston · passage manquant", texte, urgent=True)
     reg.poser_meta("derniere_alerte_surveillance", now.isoformat(sep=" ", timespec="minutes"))
     reg.commit()
     return {"alerte": True, "envoyee": True, "age_heures": age and round(age, 1)}
@@ -523,7 +535,7 @@ def rappel_rythme(reg, maintenant_dt=None):
         return {"alerte": False, "semaine": s["n"]}
     if reg.meta("derniere_alerte_rythme") == s["debut"].isoformat():
         return {"alerte": True, "envoyee": False, "semaine": s["n"]}
-    notifier("Recherche d'emploi · objectif de la semaine",
+    notifier("Piston · objectif de la semaine",
              "%d postulation%s cette semaine, l'objectif est %d : il en manque %d."
              % (s["n"], "s" if s["n"] > 1 else "", s["min"], s["manque"]), urgent=True)
     reg.poser_meta("derniere_alerte_rythme", s["debut"].isoformat())

@@ -1,10 +1,14 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone, confirmation, entete_reglage %}
-{% block titre %}{{ s.nom }} · Sources · Réglages · Recherche d'emploi{% endblock %}
+{% from "_macros.html" import icone, confirmation, entete_reglage, bouton_ajout, modale_ajout %}
+{% block titre %}{{ s.nom }} · Sources · Réglages · Piston{% endblock %}
 {% block contenu %}
 {# Une source : ses réglages en lignes de réglage, ce qu'elle a donné en chiffres clés, l'examen par l'IA. #}
 {% call entete_reglage({"nom": s.nom}) %}{% if s.nature %}{{ s.nature }}{% endif %}{% if s.url %}{{ " · " if s.nature }}<a href="{{ s.url }}" target="_blank" rel="noopener noreferrer">ouvrir le site</a>{% endif %}{% if s.manuelle and s.ajoutee_le %}{{ " · " if s.nature or s.url }}ajoutée le {{ s.ajoutee_le[:10] | date_fr(True) }}{% endif %}{% endcall %}
 {% if s.remarques %}<p>{{ s.remarques }}</p>{% endif %}
+{% if connecteur %}
+{% if not moteur.connecte %}<div class="bandeau attention"><span class="point"></span><span>{{ s.nom }} passe par ton compte Claude : il ne sert que si Claude est ton IA et qu'il est connecté. <a href="/ia">Voir ton IA</a>.</span></div>
+{% elif s.actif and s.etat and s.etat.etat == "à configurer" %}<div class="bandeau attention"><span class="point"></span><span><b>Pas encore branché</b> (le {{ (s.etat.dernier_test_le or '')[:10] | date_suisse }}) : {{ s.etat.remarques }}. {{ connecteur.activer }}, puis « Tester ». Les passages continuent sans {{ s.nom }} et le reprendront d'eux-mêmes.</span></div>{% endif %}
+{% endif %}
 
 <section class="groupe-reglages" aria-labelledby="source-reglages">
   <h2 class="section-base" id="source-reglages">Réglages</h2>
@@ -19,17 +23,105 @@
       </form>
     </li>
     {% endif %}
+    {% if apify %}
     <li class="reglage-ligne">
-      <span class="texte"><span class="titre">Accès <span class="puce {{ s.statut[0] }}">{{ s.statut[1] }}</span></span>
-        <span class="description">{{ s.acces }}</span></span>
+      <span class="texte"><span class="titre" id="source-actif">Interroger à chaque passage</span>
+        <span class="description">{% if apify.cle.presente %}Une recherche Apify par poste visé de ton profil, facturée sur ton compte Apify.{% else %}Ajoute d'abord ton jeton Apify, juste en dessous.{% endif %}</span></span>
+      {% if apify.cle.presente or s.actif %}
+      <form method="post" action="/sources/linkedin/{{ 'desactiver' if s.actif else 'activer' }}">
+        <button class="interrupteur{{ ' actif' if s.actif }}" role="switch" aria-checked="{{ 'true' if s.actif else 'false' }}" aria-labelledby="source-actif">
+          <span class="curseur" aria-hidden="true"></span></button>
+      </form>
+      {% endif %}
     </li>
+    <li class="reglage-ligne" id="jeton">
+      <span class="texte"><span class="titre">Jeton Apify
+          {% if apify.cle.presente %}<span class="puce B">enregistré · …{{ apify.cle.fin }}</span>{% else %}<span class="puce nouvelle">à ajouter</span>{% endif %}</span>
+        <span class="description">{% if apify.depuis_le_mac %}Rangé dans le trousseau de ton Mac : seuls ses quatre derniers caractères s'affichent.{% else %}À saisir depuis ton Mac : le réseau local n'est pas chiffré.{% endif %}</span></span>
+      {% if apify.depuis_le_mac %}
+      {{ bouton_ajout("modale-jeton-apify", "Remplacer" if apify.cle.presente else "Ajouter le jeton", classe="petit") }}
+      {% if apify.cle.presente %}<button type="button" class="lien-danger petit" form="retirer-cle-apify" data-confirmer-modale="confirmer-retirer-cle-apify">Retirer</button>{% endif %}
+      {% endif %}
+    </li>
+    {% endif %}
+    {% if connecteur %}
+    <li class="reglage-ligne">
+      <span class="texte"><span class="titre" id="source-actif">Interroger à chaque passage</span>
+        <span class="description">Par le connecteur {{ s.nom }} de ton compte Claude. {{ connecteur.activer }}</span></span>
+      <form method="post" action="/sources/{{ s.id | urlencode }}/{{ 'desactiver' if s.actif else 'activer' }}">
+        <button class="interrupteur{{ ' actif' if s.actif }}" role="switch" aria-checked="{{ 'true' if s.actif else 'false' }}" aria-labelledby="source-actif">
+          <span class="curseur" aria-hidden="true"></span></button>
+      </form>
+    </li>
+    {% endif %}
     <li class="reglage-ligne">
       <span class="texte"><span class="titre">État de la route
           {% if s.etat %}<span class="puce {{ 'B' if s.etat.dernier_test_ok else 'retard' }}">{{ s.etat.etat }}</span>{% endif %}</span>
         <span class="description">{% if s.etat %}Testée le {{ s.etat.dernier_test_le[:10] | date_fr(True) }}{% if s.etat.derniere_reussite_le %} · dernière réussite le {{ s.etat.derniere_reussite_le[:10] | date_fr(True) }}{% endif %}{% if s.etat.remarques and not s.etat.dernier_test_ok %}. {{ s.etat.remarques }}{% endif %}{% else %}Pas encore interrogée par un passage.{% endif %}</span></span>
+      {% if connecteur and s.actif %}<form method="post" action="/sources/{{ s.id | urlencode }}/tester"><button class="petit">Tester</button></form>{% endif %}
     </li>
   </ul>
 </section>
+
+{% if apify %}
+{% if apify.depuis_le_mac %}
+{% call modale_ajout("modale-jeton-apify", "Ton jeton Apify", "/cles/apify/enregistrer", libelle="Essayer et enregistrer",
+     texte="Apify lit les offres LinkedIn publiques pour l'application, sans ton compte LinkedIn. Son offre gratuite suffit pour commencer.") %}
+  <ol class="petit">
+    <li>Crée un compte sur <a href="https://apify.com" target="_blank" rel="noopener noreferrer">apify.com</a>.</li>
+    <li>Dans la console Apify, ouvre Settings › API &amp; Integrations et copie ton jeton personnel.</li>
+    <li>Colle-le ici : l'application l'essaie auprès d'Apify avant de le ranger dans le trousseau de ton Mac.</li>
+  </ol>
+  <div class="grille-champs">
+    <div class="champ large">
+      <label for="cle-apify">Jeton <span class="requis" title="obligatoire">*</span></label>
+      <input type="password" id="cle-apify" name="cle" placeholder="{{ apify.cle.prefixe }}…" autocomplete="off" spellcheck="false" required autofocus aria-describedby="cle-apify-aide">
+      <div class="aide" id="cle-apify-aide">Il commence par « {{ apify.cle.prefixe }} ».</div>
+    </div>
+  </div>
+{% endcall %}
+{% if apify.cle.presente %}
+<form method="post" action="/cles/apify/retirer" id="retirer-cle-apify"></form>
+{{ confirmation("confirmer-retirer-cle-apify", "Retirer le jeton Apify ?", "Il sera effacé du trousseau de ton Mac, et LinkedIn ne sera plus interrogé.",
+     "Retirer le jeton", "retirer-cle-apify", "confirme", "1") }}
+{% endif %}
+{% endif %}
+
+{% if apify.cle.presente %}{% set c, k = apify.compte, apify.conseil %}
+<section class="groupe-reglages" aria-labelledby="compte-apify">
+  <h2 class="section-base" id="compte-apify">Ton compte Apify{% if c and c.offre %} · {{ c.offre }}{% endif %}</h2>
+  {% if apify.erreur %}
+  <div class="bandeau alerte"><span class="point"></span><span>Apify ne répond pas ({{ apify.erreur }}). Vérifie ton jeton, ou recharge la page plus tard.</span></div>
+  {% elif c %}
+  <div class="chiffres">
+    <div class="chiffre"><b>{{ "%.2f" | format(c.utilise) }} $</b><span>dépensés ce mois{% if k.budget is not none %}, sur {{ "%.2f" | format(k.budget) }} ${% endif %}</span></div>
+    {% if k.reste is not none %}<div class="chiffre"><b>{{ "%.2f" | format(k.reste) }} $</b><span>restants{% if c.fin_cycle %} jusqu'au {{ c.fin_cycle | date_fr(True) }}{% endif %}</span></div>{% endif %}
+    <div class="chiffre"><b>{{ "%.2f" | format(c.cout_moyen) ~ " $" if c.cout_moyen is not none else "–" }}</b><span>par recherche{% if c.runs %}, moyenne de tes {{ c.runs }} dernières{% else %} : pas encore mesuré{% endif %}</span></div>
+    {% if k.prevu is not none %}<div class="chiffre"><b>{{ "%.2f" | format(k.prevu) }} $</b><span>prévus d'ici là : {{ k.requetes }} recherche{{ 's' if k.requetes != 1 }} par jour, {{ k.jours }} jour{{ 's' if k.jours != 1 }}</span></div>{% endif %}
+  </div>
+  {% if not k.requetes %}
+  <div class="bandeau info"><span class="point"></span><span>Aucun poste visé dans ton profil : LinkedIn n'a rien à chercher. <a href="/profil">Ajouter des postes</a>.</span></div>
+  {% elif k.suffisant == false %}
+  <div class="bandeau attention"><span class="point"></span><span>Ton crédit ne couvrira pas un passage par jour jusqu'à la fin du cycle. Le plafond proposé limite chaque recherche, quitte à rapporter moins d'annonces ; tu peux aussi viser moins de postes, ou prendre une offre Apify plus grande.</span></div>
+  {% endif %}
+  <ul class="reglages-liste">
+    <li class="reglage-ligne">
+      <span class="texte"><span class="titre">Plafond par recherche : {{ "%.2f" | format(apify.plafond) }} $</span>
+        <span class="description">{% if not k.a_changer %}Il tient dans ce que ton compte permet.
+          {% elif k.serre %}D'après ton compte : {{ "%.2f" | format(k.plafond) }} $, pour tenir dans ta part du crédit restant ({{ "%.2f" | format(k.part) }} $ par recherche). Une recherche s'arrêtera plus tôt et rapportera moins d'annonces.
+          {% elif c.cout_moyen is not none %}D'après ton compte : {{ "%.2f" | format(k.plafond) }} $, une recherche habituelle et une marge.
+          {% else %}D'après ton compte : {{ "%.2f" | format(k.plafond) }} $, en attendant de connaître le coût de tes recherches.{% endif %}
+          Apify arrête une recherche qui atteint son plafond.</span></span>
+      {% if k.a_changer %}
+      <form method="post" action="/sources/linkedin/plafond"><input type="hidden" name="plafond" value="{{ '%.2f' | format(k.plafond) }}">
+        <button class="petit">Appliquer {{ "%.2f" | format(k.plafond) }} $</button></form>
+      {% endif %}
+    </li>
+  </ul>
+  {% endif %}
+</section>
+{% endif %}
+{% endif %}
 
 <section class="groupe-reglages" aria-labelledby="source-chiffres">
   <h2 class="section-base" id="source-chiffres">Ce qu'elle a donné</h2>
@@ -72,7 +164,7 @@
   </div>
   {% else %}
   {% if ex and ex.erreur %}<p><span class="echec-tache" role="alert">Examen impossible : {{ ex.erreur[:160] }}</span></p>{% endif %}
-  <p class="petit muet">L'IA lit ses conditions générales et cherche une API publique ou un serveur MCP. Une tâche sur ton abonnement Claude.</p>
+  <p class="petit muet">L'IA lit ses conditions générales et cherche une API publique ou un serveur MCP. Une tâche sur ton abonnement {{ ia_active().nom }}.</p>
   {% endif %}
   {% if not en_cours %}
   <form method="post" action="/sources/examiner" class="boutons"><input type="hidden" name="id" value="{{ s.id }}">

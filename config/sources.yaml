@@ -21,14 +21,10 @@ jobs-ch:
 indeed:
   nom: "Indeed"
   nature: "Site d'annonces international"
-  acces: "à brancher"
-  remarques: "Lu par le connecteur Indeed du compte Claude (le site refuse les scripts) : « automatique » dès que le connecteur est actif (page Connecteurs)."
+  acces: "automatique"
+  remarques: "Lu par le connecteur Indeed de ton compte Claude : le site refuse les scripts."
 linkedin:
   nom: "LinkedIn"
   nature: "Réseau social, offres d'emploi"
-  acces: "à brancher"
-  remarques: "Offres publiques par Apify (sources/linkedin.py), « automatique » dès que linkedin.actif ; aucun compte LinkedIn personnel n'est utilisé."
-mails:
-  nom: "Courrier"
-  nature: "Alertes d'emploi et mails de recruteurs"
-  acces: "en session"
+  acces: "automatique"
+  remarques: "Offres publiques lues par Apify, sans ton compte LinkedIn."

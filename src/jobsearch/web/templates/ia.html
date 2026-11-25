@@ -1,31 +1,34 @@
 {% extends "base.html" %}
 {% from "_macros.html" import entete_reglage, confirmation %}
 {% block contenu %}
-{% call entete_reglage(reglage) %}L'IA de ton abonnement : elle note les annonces et écrit tes dossiers de candidature. Aucune clé API, rien n'est facturé en plus. Ce que l'application peut lire pour toi (courrier, Indeed, Chrome) est sur la page <a href="/connecteurs">Connecteurs</a>.{% endcall %}
+{% call entete_reglage(reglage) %}L'IA de ton abonnement : elle note les annonces et écrit tes dossiers de candidature. Aucune clé API, rien n'est facturé en plus. Ce que l'application peut lire pour toi (courrier, Chrome) est sur la page <a href="/connecteurs">Connecteurs</a>, Indeed sur la page <a href="/sources/indeed">Sources</a>.{% endcall %}
 
 <div class="cartes deux">
 {% for f in fournisseurs %}
   <section class="carte action-droite" id="{{ f.id }}">
     <div class="texte-carte">
-    <div class="tete"><b>{{ f.nom }}</b>
+    <div class="tete"><span class="titre">{{ f.nom }}
       {% if f.etat.connecte %}<span class="puce B">connecté{% if f.etat.abonnement %} · {{ f.etat.abonnement }}{% endif %}</span>
-      {% else %}<span class="puce retard">{{ "non connecté" if f.etat.installe else "non installé" }}</span>{% endif %}</div>
-    <div class="meta">{{ f.detail }}. Évaluation des annonces, dossiers de candidature, Indeed et formulaires.{% if distant %} Tourne dans la machine virtuelle.{% endif %}</div>
+      {% else %}<span class="puce retard">{{ "non connecté" if f.etat.installe else "non installé" }}</span>{% endif %}</span></div>
+    <div class="meta">{{ f.detail }}. Évaluation des annonces, dossiers de candidature et formulaires{% if f.id == "claude" %}, Indeed et Gmail{% else %} ; Indeed et Gmail restent réservés à Claude{% endif %}.{% if distant %} Tourne dans la machine virtuelle.{% endif %}</div>
     <div class="petit muet ligne-carte">{{ f.etat.message }}</div>
     {% if not f.etat.connecte and actif %}
-    <div class="petit muet ligne-carte">Un seul fournisseur à la fois : déconnecte d'abord {{ actif.nom }}.</div>
+    <div class="petit muet ligne-carte" id="un-seul-{{ f.id }}">Un seul fournisseur à la fois : déconnecte d'abord {{ actif.nom }}.</div>
     {% endif %}
     </div>
     {% if f.etat.connecte %}
     <div class="boutons">
-      <button type="button" class="lien-danger" form="deconnecter-{{ f.id }}" data-confirmer-modale="confirmer-deconnecter-{{ f.id }}">Se déconnecter</button></div>
+      <button type="button" form="deconnecter-{{ f.id }}" data-confirmer-modale="confirmer-deconnecter-{{ f.id }}" aria-label="Se déconnecter de {{ f.nom }}">Se déconnecter</button></div>
     <form method="post" action="/ia/{{ f.id }}/deconnecter" id="deconnecter-{{ f.id }}"></form>
     {{ confirmation("confirmer-deconnecter-" ~ f.id, "Se déconnecter de " ~ f.nom ~ " ?",
          "L'application ne notera plus les annonces et n'écrira plus tes dossiers tant qu'aucune IA n'est connectée. Ton abonnement n'est pas résilié.",
          "Se déconnecter", "deconnecter-" ~ f.id, "confirme", "1") }}
-    {% elif not actif %}
+    {% elif actif %}
     <div class="boutons">
-      <button type="button" class="go" data-connexion-ia="{{ f.id }}" data-nom="{{ f.nom }}">Se connecter avec {{ f.nom }}</button></div>
+      <button type="button" disabled aria-label="Se connecter avec {{ f.nom }}" aria-describedby="un-seul-{{ f.id }}">Se connecter</button></div>
+    {% else %}
+    <div class="boutons">
+      <button type="button" data-connexion-ia="{{ f.id }}" data-nom="{{ f.nom }}" aria-label="Se connecter avec {{ f.nom }}">Se connecter</button></div>
     {% endif %}
   </section>
 {% endfor %}

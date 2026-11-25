@@ -23,6 +23,8 @@ def lima(monkeypatch, tmp_path):
             etat["instance"] = {"name": "jobsearch", "status": "Stopped"}
         if cmd[1] == "start":
             etat["instance"]["status"] = "Running"
+        if cmd[1] == "shell" and "poweroff" in cmd or cmd[1:3] == ["stop", "--force"]:
+            etat["instance"]["status"] = "Stopped"
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
     monkeypatch.setattr(vm, "EXECUTER", executer)
     monkeypatch.setattr(vm, "limactl", lambda: "/opt/homebrew/bin/limactl")
@@ -103,3 +105,107 @@ def test_deconnexion_dans_la_vm(lima):
     etat["instance"] = {"name": "jobsearch", "status": "Running"}
     assert "déconnecté" in vm.deconnexion()
     assert any(c[0] == "shell" and "claude auth logout" in c[-1] for c in commandes)
+
+
+def test_vm_allumee_a_jour_rien_a_refaire(lima, monkeypatch):
+    """VM déjà allumée et travailleur sur le code du Mac : ni copie ni relance."""
+    etat, commandes = lima
+    etat["instance"] = {"name": "jobsearch", "status": "Running"}
+    monkeypatch.setattr(vm, "ports_a_jour", lambda i: True)
+    monkeypatch.setattr(vm, "travailleur_etat", lambda: {"version": "1", "code": vm.empreinte_code()})
+    assert vm.demarrer(attente_s=1)["code"] == vm.empreinte_code()
+    assert not [c for c in commandes if c[0] in ("copy", "shell", "start")]
+
+
+def test_vm_allumee_sur_un_vieux_code_reinstallee(lima, monkeypatch):
+    """VM restée allumée pendant une mise à jour : son travailleur tourne sur l'ancien code
+    (Indeed y plantait, « list index out of range ») ; demarrer le réinstalle et le relance."""
+    etat, commandes = lima
+    etat["instance"] = {"name": "jobsearch", "status": "Running"}
+    monkeypatch.setattr(vm, "ports_a_jour", lambda i: True)
+    reponses = iter([{"version": "1", "code": "ancien"}, {"version": "1", "code": vm.empreinte_code()}])
+    monkeypatch.setattr(vm, "travailleur_etat", lambda: next(reponses))
+    vm.demarrer(attente_s=1)
+    verbes = [c[0] for c in commandes]
+    assert "copy" in verbes and "start" not in verbes
+    assert "jobsearch\" travailleur" in " ".join(c[-1] for c in commandes if c[0] == "shell")
+
+
+def test_empreinte_du_code_suit_la_copie(tmp_path):
+    """Le travailleur calcule l'empreinte sur sa copie : elle doit égaler celle du Mac."""
+    vm.copie_du_code(tmp_path)
+    assert vm.empreinte_code(tmp_path) == vm.empreinte_code()
+    (tmp_path / "src" / "jobsearch" / "vm.py").write_text("# autre\n")
+    assert vm.empreinte_code(tmp_path) != vm.empreinte_code()
+
+
+def test_vm_eteinte_au_code_deja_installe_pas_reinstallee(lima, monkeypatch):
+    """L'application éteint la VM en partant : au lancement suivant, la VM redémarre sans recopier
+    le code s'il n'a pas changé (l'écran d'attente reste court)."""
+    etat, commandes = lima
+    etat["instance"] = {"name": "jobsearch", "status": "Stopped"}
+    monkeypatch.setattr(vm, "ports_a_jour", lambda i: True)
+    monkeypatch.setattr(vm, "code_installe", lambda: vm.empreinte_code())
+    monkeypatch.setattr(vm, "travailleur_etat", lambda: {"version": "1", "code": vm.empreinte_code()})
+    etapes = []
+    vm.demarrer(attente_s=1, annoncer=etapes.append)
+    verbes = [c[0] for c in commandes]
+    assert "start" in verbes and "copy" not in verbes
+    assert "uv pip install" not in " ".join(c[-1] for c in commandes if c[0] == "shell")
+    assert etapes[0] == "Démarrage de la machine virtuelle" and etapes[-1] == "Lancement du travailleur"
+
+
+def test_installation_marquee_a_la_fin(lima):
+    etat, commandes = lima
+    etat["instance"] = {"name": "jobsearch", "status": "Running"}
+    vm.installer_code()
+    scripts = [c[-1] for c in commandes if c[0] == "shell"]
+    i = next(i for i, s in enumerate(scripts) if "uv pip install" in s)
+    assert any(vm.MARQUE_CODE in s and vm.empreinte_code() in s for s in scripts[i + 1:])
+
+
+def test_arreter_a_la_fermeture(lima, monkeypatch):
+    """Le système de la VM s'éteint lui-même (`limactl stop` seul ne l'arrête pas) ; puis plus aucun agent."""
+    etat, commandes = lima
+    etat["instance"] = {"name": "jobsearch", "status": "Stopped"}
+    assert "déjà arrêtée" in vm.arreter() and not [c for c in commandes if c[0] in ("stop", "shell")]
+    etat["instance"]["status"] = "Running"
+    tues = []
+    monkeypatch.setattr(vm, "_tuer_agents", lambda: tues.append(1))
+    assert vm.arreter() == "Machine virtuelle arrêtée." and tues
+    assert any(c[0] == "shell" and "poweroff" in c for c in commandes) and not [c for c in commandes if c[0] == "stop"]
+
+
+def test_arret_force_si_la_vm_ne_s_eteint_pas(lima, monkeypatch):
+    etat, commandes = lima
+    etat["instance"] = {"name": "jobsearch", "status": "Running"}
+    sourde = lambda cmd, **kw: (commandes.append(cmd[1:]),
+                                 cmd[1:3] == ["stop", "--force"] and etat["instance"].update(status="Stopped"),
+                                 subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(etat["instance"]) if cmd[1] == "list" else "",
+                                                             stderr=""))[-1]
+    monkeypatch.setattr(vm, "EXECUTER", sourde)
+    monkeypatch.setattr(vm.time, "sleep", lambda s: None)
+    vm._arreter_vm(attente_s=0)
+    assert ["stop", "--force", "jobsearch"] in commandes
+
+
+def test_agents_orphelins_termines(monkeypatch, tmp_path):
+    """Des agents Lima restés derrière (le 25.11 : quatre pour une VM) sont terminés, SIGKILL s'il le faut."""
+    monkeypatch.setattr(vm, "DATA", tmp_path)
+    prise = str(tmp_path / "lima" / vm.nom() / "ha.sock")
+    vivants = {101, 102}
+    ps = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stderr="", stdout="".join(
+        " %d /app/limactl hostagent --socket %s emploi\n" % (p, prise) for p in sorted(vivants))
+        + " 200 /opt/homebrew/bin/limactl hostagent --socket /ailleurs/ha.sock autre\n")
+    monkeypatch.setattr(vm, "EXECUTER", ps)
+    assert vm._agents() == [101, 102]
+    signaux = []
+
+    def tuer(pid, sig):
+        signaux.append((pid, sig))
+        if sig == 9:
+            vivants.discard(pid)
+    monkeypatch.setattr(vm.os, "kill", tuer)
+    monkeypatch.setattr(vm.time, "sleep", lambda s: None)
+    vm._tuer_agents()
+    assert not vivants and (101, 15) in signaux and (101, 9) in signaux and all(p != 200 for p, _ in signaux)

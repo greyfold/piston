@@ -279,3 +279,28 @@ def test_parametres_du_mac_repris_par_le_travailleur():
     copie = vm.selon(mac.parametres())
     assert copie.recherches() == [("Product Owner", "Lausanne"), ("Product Owner", "Sion")]
     assert copie.cantons == {"VD", "VS"} and copie.r["modele"] == "haiku" and vm.requetes == []
+
+
+def test_appels_refuses_pour_limite_refaits_apres_l_attente(monkeypatch):
+    """Comme le 24.11 : la limite d'Indeed tombe au milieu d'un paquet. Les recherches et les détails
+    refusés sont refaits une fois, après l'attente demandée, au lieu d'être perdus."""
+    attentes = []
+    monkeypatch.setattr(indeed.time, "sleep", attentes.append)
+    s = FausseSession()
+    s.attente_conseillee = lambda: 30
+    vraie, refuses = s.tour, set()
+    limite = "Rate limit exceeded for account 1 on toolset claude. Try again in 30 seconds."
+
+    def tour(message, delai):
+        out = vraie(message, delai)
+        genre = "recherches" if "search_jobs" in message else "details"
+        if genre not in refuses:                             # le premier tour de chaque genre : dernier appel refusé
+            refuses.add(genre)
+            out[-1] = dict(out[-1], erreur=True, texte=limite)
+        return out
+    s.tour = tour
+    src = _src(s, {"lieux": ["Genève", "Lausanne"]}, requetes=("A",))
+    offres = src.offres(a_lire=lambda a: a.entreprise == "Proton" and "Product" in a.titre)
+    assert "location: Lausanne" in s.messages[1] and "location: Genève" not in s.messages[1]   # seule la refusée
+    assert offres[0].requetes == ["indeed:A"] and any(a.detail_charge for a in offres)          # détail repris
+    assert attentes.count(35.0) == 2                         # 30 s demandées par Indeed + 5 s de marge

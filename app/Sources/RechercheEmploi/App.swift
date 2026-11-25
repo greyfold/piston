@@ -1,4 +1,4 @@
-// Recherche d'emploi : fenêtre du tableau de bord, icône de la barre des menus, connexion à Claude.
+// Piston : fenêtre du tableau de bord, icône de la barre des menus, connexion à Claude.
 
 import AppKit
 import SwiftUI
@@ -12,6 +12,10 @@ final class Delegue: NSObject, NSApplicationDelegate {
     }
     // La fenêtre se ferme, l'application reste dans la barre des menus.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    /// Quitter éteint d'abord la machine virtuelle (écran d'arrêt) ; la fermeture suit (Etat.swift).
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        MainActor.assumeIsolated { Delegue.etat.quitterEnEteignantLaVM() ? .terminateLater : .terminateNow }
+    }
     func applicationWillTerminate(_ notification: Notification) {
         MainActor.assumeIsolated { Delegue.etat.quitter() }
     }
@@ -24,7 +28,7 @@ struct RechercheEmploiApp: App {
 
     var body: some Scene {
         // Une seule fenêtre (donc une seule vue web et une seule dictée), rouverte par le menu.
-        Window("Recherche d'emploi", id: "tableau") {
+        Window("Piston", id: "tableau") {
             Tableau()
                 .environmentObject(etat)
                 .frame(minWidth: 900, minHeight: 640)
@@ -43,12 +47,12 @@ struct RechercheEmploiApp: App {
 
 }
 
-/// « Se connecter à Claude… » : la modale de connexion du tableau de bord, dans la fenêtre principale.
+/// « Se connecter à <IA>… » : la modale de connexion du tableau de bord, dans la fenêtre principale.
 struct BoutonConnexion: View {
     @EnvironmentObject var etat: Etat
     @Environment(\.openWindow) private var ouvrir
     var body: some View {
-        Button("Se connecter à Claude…") {
+        Button("Se connecter à \(etat.iaNom)…") {
             etat.connexionDemandee = true
             ouvrir(id: "tableau")
             NSApp.activate(ignoringOtherApps: true)
@@ -64,7 +68,7 @@ struct Menu_: View {
     var body: some View {
         Text(etat.passage)
         Text(etat.aTrancher == 0 ? "Rien à trancher" : "\(etat.aTrancher) annonce(s) à trancher")
-        Text(etat.claudeConnecte ? "Claude : connecté" : "Claude : pas connecté")
+        Text(etat.claudeConnecte ? "\(etat.iaNom) : connecté" : "\(etat.iaNom) : pas connecté")
         if etat.mode == "distant" {
             Text("Machine virtuelle : \(libelleVM)")
         }
@@ -82,7 +86,7 @@ struct Menu_: View {
         }
         Button("Lancer un passage") { etat.lancerPassage() }
             .disabled(etat.occupe != nil)
-        Button(etat.claudeConnecte ? "Se reconnecter à Claude…" : "Se connecter à Claude…") {
+        Button(etat.claudeConnecte ? "Se reconnecter à \(etat.iaNom)…" : "Se connecter à \(etat.iaNom)…") {
             etat.connexionDemandee = true
             ouvrir(id: "tableau")
             NSApp.activate(ignoringOtherApps: true)
@@ -99,7 +103,7 @@ struct Menu_: View {
         Toggle("Ouvrir à la connexion", isOn: Binding(get: { etat.ouvertureAuto },
                                                        set: { _ in etat.basculerOuvertureAuto() }))
         Divider()
-        Button("Quitter Recherche d'emploi") { NSApp.terminate(nil) }
+        Button("Quitter Piston") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
     }
 
@@ -120,7 +124,14 @@ struct Tableau: View {
 
     var body: some View {
         Group {
-            if etat.tableauPret {
+            if etat.arretEnCours {
+                EcranArret()
+            } else if etat.tableauPret && etat.attenteVM {
+                EcranAttente(titre: "Démarrage de la machine virtuelle",
+                             detail: etat.etapeVM ?? "Préparation",
+                             note: "L'IA, Indeed et le navigateur tournent dans la machine virtuelle. Elle s'éteint quand tu quittes l'application.",
+                             action: ("Continuer sans attendre", { etat.continuerSansAttendre() }))
+            } else if etat.tableauPret {
                 PageWeb(url: etat.base, etat: etat)
             } else if let e = etat.erreurTableau {
                 VStack(spacing: 12) {
@@ -129,8 +140,46 @@ struct Tableau: View {
                     Button("Réessayer") { Task { await etat.reessayer() } }
                 }.padding(40)
             } else {
-                ProgressView("Démarrage du tableau de bord…").padding(40)
+                EcranAttente(titre: "Ouverture de l'application", detail: "Démarrage du tableau de bord")
             }
         }
+    }
+}
+
+/// Écran d'attente natif (lancement, fermeture) : un indicateur, ce qui se passe, l'étape en cours,
+/// et au besoin une action secondaire. Sobre, aux couleurs du système (clair et sombre).
+struct EcranAttente: View {
+    let titre: String
+    let detail: String
+    var note: String? = nil
+    var action: (String, () -> Void)? = nil
+
+    var body: some View {
+        VStack(spacing: 14) {
+            ProgressView().controlSize(.large)
+            Text(titre).font(.title3.weight(.semibold))
+            Text(detail + "…").foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .accessibilityAddTraits(.updatesFrequently)
+            if let note {
+                Text(note).font(.callout).foregroundStyle(.tertiary).multilineTextAlignment(.center)
+                    .frame(maxWidth: 380)
+            }
+            if let action {
+                Button(action.0, action: action.1).buttonStyle(.link).padding(.top, 4)
+            }
+        }
+        .padding(40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// La fermeture : la machine virtuelle s'éteint avant que l'application parte.
+struct EcranArret: View {
+    @EnvironmentObject var etat: Etat
+    var body: some View {
+        EcranAttente(titre: "Fermeture de l'application", detail: "Arrêt de la machine virtuelle",
+                     note: etat.passageInterrompu
+                        ? "Le passage en cours est interrompu : il reprendra au prochain lancement."
+                        : "Cela prend quelques secondes, deux minutes au plus.")
     }
 }

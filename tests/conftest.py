@@ -57,16 +57,17 @@ def jamais_le_vrai_moteur(monkeypatch):
         raise moteur.MoteurImpossible("Claude Code absent (test)", bloquant=True)
     monkeypatch.setattr(moteur, "EXECUTER", interdit)
     monkeypatch.setattr(moteur, "ouvrir", absent)
-    monkeypatch.setattr(moteur, "etat", lambda executer=None: {
-        "installe": True, "connecte": True, "abonnement": "pro", "message": "Connecté au compte Claude (abonnement pro)"})
+    etat = {"installe": True, "connecte": True, "abonnement": "pro", "message": "Connecté au compte Claude (abonnement pro)"}
+    monkeypatch.setattr(moteur, "etat", lambda executer=None, fournisseur_=None: dict(etat))
+    monkeypatch.setattr(moteur, "etats", lambda executer=None: {"claude": dict(etat)})
 
 
-COMMANDES_INTERDITES = ("claude", "limactl", "security", "open", "osascript")
+COMMANDES_INTERDITES = ("claude", "codex", "agy", "gemini", "grok", "limactl", "security", "open", "osascript", "script")
 
 
 @pytest.fixture(autouse=True)
 def jamais_de_commande_systeme(monkeypatch):
-    """Aucun test ne lance `claude`, `limactl`, `security` (trousseau), `open`, `osascript` ni Chrome :
+    """Aucun test ne lance un moteur (`claude`, `codex`, `agy`, `grok`), `limactl`, `security` (trousseau), `open`, `osascript` ni Chrome :
     le démarrage d'un processus (`subprocess.Popen`, donc aussi `subprocess.run`) vers l'une de ces
     commandes lève une erreur explicite. Un test qui les simule remplace `subprocess.run` / `Popen`
     lui-même : son faux passe avant cette garde."""

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros.html" import icone, entete_reglage %}
 {% block contenu %}
+{% set ia = ia_active() %}
 <div class="confidentialite">
 {% call entete_reglage(reglage) %}L'IA écrit tes candidatures sans connaître ton nom : elle reçoit des balises à la place de tes coordonnées,
   et l'application remet les vraies dans le CV et la lettre, sur ton Mac.{% endcall %}
@@ -29,17 +30,18 @@
       <li>Le texte des annonces</li>
     </ul>
     <p class="petit muet">C'est une protection par balises, pas un anonymat : un parcours détaillé reste reconnaissable. C'est pourquoi
-      il ne part que vers ton propre compte Claude, jamais vers un autre service.</p>
+      il ne part que vers ton propre compte {{ ia.nom }} ({{ ia.editeur }}), le moteur que tu as choisi, jamais vers un autre service.</p>
   </div>
 </div>
 
-<h2>Comment l'IA travaille{% if moteur and moteur.connecte %} <span class="puce B">connecté</span>{% endif %}</h2>
+<h2>Comment l'IA travaille</h2>
 <div class="carte">
   <ul class="liste-confidentialite">
-    <li><b>Avec ton abonnement Claude</b>, sans clé API ni intermédiaire.</li>
-    <li><b>Sans aucun outil</b> pour noter les annonces et écrire les dossiers : ni fichiers, ni Internet, ni tes réglages, extensions ou connecteurs Claude.</li>
+    <li><b>Avec ton abonnement {{ ia.abonnement }}</b>, par la commande de code de {{ ia.editeur }}, sans clé API ni intermédiaire.</li>
+    <li><b>Sans aucun outil</b> pour noter les annonces et écrire les dossiers : ni fichiers, ni terminal, ni Internet, ni tes réglages, extensions ou connecteurs {{ ia.nom }}.</li>
     <li><b>Consigne dans un fichier temporaire</b> lisible de ton seul compte, effacé après la tâche : rien de ton profil n'apparaît dans la liste des processus.</li>
-    <li><b>Dans la machine virtuelle</b>, toujours : Claude Code et son Chrome y tournent, jamais sur ton Mac. Elle ne voit qu'un dossier d'échange (jeton, journaux, ce qu'une tâche lui confie) ; ni ta base, ni ton profil, ni ton dossier personnel, ni ton trousseau, ni Mail, ni ton Chrome à toi.</li>
+    <li><b>Ni télémétrie ni rapports d'erreur</b> : l'application les coupe chez chaque moteur ; seule ta demande part vers {{ ia.editeur }}.</li>
+    <li><b>Dans la machine virtuelle</b>, toujours : {{ ia.nom }} et son Chrome y tournent, jamais sur ton Mac. Elle ne voit qu'un dossier d'échange (jeton, journaux, ce qu'une tâche lui confie) ; ni ta base, ni ton profil, ni ton dossier personnel, ni ton trousseau, ni Mail, ni ton Chrome à toi.</li>
     <li><b>Rien n'est envoyé à un employeur sans toi</b> : tu relis, tu envoies.</li>
   </ul>
 </div>
@@ -47,15 +49,16 @@
 <h2>Les exceptions, que tu déclenches</h2>
 <div class="carte">
   <ul class="liste-confidentialite">
-    <li><b>Remplir un formulaire</b> avec Claude : Claude tape tes vraies coordonnées dans la page de l'employeur, dans le Chrome de la machine virtuelle. Il doit les voir pour les saisir. Il ne le fait que quand tu le lui demandes ; le pré-remplissage sans Claude, lui, les saisit sans l'IA.</li>
-    <li><b>Gmail</b>, s'il est activé : la session Claude qui interroge ta boîte voit les messages liés à tes candidatures. Le tri des réponses se fait ensuite sur ton Mac. Apple Mail, lui, est lu sur ton Mac, sans l'IA.</li>
+    <li><b>Remplir un formulaire</b> avec {{ ia.nom }} : l'IA tape tes vraies coordonnées dans la page de l'employeur, dans le Chrome de la machine virtuelle. Elle doit les voir pour les saisir, et ne le fait que quand tu le lui demandes. Elle n'a que deux outils, fixés par l'application : piloter ce Chrome (sans exécuter de script) et lire ce que la tâche lui confie. Le pré-remplissage sans IA, lui, les saisit sans elle.</li>
+    <li><b>Gmail</b>, s'il est activé : la session Claude qui interroge ta boîte voit les messages liés à tes candidatures. Le tri des réponses se fait ensuite sur ton Mac. Apple Mail, lui, est lu sur ton Mac, sans l'IA.{% if ia.id != "claude" %} Gmail et Indeed sont des connecteurs du compte Claude : ils ne servent qu'avec Claude, pas avec {{ ia.nom }}.{% endif %}</li>
   </ul>
 </div>
 
-<h2>Ton réglage chez Claude</h2>
+<h2>Ton réglage chez {{ ia.editeur }}</h2>
 <div class="carte">
-  <p>Dans <a href="https://claude.ai/settings/data-privacy-controls" rel="noopener" target="_blank">claude.ai → Paramètres → Confidentialité</a>,
-    désactive « Aider à améliorer Claude » si tu ne veux pas que tes échanges servent à entraîner les modèles. Ce réglage vaut aussi pour l'application, qui passe par ton compte.</p>
+  <p>{{ ia.entrainement }} Ce réglage vaut aussi pour l'application, qui passe par ton compte :
+    <a href="{{ ia.lien_entrainement }}" rel="noopener" target="_blank">ouvrir le réglage</a>
+    · <a href="{{ ia.lien_conditions }}" rel="noopener" target="_blank">politique de confidentialité de {{ ia.editeur }}</a>.</p>
 </div>
 
 {% if extrait %}

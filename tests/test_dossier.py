@@ -169,6 +169,18 @@ def test_sans_texte_pas_de_dossier(reg, isole):
 
 def test_chiffres_sans_preuve():
     assert dossier._chiffres_sans_preuve("Formé 300 collègues, 45 % de gain, en 2024", "300 collègues") == ["45 %"]
+    lettre = "Service des ressources humaines\nRue de l'Exemple 1\n1400 Exempleville\n\nJ'ai géré 1400 tickets."
+    assert dossier._chiffres_sans_preuve(lettre, "Profil.") == ["1400"]      # l'adresse oui, la phrase non
+
+
+def test_cq07_accepte_un_chiffre_de_l_annonce(tmp_path):
+    """« plus de 300 professionnels » vient de l'annonce : pas inventé. Un chiffre absent des deux l'est."""
+    f = {"titre": "Chef de projet", "entreprise": "Exemple SA", "langue": "fr",
+         "texte": "Notre équipe de plus de 300 professionnels."}
+    pieces = {"cv": "## Chef de projet\n", "lettre": "Votre équipe de plus de 300 professionnels, et 45 % de gain.",
+              "analyse": "## Angle proposé\n", "envoi": ""}
+    cq = {x["cq"][:5]: x for x in dossier.controler(f, tmp_path, pieces, 90, "Profil sans chiffre.")}
+    assert not cq["CQ-07"]["ok"] and cq["CQ-07"]["detail"] == "45 %"
 
 
 def test_a_produire(reg, isole):

@@ -13,10 +13,11 @@
 import AppKit
 import Foundation
 import ServiceManagement
+import SwiftUI
 
 struct EtatAPI: Decodable {
     struct Passage: Decodable { let niveau: String; let texte: String }
-    struct Claude: Decodable { let connecte: Bool; let message: String }
+    struct Claude: Decodable { let connecte: Bool; let message: String; let id: String?; let nom: String? }
     struct VM: Decodable { let existe: Bool; let statut: String? }
     let donnees: String?
     let pid: Int32?          // le processus du tableau de bord qui répond
@@ -37,6 +38,8 @@ final class Etat: ObservableObject {
     @Published var aTrancher = 0
     @Published var claudeConnecte = false
     @Published var claudeMessage = ""
+    @Published var iaId = "claude"
+    @Published var iaNom = "Claude"
     @Published var mode = "local"
     @Published var vmStatut: String?
     @Published var occupe: String?
@@ -50,6 +53,13 @@ final class Etat: ObservableObject {
     /// répond, l'accueil se recharge pour dire si l'IA est connectée (bandeau de l'accueil).
     @Published var rechargerAccueil = false
     @Published var ouvertureAuto = SMAppService.mainApp.status == .enabled
+    /// Écran d'attente du lancement : la machine virtuelle démarre (montré si cela dure plus d'un instant).
+    @Published var attenteVM = false
+    /// L'étape en cours, annoncée par `jobsearch vm demarrer` (« étape : … »).
+    @Published var etapeVM: String?
+    /// La fermeture attend que la machine virtuelle soit éteinte.
+    @Published var arretEnCours = false
+    @Published var passageInterrompu = false
 
     let racine: String                    // le code embarqué : src, config, pyproject.toml
     let python: String                    // le Python embarqué
@@ -62,6 +72,10 @@ final class Etat: ObservableObject {
     private var minuterie: Timer?
     private var minuterieEcheances: Timer?
     private var demarre = false
+    private var commande: Process?        // la commande du menu en cours (`executer`)
+    private var vmEnDemarrage = false
+    private var modeLu = false            // `mode` vient de /api/etat (sinon : valeur par défaut)
+    private var fenetreArret: NSWindow?
     /// Le jeton du tableau de bord (fichier `jeton` du dossier de données, écrit par le serveur avant
     /// d'écouter) : exigé pour toute requête, en en-tête ici, en cookie dans la vue web (PageWeb.swift).
     private(set) var jeton: String?
@@ -140,12 +154,14 @@ final class Etat: ObservableObject {
         Task {
             await assurerTableau()
             await rafraichir()
-            if mode == "distant", vmStatut != "Running" {
-                executer(["vm", "demarrer"], titre: "Démarrage de la machine virtuelle") { [weak self] in
-                    self?.rechargerAccueil = true
-                }
+            // La VM est éteinte à chaque fermeture : elle redémarre ici (code réinstallé seulement
+            // s'il a changé). Les échéances attendent qu'elle réponde, pour qu'un passage dû ne
+            // parte pas sans elle.
+            if mode == "distant" {
+                demarrerVMAuLancement { [weak self] in self?.lancerEcheances() }
+            } else {
+                lancerEcheances()
             }
-            lancerEcheances()
         }
         minuterie = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.rafraichir() }
@@ -153,6 +169,68 @@ final class Etat: ObservableObject {
         minuterieEcheances = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.lancerEcheances() }
         }
+    }
+
+    /// `jobsearch vm demarrer` au lancement, avec ses étapes. L'écran d'attente ne paraît que si le
+    /// démarrage dure (VM éteinte, code à réinstaller) ; « Continuer sans attendre » le referme.
+    private func demarrerVMAuLancement(ensuite: @escaping @MainActor () -> Void) {
+        guard occupe == nil else { ensuite(); return }
+        let titre = "Démarrage de la machine virtuelle"
+        occupe = titre
+        vmEnDemarrage = true
+        etapeVM = vmStatut == "Running" ? "Vérification de la machine virtuelle" : titre
+        let p = processus(["vm", "demarrer"])
+        let sortie = Pipe()
+        let tampon = Tampon()
+        sortie.fileHandleForReading.readabilityHandler = { h in
+            let d = h.availableData
+            if d.isEmpty { h.readabilityHandler = nil; return }
+            tampon.ajouter(d)
+            let lignes = String(decoding: d, as: UTF8.self).split(separator: "\n")
+            if let e = lignes.last(where: { $0.hasPrefix("étape : ") }) {
+                let texte = String(e.dropFirst("étape : ".count))
+                Task { @MainActor in self.etapeVM = texte }
+            }
+        }
+        p.standardOutput = sortie
+        p.standardError = sortie
+        p.terminationHandler = { proc in
+            tampon.vider(sortie)
+            let texte = tampon.texte
+            let code = proc.terminationStatus
+            Task { @MainActor in
+                self.commande = nil
+                self.occupe = nil
+                self.vmEnDemarrage = false
+                self.attenteVM = false
+                self.etapeVM = nil
+                guard !self.quitte else { return }
+                let derniere = texte.split(separator: "\n").last.map(String.init) ?? ""
+                self.dernierMessage = code == 0 ? "\(titre) : terminé." : "\(titre) : échec. \(derniere)"
+                await self.rafraichir()
+                self.rechargerAccueil = true
+                ensuite()
+            }
+        }
+        do { try p.run() } catch {
+            occupe = nil
+            vmEnDemarrage = false
+            dernierMessage = "\(titre) : impossible de lancer la commande (\(error.localizedDescription))."
+            ensuite()
+            return
+        }
+        commande = p
+        Etat.garde(p, secondes: 3600)
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if self.vmEnDemarrage { self.attenteVM = true }
+        }
+    }
+
+    /// « Continuer sans attendre » : le tableau de bord s'ouvre, la VM finit de démarrer en arrière-plan.
+    func continuerSansAttendre() {
+        vmEnDemarrage = false
+        attenteVM = false
     }
 
     /// Un processus Python embarqué : `python3 -m jobsearch <arguments>`.
@@ -433,7 +511,10 @@ final class Etat: ObservableObject {
         aTrancher = e.a_trancher
         claudeConnecte = e.claude.connecte
         claudeMessage = e.claude.message
+        if let id = e.claude.id, !id.isEmpty { iaId = id }
+        if let nom = e.claude.nom, !nom.isEmpty { iaNom = nom }
         mode = e.mode
+        modeLu = true
         vmStatut = e.vm?.statut ?? (e.vm == nil ? nil : "absente")
     }
 
@@ -471,7 +552,9 @@ final class Etat: ObservableObject {
             let texte = tampon.texte
             let code = proc.terminationStatus
             Task { @MainActor in
+                self.commande = nil
                 self.occupe = nil
+                guard !self.quitte else { return }
                 let derniere = texte.split(separator: "\n").last.map(String.init) ?? ""
                 self.dernierMessage = code == 0 ? "\(titre) : terminé." : "\(titre) : échec. \(derniere)"
                 await self.rafraichir()
@@ -483,6 +566,7 @@ final class Etat: ObservableObject {
             dernierMessage = "\(titre) : impossible de lancer la commande (\(error.localizedDescription))."
             return
         }
+        commande = p
         // Un passage peut durer des heures ; la machine virtuelle se crée (image à télécharger) en
         // moins d'une heure.
         Etat.garde(p, secondes: arguments.first == "passage" ? Etat.delaiPassage : 3600)
@@ -497,6 +581,47 @@ final class Etat: ObservableObject {
     func quitter() {
         quitte = true                         // pas de relance du tableau de bord qu'on arrête
         processusWeb?.terminate()             // seulement s'il a été lancé par l'application
-        // Un passage du matin en cours (echeances) va à son terme : il est détaché du menu.
+    }
+
+    /// La fermeture éteint la machine virtuelle : rien n'y tourne quand l'application n'est pas
+    /// ouverte. Vrai : la fermeture attend (`.terminateLater`), un écran le dit, et
+    /// `NSApp.reply(toApplicationShouldTerminate:)` la termine une fois la VM arrêtée. Ce qui tourne
+    /// encore s'arrête avant : la commande du menu, et le passage en cours, qui reprendra au
+    /// prochain lancement (`echeances.dues`, une reprise par jour).
+    func quitterEnEteignantLaVM() -> Bool {
+        if arretEnCours { return true }                    // déjà en train d'éteindre
+        guard mode == "distant" || !modeLu, FileManager.default.isExecutableFile(atPath: python) else { return false }
+        arretEnCours = true
+        quitte = true
+        minuterie?.invalidate()
+        minuterieEcheances?.invalidate()
+        passageInterrompu = echeances?.isRunning == true || (occupe?.hasPrefix("Passage") ?? false)
+        commande?.terminate()
+        echeances?.terminate()
+        montrerFenetreArret()
+        let p = processus(["vm", "arreter"])
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        p.terminationHandler = { _ in
+            Task { @MainActor in NSApp.reply(toApplicationShouldTerminate: true) }
+        }
+        do { try p.run() } catch { return false }
+        Etat.garde(p, secondes: 240)                       // arrêt propre (120 s) puis forcé (60 s)
+        return true
+    }
+
+    /// L'écran d'arrêt : dans la fenêtre du tableau de bord si elle est ouverte (`Tableau`), sinon
+    /// dans une petite fenêtre à lui, l'application n'étant alors que dans la barre des menus.
+    private func montrerFenetreArret() {
+        NSApp.activate(ignoringOtherApps: true)
+        if NSApp.windows.contains(where: { $0.isVisible && $0.identifier?.rawValue.contains("tableau") == true }) { return }
+        let f = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 220), styleMask: [.titled],
+                         backing: .buffered, defer: false)
+        f.title = "Piston"
+        f.isReleasedWhenClosed = false
+        f.contentView = NSHostingView(rootView: EcranArret().environmentObject(self))
+        f.center()
+        f.makeKeyAndOrderFront(nil)
+        fenetreArret = f
     }
 }

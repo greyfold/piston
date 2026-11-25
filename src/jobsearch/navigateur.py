@@ -144,7 +144,7 @@ _JS_BANDEAU = r"""
   if (b.dataset.replie) { b.innerHTML = contenu + " <span style='color:#7b878d'>▴</span>"; return; }
   b.innerHTML = contenu + " <span style='color:#7b878d;float:right'>▾</span><ul style='margin:6px 0 0;padding-left:16px'>" +
     lignes.map(l => "<li>" + l.replace(/</g, "&lt;") + "</li>").join("") + "</ul>" +
-    "<div style='margin-top:6px;color:#7b878d;font-size:11px'>Plateforme Recherche d'emploi · rien n'est envoyé sans toi</div>";
+    "<div style='margin-top:6px;color:#7b878d;font-size:11px'>Piston · rien n'est envoyé sans toi</div>";
 }
 """
 

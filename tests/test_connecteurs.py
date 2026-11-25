@@ -128,5 +128,6 @@ def test_etat_pour_l_application_mac(monkeypatch, reg):
     reg.commit()
     e = TestClient(appmod.app).get("/api/etat").json()
     assert e["a_trancher"] == 1 and e["mode"] == "local" and e["vm"] is None
-    assert e["claude"] == {"connecte": True, "message": "Connecté au compte Claude (abonnement pro)"}
+    assert e["claude"] == {"connecte": True, "message": "Connecté au compte Claude (abonnement pro)",
+                           "id": "claude", "nom": "Claude"}
     assert set(e["passage"]) == {"niveau", "texte"} and e["donnees"]

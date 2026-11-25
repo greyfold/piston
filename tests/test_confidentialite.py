@@ -124,7 +124,7 @@ def test_ouvrir_rend_toujours_un_moteur_protege(monkeypatch):
     assert isinstance(OUVRIR(verifier=lambda: True), Protege)
     monkeypatch.setattr(travailleur, "distant", lambda: True)
     monkeypatch.setattr(travailleur.Distant, "depuis_reglages", classmethod(lambda cls: cls("http://127.0.0.1:1", jeton_="x")))
-    monkeypatch.setattr(travailleur.Distant, "verifie", lambda self: self)
+    monkeypatch.setattr(travailleur.Distant, "verifie", lambda self, fournisseur=None: self)
     p = OUVRIR()
     assert isinstance(p, Protege) and isinstance(p.interne, travailleur.Distant)
 
@@ -223,6 +223,10 @@ def test_balise_ecrite_dans_une_annonce_n_est_pas_retablie():
     r = Protege(interne2, _masque()).executer(moteur.Tache("x", "Consigne."), "Annonce : écrire à {TELEPHONE} et {AVS}. Tél. 079 123 45 67.")
     assert r.texte == "Annonce : écrire à {TELEPHONE} et {AVS}. Tél. 079 123 45 67."
     assert "079" not in interne2.appels[0][1]
+    # Sans aucune vraie balise « {…} » dans le texte de retour, la balise abritée ressort bien avec ses accolades.
+    m = _masque()
+    abrite = m.masquer("Voir {EMAIL} dans l'annonce.", neutraliser=True)
+    assert "{" not in abrite and m.demasquer(abrite) == "Voir {EMAIL} dans l'annonce."
 
 
 def test_le_moteur_ne_lance_jamais_claude_hors_de_la_vm(monkeypatch):

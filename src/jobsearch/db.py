@@ -7,6 +7,7 @@ l'historique des passages qui sert de battement de cœur.
 
 import datetime as dt
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -35,8 +36,21 @@ COLONNES = [
     "raison_decision", "raison_note", "decision_le",
     "extra", "cree_le", "maj_le",
 ]
+COLONNES_SET = frozenset(COLONNES)
 LISTES = {"exigences", "sources", "ids_source", "requetes", "raison_decision"}
 BOOLEENS = {"limite", "permanent", "cv_genere"}
+_TERME_ORDRE = re.compile(r"^\s*([a-z_]+)(?:\s+IS\s+(?:NOT\s+)?NULL)?(?:\s+(?:ASC|DESC))?\s*$", re.I)
+
+
+def _verifier_ordre(ordre):
+    termes = [t.strip() for t in str(ordre or "").split(",") if t.strip()]
+    if not termes:
+        raise ValueError("clause ORDER BY vide")
+    for t in termes:
+        m = _TERME_ORDRE.fullmatch(t)
+        if not m or m.group(1) not in COLONNES_SET:
+            raise ValueError("clause ORDER BY invalide : %s" % ordre)
+    return ", ".join(termes)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS annonces (
@@ -165,6 +179,12 @@ class Registre:
     def fermer(self):
         self.cx.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.fermer()
+
     # --- Annonces -----------------------------------------------------------
 
     def get(self, emp):
@@ -198,11 +218,15 @@ class Registre:
                             (cle, f["empreinte"]))
 
     def maj(self, emp, **champs):
+        inconnus = set(champs) - COLONNES_SET
+        if inconnus:
+            raise ValueError("colonne(s) inconnue(s) : %s" % ", ".join(sorted(inconnus)))
         champs["maj_le"] = maintenant()
         self.cx.execute("UPDATE annonces SET %s WHERE empreinte=?" % ",".join(
             "%s=?" % k for k in champs), [_encode(k, v) for k, v in champs.items()] + [emp])
 
     def liste(self, statuts=None, ordre="vue_le DESC, entreprise"):
+        ordre = _verifier_ordre(ordre)
         if statuts:
             q = "SELECT * FROM annonces WHERE statut IN (%s) ORDER BY %s" % (
                 ",".join("?" * len(statuts)), ordre)

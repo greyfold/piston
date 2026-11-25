@@ -1,14 +1,11 @@
 {% extends "base.html" %}
 {% from "_macros.html" import entete_reglage, bouton_ajout, ligne_lien, modale_ajout %}
 {% block contenu %}
-{% call entete_reglage(reglage) %}Les sources interrogées à chaque passage, et celles que tu as notées. Ouvre une source pour voir ce qu'elle donne, son état et ses réglages.{% endcall %}
+{% set actions %}{{ bouton_ajout("modale-brancher", "Brancher une page carrière", classe="") }}{% endset %}
+{% call entete_reglage(reglage, actions) %}Les sources interrogées à chaque passage, et celles que tu as notées. Ouvre une source pour voir ce qu'elle donne, son état et ses réglages.{% endcall %}
 
-<div class="boutons">
-  {{ bouton_ajout("modale-brancher", "Brancher une page carrière", classe="petit") }}
-  {{ bouton_ajout("modale-ajout-source", "Noter une source sans la brancher") }}
-</div>
 {% call modale_ajout("modale-brancher", "Brancher une page carrière", "/sources/essayer", libelle="Essayer",
-     texte="L'application reconnaît le logiciel de la page ou la fait lire par Claude, et te montre ce qu'elle y trouve avant d'enregistrer.") %}
+     texte="L'application reconnaît le logiciel de la page ou la fait lire par l'IA, et te montre ce qu'elle y trouve avant d'enregistrer.") %}
   <div class="grille-champs">
     <div class="champ large">
       <label for="essai-entreprise">Employeur <span class="requis" title="obligatoire">*</span></label>
@@ -20,35 +17,7 @@
       <label for="essai-url">Adresse de la page des offres <span class="requis" title="obligatoire">*</span></label>
       <input type="text" id="essai-url" name="url" placeholder="https://…" inputmode="url" required spellcheck="false" autocapitalize="off" aria-describedby="essai-url-aide"
         value="{{ essai.url if essai else '' }}">
-      <div class="aide" id="essai-url-aide">Workday, Greenhouse, Lever, SmartRecruiters, Recruitee et Personio sont lus directement. Toute autre page est lue par Claude (une tâche sur ton abonnement, seulement quand la page change).</div>
-    </div>
-  </div>
-{% endcall %}
-{% call modale_ajout("modale-ajout-source", "Noter une source sans la brancher", "/sources/ajouter") %}
-  <div class="grille-champs">
-    <div class="champ">
-      <label for="source-nom">Nom <span class="requis" title="obligatoire">*</span></label>
-      <input type="text" id="source-nom" name="nom" placeholder="Page carrière Exemple SA" required autofocus>
-    </div>
-    <div class="champ">
-      <label for="source-url">Adresse</label>
-      <input type="text" id="source-url" name="url" placeholder="https://…" inputmode="url" spellcheck="false" autocapitalize="off">
-    </div>
-    <div class="champ">
-      <label for="source-nature">Nature</label>
-      <input type="text" id="source-nature" name="nature" placeholder="Page carrière, site d'annonces, réseau…">
-    </div>
-    <div class="champ">
-      <label for="source-acces">Accès</label>
-      <select id="source-acces" name="acces">{% for a in acces %}<option value="{{ a }}">{{ a }}</option>{% endfor %}</select>
-    </div>
-    <div class="champ large">
-      <label for="source-remarques">Remarques</label>
-      <input type="text" id="source-remarques" name="remarques">
-    </div>
-    <div class="champ large">
-      <div class="cases"><label><input type="checkbox" name="examiner" value="1" checked aria-describedby="source-examiner-aide"> Faire examiner la source par l'IA</label></div>
-      <div class="aide" id="source-examiner-aide">L'IA lit ses conditions générales et cherche une API publique ou un serveur MCP : tu sauras si elle peut être branchée et par quelle voie. Une tâche sur ton abonnement Claude.</div>
+      <div class="aide" id="essai-url-aide">Workday, Greenhouse, Lever, SmartRecruiters, Recruitee et Personio sont lus directement. Toute autre page est lue par l'IA (une tâche sur ton abonnement, seulement quand la page change).</div>
     </div>
   </div>
 {% endcall %}
@@ -69,20 +38,12 @@
 </div>
 {% endif %}
 
-{# Une ligne par source (comme la page Réglages) : nom et statut, accès et annonces vues ; la ligne ouvre sa page. #}
-{% set groupes = [("Interrogées à chaque passage", lignes | selectattr("acces", "equalto", "automatique") | list),
-                  ("Autres sources", lignes | rejectattr("acces", "equalto", "automatique") | list)] %}
-{% for titre, liste in groupes if liste %}
-<section class="groupe-reglages" aria-labelledby="groupe-sources-{{ loop.index }}">
-  <h2 class="section-base" id="groupe-sources-{{ loop.index }}">{{ titre }}</h2>
-  <ul class="reglages-liste">
-    {% for s in liste %}{% set vues = s.n.vues or 0 %}
-    {# L'icône dit comment la source est lue : par le passage, par l'IA en session, par courriel, à brancher, interdite. #}
-    {{ ligne_lien("/sources/" ~ (s.id | urlencode), s.nom, {"en session": "modele", "à brancher": "prise", "alertes e-mail": "courrier",
-         "interdit à la plateforme": "cadenas"}.get(s.acces, "globe"),
-         s.acces ~ " · " ~ vues ~ " annonce" ~ ("s" if vues != 1 else "") ~ " vue" ~ ("s" if vues != 1 else ""), statut=s.statut) }}
-    {% endfor %}
-  </ul>
-</section>
-{% endfor %}
+{# Une ligne par source (comme la page Réglages) : nom, statut et annonces vues ; la ligne ouvre sa page. Toutes
+   sont interrogées à chaque passage : le statut dit si elle tourne, est désactivée ou attend un réglage. #}
+<ul class="reglages-liste">
+  {% for s in lignes %}{% set vues = s.n.vues or 0 %}
+  {{ ligne_lien("/sources/" ~ (s.id | urlencode), s.nom, "globe",
+       vues ~ " annonce" ~ ("s" if vues != 1 else "") ~ " vue" ~ ("s" if vues != 1 else ""), statut=s.statut) }}
+  {% endfor %}
+</ul>
 {% endblock %}

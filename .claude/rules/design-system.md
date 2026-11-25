@@ -7,7 +7,8 @@ paths:
 
 # Design system : règles strictes pour l'interface
 
-L'interface suit le design system **Nexus**, traduit une fois pour toutes dans
+L'interface suit le design system **Nexus**, aux couleurs, polices et arrondis de la charte **Piston Douceur**
+(maquette Figma « Recherche d'emploi — écrans clés », écran « Aujourd'hui — Piston Douceur »), traduit une fois pour toutes dans
 `src/jobsearch/web/static/style.css` (jetons et composants) et `src/jobsearch/web/templates/_macros.html`
 (macros Jinja). Ces deux fichiers sont la seule source de vérité. Ces règles sont obligatoires : une
 interface qui ne les respecte pas est à refaire, même si elle « marche ».
@@ -32,12 +33,13 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
   pas en ajouter, et retirer celui qu'on croise dans les lignes qu'on modifie. Seule exception : la largeur
   calculée d'une barre `.progression` ou d'une `.jauge`, écrite `style="width: {{ … }}%"` et rien d'autre.
 - **Aucune bibliothèque d'interface** : ni Tailwind, ni Bootstrap, ni React, ni police ou CDN de plus
-  (Figtree est la seule police). Pas de nouveau fichier CSS : tout va dans `style.css`.
+  (Quicksand pour les titres, la marque, les chiffres et les boutons ; Nunito Sans pour le texte : jetons
+  `--police-titres` et `--police-texte`). Pas de nouveau fichier CSS : tout va dans `style.css`.
 - **Aucune icône hors du jeu Lucide** de la macro `icone()`. Pas d'emoji ni de glyphe Unicode comme icône
   (les `⚠` et `✕` existants sont une dette). Une icône manquante s'ajoute au dictionnaire `ICONES` de
   `_macros.html` (tracé Lucide d'origine, `viewBox 0 0 24 24`, trait `currentColor`).
 - **Pas de violet, pas d'étincelle, pas de dégradé « magique » pour l'IA** (règles AI de Nexus). Pas de
-  lavande non plus : `--marine` reste un bleu-gris dans les deux modes. Ce que
+  lavande non plus : `--marine` reste le Forêt de la charte (lin en sombre). Ce que
   l'IA produit est étiqueté par du texte (`badge-ia`, « Question de l'IA »), en vert ou en neutre.
 - **Pas de nouvelle valeur ad hoc** quand un jeton ou une valeur du système existe (voir « Jetons »).
 - **Pas de `!important`**, sauf pour `[hidden]`.
@@ -46,18 +48,21 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
 
 | Usage | Jeton |
 |---|---|
-| Action principale, sélection, focus, succès | `--vert`, `--vert-fonce` (texte sur fond pâle), `--vert-pale` / `--ok-pale` (fond) ; texte sur fond `--vert` plein : `--sur-vert` |
+| Action principale, sélection, focus, succès | `--vert` (Forêt en clair, Pêche en sombre), `--vert-survol` (survol du bouton principal), `--vert-fonce` (texte sur fond pâle), `--vert-pale` / `--ok-pale` (fond) ; texte sur fond `--vert` plein : `--sur-vert` |
+| Liens, titres de carte qui mènent à l'annonce, lien ouvert du menu | `--lien` |
 | Fond de page / surfaces | `--fond`, `--surface` (carte, champ), `--surface-2` (fond neutre, survol) |
-| Bordures et séparateurs | `--bord` |
+| Bordures et séparateurs | `--bord` (cartes, séparateurs : décor seul) ; contour des boutons secondaires : `--contour` ; contour de ce qui se remplit ou se coche (champs, compositeur, pilules à cocher, étiquettes) : `--contour-champ` (3:1 au moins, WCAG 1.4.11), survol `--texte` |
 | Texte | `--texte` (principal), `--texte-2` (secondaire), `--texte-3` (indications, en-têtes de tableau ; AA tenu sur `--fond` et `--surface` dans les deux modes : ne pas l'éclaircir) |
+| Réussite, en service, connecté | `--reussite` (texte, vert de la charte) sur `--ok-pale` (sauge) : toujours un vert, jamais le beurre de `--vert-pale` |
 | Erreur, destructif, en retard | `--alerte`, `--alerte-pale` ; texte sur fond `--alerte` plein : `--sur-alerte` |
 | Avertissement, à faire bientôt | `--attention`, `--attention-pale` |
 | Accent de marque, statuts « candidature » | `--marine` (texte), `--marine-pale` (fond de la pilule « envoyée ») |
-| Rayon des cartes et blocs | `--rayon` (10px) ; 8px pour boutons et champs ; 12px pour modale, compositeur, grandes cartes ; 999px pour pilules |
-| Ombre des cartes | `--ombre` (nulle en mode sombre) |
+| Rayon des cartes et blocs | `--rayon` (28px : cartes, tableaux, bandeaux, modale, compositeur) ; `--rayon-champ` (18px : champs, panneaux, blocs intérieurs) ; 999px pour boutons, pilules, délais et notes |
+| Ombre des cartes | `--ombre` (nulle : la charte n'en veut pas) |
 
 - Tailles en `rem`/`em`, sur l'échelle déjà en usage (.72, .75, .78, .8, .82, .85, .88, .9, .92, .95, 1,
-  1.05, 1.15, 1.3, 1.45 rem). Hauteur des champs : 42px. Largeur du contenu : `main` (1120px), formulaires et
+  1.05, 1.15, 1.3, 1.45 rem). Hauteur des champs : 42px. Largeur du contenu : `main` (1120px, 40px de marge de
+  chaque côté à droite du menu), cartes et chiffres à 20 × 24px d'intérieur, formulaires et
   colonnes de lecture ~46–52rem, texte courant ≤ 72ch.
 - Points de rupture existants seulement : 560, 640, 760, 900, 960px.
 - **Mode sombre obligatoire** : un nouveau jeton se déclare dans `:root` **et** dans le bloc
@@ -74,7 +79,7 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
 | Carte | `.carte` (`.tete`, `.meta`, `.extrait`) dans `.cartes` / `.cartes.deux` |
 | Chiffres clés | `.chiffres` > `.chiffre` ; un chiffre qui mène à sa section : `a.chiffre` (lien `#ancre`), et la section ne répète pas le compte dans son titre ; jauge `.jauge` ; progression `.progression` |
 | Pilule, statut (Badge) | `.puce` et ses variantes (`A`, `B`, `C`, `nouvelle`, `retenue`, `entretien`, `refus`, `retard`…) ; délais `.delai`. Un statut d'annonce a sa couleur : à trancher (`nouvelle`, ambre), oui (`retenue`, vert pâle), envoyée (`candidature`, marine), entretien et offre (vert plein), refus et non (neutre). L'avis de l'IA s'écrit « IA : oui / peut-être / non » (macro `notes`), pour ne pas se confondre avec la décision de la personne. Un nom de statut ne sert jamais de nom de bloc ailleurs dans `style.css` (`.entretien` seul a déformé `.puce.entretien`) |
-| État d'un réglage (connecteur, clé, fonction, IA) | `.puce.B` : en service ; `.puce` neutre : éteint par choix ou facultatif (« inactif », « fermée », « absente ») ; `.puce.nouvelle` : à faire, sans rien bloquer (« à configurer », « à compléter ») ; `.puce.retard` : bloquant seulement (« non connecté ») |
+| État d'un réglage (connecteur, clé, fonction, IA) | `.puce.B` : en service, connecté (vert `--reussite` sur sauge) ; `.puce` neutre : éteint par choix ou facultatif (« inactif », « fermée », « absente ») ; `.puce.nouvelle` : à faire, sans rien bloquer (« à configurer », « à compléter ») ; `.puce.retard` : bloquant seulement (« non connecté ») |
 | Ce que l'IA a produit | `.badge-ia` avec `icone("modele")` et un texte (« Question de l'IA », « Proposés par l'IA ») ; une seule étiquette IA, et jamais sur ce qui ne vient pas de l'IA |
 | État vide (EmptyState) | macro `etat_vide()` uniquement (test dans `tests/test_pipeline_web.py`) |
 | Champ (TextField, SelectField) | `.champ` > `label` + contrôle + `.aide`, dans `.grille-champs` (`.champ.large` pour toute la largeur) ; erreur `.erreur-champ` ; préfixe `.avec-prefixe` |

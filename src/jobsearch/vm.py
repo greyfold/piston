@@ -11,19 +11,21 @@ Ce que la VM voit et fait :
   l'écran (noVNC, mot de passe exigé), que l'application montre dans une fenêtre ;
 - Ubuntu, Python, uv, Claude Code, Google Chrome, Node.js et le serveur MCP de Chrome
   (chrome-devtools-mcp, version figée), installés au premier démarrage depuis leurs
-  sources officielles ; un écran virtuel (TigerVNC, Openbox) où tourne Chrome, avec son
+  sources officielles ; Codex, Antigravity CLI et Grok Build (versions figées) au démarrage, s'ils
+  manquent (moteur/fournisseurs.py) ; un écran virtuel (TigerVNC, Openbox) où tourne Chrome, avec son
   propre profil dans la VM : la personne s'y connecte aux sites (Job-Room…) en le voyant
-  dans l'application, et Claude le pilote par le protocole DevTools (port local de la VM) ;
+  dans l'application, et le moteur d'IA le pilote par le protocole DevTools (port local de la VM) ;
 - le code (src, pyproject, config) est copié puis installé dans un environnement de la VM
   (`~/venv`) à chaque démarrage.
 
-Claude Code ne tourne que dans la VM : rien de ce que fait l'IA ne touche le Mac.
+Les moteurs d'IA ne tournent que dans la VM : rien de ce que fait l'IA ne touche le Mac.
 Lima est embarqué dans l'application (JOBSEARCH_LIMACTL) et range ses machines dans le
 dossier des données (LIMA_HOME), à part de toute autre installation de Lima.
 
-Connexion à Claude : `jobsearch vm connexion` ouvre `claude auth login` dans la VM ;
-l'utilisateur se connecte à son propre compte Claude, et les identifiants restent
-dans la VM. Aucune clé, aucun jeton Claude ne passe par le Mac.
+Connexion à l'IA : `jobsearch vm connexion [--fournisseur …]` ouvre la connexion du moteur
+dans la VM (`claude auth login`, `codex login --device-auth`, Antigravity, `grok login
+--device-code`) ; la personne se connecte à son propre compte, et les identifiants restent dans
+la VM. Aucune clé, aucun jeton ne passe par le Mac.
 
 Le framework de conteneurs d'Apple (macOS 26) pourra remplacer Lima : seul ce
 module en dépend.
@@ -52,7 +54,7 @@ PROVISION_SYSTEME = """#!/bin/bash
 set -eux
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y --no-install-recommends python3 python3-venv curl ca-certificates git xz-utils \\
+apt-get install -y --no-install-recommends python3 python3-venv curl ca-certificates git xz-utils bubblewrap \\
   tigervnc-standalone-server tigervnc-tools openbox novnc websockify \\
   fonts-dejavu fonts-liberation fonts-noto-color-emoji
 # Google Chrome pour Linux arm64, depuis Google (le paquet ajoute aussi le dépôt de mises à jour).
@@ -116,7 +118,10 @@ pgrep -x chrome >/dev/null || { nohup google-chrome --remote-debugging-port=%(de
 pkill -x websockify || true
 nohup websockify --web /usr/share/novnc 127.0.0.1:%(ecran)d 127.0.0.1:%(vnc)d >> %(donnees)s/logs/ecran.log 2>&1 &
 pkill -f "[v]env/bin/jobsearch travailleur" || true    # code réinstallé : on repart ([v] : pas ce script lui-même)
-sleep 1
+# Un travailleur pris dans une longue tâche met du temps à s'arrêter : sans attendre, le nouveau ne
+# trouve pas son port libre et s'arrête aussitôt (constaté le 25.11.2026). 10 s, puis arrêt forcé.
+for i in 1 2 3 4 5 6 7 8 9 10; do pgrep -f "[v]env/bin/jobsearch travailleur" >/dev/null || break; sleep 1; done
+pkill -9 -f "[v]env/bin/jobsearch travailleur" || true
 nohup "$HOME/venv/bin/jobsearch" travailleur --hote 127.0.0.1 --port %(port)d >> %(donnees)s/logs/travailleur.log 2>&1 &
 """
 
@@ -265,6 +270,27 @@ def copie_du_code(dest):
     return dest
 
 
+def _fichiers_du_code(racine):
+    """Les fichiers que `copie_du_code` emporte, dans un ordre stable."""
+    racine = Path(racine)
+    yield racine / "pyproject.toml"
+    for d in ("src", "config"):
+        for f in sorted((racine / d).rglob("*")):
+            if f.is_file() and "__pycache__" not in f.parts and f.suffix != ".pyc":
+                yield f
+
+
+def empreinte_code(racine=None):
+    """L'empreinte du code qu'on copie dans la VM. Le travailleur rend la sienne (`/etat`) : si elle
+    diffère de celle du Mac, il tourne sur un code périmé et `demarrer` le réinstalle."""
+    import hashlib
+    racine = Path(racine or RACINE)
+    h = hashlib.sha256()
+    for f in _fichiers_du_code(racine):
+        h.update(f.relative_to(racine).as_posix().encode() + b"\0" + f.read_bytes() + b"\0")
+    return h.hexdigest()[:16]
+
+
 def version_python():
     """La version de Python que le projet exige (requires-python), installée par uv dans la VM."""
     import re
@@ -284,6 +310,34 @@ def installer_code():
             raise VMImpossible("copie du code refusée : %s" % (res.stderr or "").strip()[-300:])
     v = version_python()
     _shell(INSTALLER % {"code": CODE, "pyv": v, "py": v.replace(".", ", ")}, timeout=900)
+    # Posée à la fin seulement : une installation interrompue sera refaite au démarrage suivant.
+    _shell('echo %s > "$HOME/%s/%s"' % (empreinte_code(), CODE, MARQUE_CODE), timeout=30)
+    installer_moteurs()
+
+
+MARQUE_CODE = ".empreinte-installee"     # hors de src/ et config/ : n'entre pas dans l'empreinte
+
+
+def code_installe():
+    """L'empreinte du code installé dans la VM (posée par `installer_code`), ou None. Une VM éteinte
+    à la fermeture de l'application garde son code : rien à réinstaller s'il n'a pas changé."""
+    try:
+        r = _shell('cat "$HOME/%s/%s" 2>/dev/null || true' % (CODE, MARQUE_CODE), timeout=30)
+    except (VMImpossible, subprocess.TimeoutExpired):
+        return None
+    return (r.stdout or "").strip() or None
+
+
+def installer_moteurs():
+    """Codex, Antigravity CLI et Grok Build, s'ils manquent. Un échec n'empêche pas le démarrage : les
+    autres moteurs restent utilisables, et la page IA dit lequel n'est pas installé."""
+    from .moteur import fournisseurs
+    try:
+        _shell(fournisseurs.installer_vm(), timeout=900)
+    except (VMImpossible, subprocess.TimeoutExpired) as e:
+        (DATA / "logs").mkdir(parents=True, exist_ok=True)
+        with open(DATA / "logs" / "vm.log", "a", encoding="utf-8") as fh:
+            fh.write("installation des moteurs d'IA : %s\n" % e)
 
 
 def ports_a_jour(i):
@@ -294,13 +348,51 @@ def ports_a_jour(i):
     return vus[:len(voulus)] == voulus
 
 
-def _arreter_vm():
-    """Arrêt propre ; s'il traîne au-delà de deux minutes, arrêt forcé (rien de la personne
-    n'est dans la VM, qui ne garde que son système, Chrome et la connexion à Claude)."""
+def _arreter_vm(attente_s=60):
+    """Arrêt propre en quelques secondes : le système de la VM s'éteint lui-même (`poweroff`), et Lima
+    le voit s'arrêter. `limactl stop` seul attend de la VM un événement qu'elle ne rend pas : 190 s
+    puis échec, VM toujours allumée (constaté le 25.11). Si elle tourne encore après `attente_s`,
+    arrêt forcé (rien de la personne n'est dans la VM, qui ne garde que son système, le profil de
+    Chrome et la connexion aux moteurs d'IA). Enfin, aucun agent Lima ne doit rester derrière."""
     try:
-        _lima("stop", nom(), timeout=120)
+        _lima("shell", "--workdir", "/", nom(), "--", "sudo", "systemctl", "poweroff", "--no-block", timeout=20)
     except subprocess.TimeoutExpired:
+        pass
+    fin = time.monotonic() + attente_s
+    while time.monotonic() < fin and (instance() or {}).get("status") != "Stopped":
+        time.sleep(1)
+    if (instance() or {}).get("status") != "Stopped":
         _lima("stop", "--force", nom(), timeout=60)
+    _tuer_agents()
+
+
+def _agents():
+    """Les agents Lima (`limactl hostagent`) de cette VM. Il ne doit y en avoir qu'un, et aucun VM
+    éteinte : des agents restés d'arrêts manqués (jusqu'à quatre, le 25.11, dont un du 9.11) faisaient
+    croire la VM allumée et bloquaient tout arrêt."""
+    prise = str(DATA / "lima" / nom() / "ha.sock")
+    r = EXECUTER(["/bin/ps", "-axo", "pid=,command="], capture_output=True, text=True)
+    out = []
+    for ligne in (r.stdout or "").splitlines():
+        pid, _, commande = ligne.strip().partition(" ")
+        if "hostagent" in commande and prise in commande and pid.isdigit():
+            out.append(int(pid))
+    return out
+
+
+def _tuer_agents():
+    """Termine les agents restés après l'arrêt de la VM. Ils ignorent parfois SIGTERM : SIGKILL ensuite."""
+    import signal
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        agents = _agents()
+        if not agents:
+            return
+        for pid in agents:
+            try:
+                os.kill(pid, sig)
+            except OSError:
+                pass
+        time.sleep(3)
 
 
 def mettre_les_ports_a_jour():
@@ -314,19 +406,45 @@ def mettre_les_ports_a_jour():
         raise VMImpossible("ports de la VM non mis à jour : %s" % (res.stderr or "").strip()[-300:])
 
 
-def demarrer(attente_s=60):
-    """Démarre la VM (la crée au besoin), installe le code, lance le travailleur."""
+def demarrer(attente_s=60, annoncer=None):
+    """Démarre la VM (la crée au besoin), installe le code s'il a changé, lance le travailleur. Un seul
+    à la fois : l'ouverture de l'application et un passage peuvent le demander ensemble ; le second
+    attend, puis trouve le travailleur à jour et n'a rien à refaire. `annoncer(texte)` reçoit chaque
+    étape (l'écran d'attente de l'application les montre)."""
+    import fcntl
+    (DATA / "vm").mkdir(parents=True, exist_ok=True)
+    with open(DATA / "vm" / "demarrer.lock", "w") as verrou:
+        fcntl.flock(verrou, fcntl.LOCK_EX)
+        return _demarrer(attente_s, annoncer or (lambda texte: None))
+
+
+def _demarrer(attente_s, annoncer):
     from .travailleur import jeton
     jeton.lire()                                  # créé côté Mac, lu par la VM dans /donnees
     if not instance():
+        annoncer("Création de la machine virtuelle : la première fois, jusqu'à une demi-heure")
         creer()
     elif not ports_a_jour(instance()):
         mettre_les_ports_a_jour()
     if (instance() or {}).get("status") != "Running":
+        annoncer("Démarrage de la machine virtuelle")
+        _tuer_agents()                            # VM éteinte : un agent resté ne doit pas la doubler
         res = _lima("start", "--tty=false", nom(), timeout=1800)
         if res.returncode != 0:
             raise VMImpossible("démarrage refusé par Lima : %s" % (res.stderr or "").strip()[-300:])
-    installer_code()
+    else:
+        # VM déjà allumée (l'application a été quittée sans l'éteindre) : rien à refaire si son
+        # travailleur tourne sur le code de ce Mac.
+        e = etat_a_jour()
+        if e is not None:
+            return e
+    if code_installe() != empreinte_code():
+        annoncer("Mise à jour de l'application dans la machine virtuelle")
+        installer_code()
+    else:
+        annoncer("Vérification des moteurs d'IA")
+        installer_moteurs()                       # s'ils manquent seulement
+    annoncer("Lancement du travailleur")
     ecran_motdepasse()
     _shell(LANCER % {"donnees": DONNEES, "code": CODE, "port": port(), "ecran": port_ecran(),
                      "vnc": PORT_VNC, "devtools": PORT_DEVTOOLS, "politique": json.dumps(POLITIQUE_CHROME)}, timeout=120)
@@ -340,14 +458,34 @@ def demarrer(attente_s=60):
                        % (port(), DATA / "logs" / "travailleur.log"))
 
 
+def etat_a_jour():
+    """L'état du travailleur s'il répond et tourne sur le code de ce Mac ; sinon None."""
+    try:
+        e = travailleur_etat()
+    except Exception:
+        return None
+    return e if e.get("code") == empreinte_code() else None
+
+
+def assurer_a_jour():
+    """Avant de confier une tâche à la VM : réinstalle le code et relance le travailleur s'il
+    tourne sur un autre code que celui du Mac (application mise à jour, VM restée allumée)."""
+    if etat_a_jour() is None:
+        demarrer()
+
+
 def travailleur_etat():
     from .travailleur.client import Distant
     return Distant("http://127.0.0.1:%d" % port()).etat()
 
 
 def arreter():
-    if not instance():
+    """À la fermeture de l'application, et par le menu."""
+    i = instance()
+    if not i:
         return "Aucune machine virtuelle « %s »." % nom()
+    if i.get("status") == "Stopped":
+        return "Machine virtuelle déjà arrêtée."
     _arreter_vm()
     return "Machine virtuelle arrêtée."
 
@@ -363,26 +501,35 @@ def etat():
     return out
 
 
-def connexion():
-    """`claude auth login` dans la VM, dans le terminal de l'utilisateur (interactif)."""
+def connexion(fournisseur="claude"):
+    """La connexion du moteur dans la VM, sur l'entrée et la sortie de ce processus (le tableau de
+    bord les lit : adresse, code). Une connexion laissée en route (fenêtre annulée côté Mac) garde
+    son propre code : on la termine d'abord, sinon le code collé pourrait venir d'une autre tentative."""
+    from .moteur import fournisseurs
+    f = fournisseurs.get(fournisseur)
     if (instance() or {}).get("status") != "Running":
         raise VMImpossible("démarrer d'abord la machine virtuelle : jobsearch vm demarrer")
-    # Une connexion laissée en route (fenêtre annulée côté Mac) garde son propre code : on la
-    # termine d'abord, sinon le code collé pourrait venir d'une autre tentative.
-    _lima("shell", "--workdir", "/", nom(), "--", "pkill", "-f", "^claude.auth.login", timeout=30)
-    return subprocess.call([limactl(), "shell", "--workdir", "/", nom(), "--", "bash", "-lc",
-                            'export PATH="$HOME/.local/bin:$PATH"; exec claude auth login --claudeai'],
+    _lima("shell", "--workdir", "/", nom(), "--", "pkill", "-f", MOTIFS_CONNEXION[f.id], timeout=30)
+    return subprocess.call([limactl(), "shell", "--workdir", "/", nom(), "--", "bash", "-lc", f.connexion()],
                            env=environnement_lima())
 
 
-def deconnexion():
-    """`claude auth logout` dans la VM : l'application n'utilise plus l'abonnement de la personne.
+# Le processus d'une connexion en route, par moteur (pkill -f) : jamais le script qui le lance.
+# Les crochets : le motif ne se reconnaît pas lui-même dans la commande qui le porte.
+MOTIFS_CONNEXION = {"claude": "^claude.auth.login", "codex": "[c]odex login", "antigravity": "[a]ntigravity/agy$",
+                    "grok": "[g]rok login"}
+
+
+def deconnexion(fournisseur="claude"):
+    """Déconnecte le moteur dans la VM : l'application n'utilise plus l'abonnement de la personne.
     Une connexion encore en route est arrêtée d'abord."""
+    from .moteur import fournisseurs
+    f = fournisseurs.get(fournisseur)
     if (instance() or {}).get("status") != "Running":
         raise VMImpossible("la machine virtuelle est arrêtée : démarre-la, puis recommence")
-    _lima("shell", "--workdir", "/", nom(), "--", "pkill", "-f", "^claude.auth.login", timeout=30)
-    _shell('export PATH="$HOME/.local/bin:$PATH"; exec claude auth logout', timeout=60)
-    return "Claude est déconnecté."
+    _lima("shell", "--workdir", "/", nom(), "--", "pkill", "-f", MOTIFS_CONNEXION[f.id], timeout=30)
+    _shell(f.deconnexion(), timeout=60)
+    return "%s est déconnecté." % f.nom
 
 
 def supprimer():
@@ -392,20 +539,22 @@ def supprimer():
     return "Machine virtuelle supprimée (les données de l'utilisateur, sur le Mac, restent)."
 
 
-def commande(action):
+def commande(action, fournisseur="claude"):
     try:
         if action == "creer":
             print(creer())
         elif action == "demarrer":
-            print(json.dumps(demarrer(), ensure_ascii=False, indent=1))
+            # Les étapes, une ligne chacune, au fil de l'eau : l'application les montre en attendant.
+            annoncer = lambda texte: print("étape : %s" % texte, flush=True)
+            print(json.dumps(demarrer(annoncer=annoncer), ensure_ascii=False, indent=1))
         elif action == "arreter":
             print(arreter())
         elif action == "etat":
             print(json.dumps(etat(), ensure_ascii=False, indent=1))
         elif action == "connexion":
-            return connexion()
+            return connexion(fournisseur)
         elif action == "deconnexion":
-            print(deconnexion())
+            print(deconnexion(fournisseur))
         elif action == "supprimer":
             print(supprimer())
     except (VMImpossible, subprocess.TimeoutExpired) as e:

@@ -76,7 +76,7 @@ def message(texte, liens, origine):
 def tache():
     from .. import moteur
     return moteur.Tache("lecture d'une page carrière", CONSIGNE, schema=Offres,
-                        modele=moteur.reglage("modele_lecture", "claude-sonnet-5-5"), effort="medium", delai_s=600)
+                        niveau="leger", effort="medium", delai_s=600)
 
 
 def extraire(texte, liens, origine, c=None):

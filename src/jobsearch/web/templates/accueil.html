@@ -9,7 +9,7 @@
 {% set rien = not (a_trancher or retenues or entretiens or courrier_utile or jobroom_utile or relances.dues
                    or relances.a_classer) %}
 {# L'IA n'est plus connectée : un bandeau (Nexus Banner) qui ouvre la modale de connexion, jamais la checklist de retour. #}
-{% if ia_deconnectee %}<div class="bandeau attention" id="ia-deconnectee"><span class="point"></span><span>Ton IA n'est plus connectée : sans elle, les annonces ne sont pas notées et aucun dossier n'est préparé. <a href="/ia" data-connexion-ia="claude" data-nom="Claude">Se connecter à Claude</a>.</span></div>{% endif %}
+{% if ia_deconnectee %}<div class="bandeau attention" id="ia-deconnectee"><span class="point"></span><span>Ton IA n'est plus connectée : sans elle, les annonces ne sont pas notées et aucun dossier n'est préparé. <a href="/ia" data-connexion-ia="{{ ia_active().id }}" data-nom="{{ ia_active().nom }}">Se connecter à {{ ia_active().nom }}</a>.</span></div>{% endif %}
 {% if rythme.alerte and not rien %}<div class="bandeau attention"><span class="point"></span><span>Encore {{ rythme.semaine.manque }} postulation{{ 's' if rythme.semaine.manque > 1 }} d'ici dimanche pour tenir ton objectif de la semaine.</span></div>{% endif %}
 
 {% if premiers_pas %}{% set faits = premiers_pas | selectattr(5) | list | length %}
@@ -28,7 +28,7 @@
     <li class="{{ 'fait' if fait }}">
       <span class="coche" aria-hidden="true">{% if fait %}<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.25 7.34a1 1 0 0 1-1.42.006l-3.75-3.72a1 1 0 1 1 1.408-1.42l3.04 3.016 6.543-6.624a1 1 0 0 1 1.414-.006Z" clip-rule="evenodd"/></svg>{% endif %}</span>
       <span class="texte"><span class="libelle">{{ libelle }}{% if fait %}<span class="lecteur"> (fait)</span>{% endif %}</span><span class="pourquoi">{{ pourquoi }}</span></span>
-      {% if not fait %}<span class="duree">{{ duree }}</span><a class="bouton petit" href="{{ lien }}"{% if id == 'ia' %} data-connexion-ia="claude" data-nom="Claude"{% endif %}>Commencer</a>{% endif %}
+      {% if not fait %}<span class="duree">{{ duree }}</span><a class="bouton petit" href="{{ lien }}"{% if id == 'ia' %} data-connexion-ia="{{ ia_active().id }}" data-nom="{{ ia_active().nom }}"{% endif %}>Commencer</a>{% endif %}
     </li>
   {% endfor %}
   </ul>
@@ -205,7 +205,7 @@
 {% if jobroom_utile %}{# option « Preuves de recherche Job-Room », et quelque chose à saisir ou vérifier #}
 <h2 id="jobroom">Preuves Job-Room</h2>
 <div class="boutons tete-section">
-  {% if jobroom.a_saisir or (tache_jobroom and tache_jobroom.active) %}{{ claude(none, "jobroom", "Saisir par Claude", "/#jobroom", "", tache_jobroom) }}{% endif %}
+  {% if jobroom.a_saisir or (tache_jobroom and tache_jobroom.active) %}{{ claude(none, "jobroom", "Saisir par " ~ ia_active().nom, "/#jobroom", "", tache_jobroom) }}{% endif %}
   {{ etat_tache(tache_jobroom, etats_taches) }}
   <span class="petit muet">Automatique dès qu'une candidature est notée envoyée.</span>
 </div>

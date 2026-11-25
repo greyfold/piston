@@ -195,9 +195,18 @@ def _annonce(f):
         f.get("texte") or "(texte absent)")
 
 
+def modele_actif():
+    """Le modèle pris en compte pour l'empreinte et le registre : Claude garde la constante MODELE,
+    un autre fournisseur porte son identifiant et le modèle choisi dans les réglages."""
+    f = moteur.fournisseur()
+    if f.id == "claude":
+        return MODELE
+    return "%s:%s" % (f.id, f.modele(moteur.Tache("évaluation", "")) or "defaut")
+
+
 def empreinte_entree(f, texte_profil):
     h = hashlib.sha1()
-    for part in (VERSION, MODELE, texte_profil, f.get("titre") or "", f.get("texte") or ""):
+    for part in (VERSION, modele_actif(), texte_profil, f.get("titre") or "", f.get("texte") or ""):
         h.update(part.encode("utf-8"))
     return h.hexdigest()[:16]
 
@@ -225,7 +234,7 @@ def evaluer(c, f, texte_profil, decisions=""):
     ev.categories = adequation.normaliser(ev.categories)
     propres = lambda points: [p.strip() for p in points or [] if p and p.strip()][:MAX_RAISONS]
     ev.pour, ev.contre, ev.arbitrage = propres(ev.pour), propres(ev.contre), (ev.arbitrage or "").strip()
-    return ev, dict(r.usage or {}, cout_usd=r.cout_usd)
+    return ev, dict(r.usage or {}, cout_usd=r.cout_usd, modele=r.modele)
 
 
 # --- Registre ---------------------------------------------------------------------
@@ -291,7 +300,8 @@ def enregistrer(reg, f, ev, usage, texte_profil):
         "version=excluded.version, empreinte_entree=excluded.empreinte_entree, note_globale=excluded.note_globale, "
         "adequation_profil=excluded.adequation_profil, nb_alertes=excluded.nb_alertes, "
         "resultat=excluded.resultat, cout_jetons=excluded.cout_jetons",
-        (f["empreinte"], maintenant(), MODELE, VERSION, empreinte_entree(f, texte_profil), ev.note_globale,
+        (f["empreinte"], maintenant(), (usage or {}).get("modele") or modele_actif(), VERSION,
+         empreinte_entree(f, texte_profil), ev.note_globale,
          ev.adequation_profil, len(ev.alertes), ev.model_dump_json(), json.dumps(jetons)))
     a = avis(ev.note_globale, ev.adequation_profil, ev.criteres)
     reg.noter(f["empreinte"], "évaluation · %d/100 · profil %d %% · avis %s · %d alerte(s) · périmètre %s"

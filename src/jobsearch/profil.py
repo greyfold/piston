@@ -220,6 +220,9 @@ SUPERPOSES = {
     "courrier.comptes": ("reglages", "courrier.comptes"),
     "recherche.cantons": ("criteres", "sourcing.cantons"),
     "recherche.entreprises": ("criteres", "sourcing.entreprises"),
+    "ia.fournisseur": ("reglages", "moteur.fournisseur"),        # le moteur d'IA choisi (connexion_ia)
+    "sources.linkedin.actif": ("reglages", "linkedin.actif"),    # réglés sur la page de la source LinkedIn
+    "sources.linkedin.plafond_usd": ("reglages", "linkedin.plafond_usd_par_run"),
 }
 POSTES = "recherche.postes"            # requêtes, recherches LinkedIn et mots du pré-tri en sont déduits
 # Clés d'avant les postes : lues tant que le profil n'a pas de postes, retirées à son premier enregistrement.
@@ -489,6 +492,20 @@ TACHES = {
 }
 
 
+def regler_linkedin(actif=None, plafond_usd=None):
+    """La source LinkedIn, réglée sur sa page : interrogée ou non, plafond de dépense Apify par recherche."""
+    p = copy.deepcopy(charger())
+    if actif is not None:
+        _poser(p, "sources.linkedin.actif", bool(actif))
+    if plafond_usd is not None:
+        v = float(plafond_usd)
+        if not 0.01 <= v <= 50:
+            raise ProfilInvalide("plafond par recherche entre 0.01 et 50 dollars")
+        _poser(p, "sources.linkedin.plafond_usd", round(v, 2))
+    ecrire(p)
+    return p
+
+
 def enregistrer_sources(choisis):
     """L'écran « Tes sources » de l'accueil : les sites du socle à lire chaque matin."""
     from .sources.catalogue import SOCLE
@@ -670,6 +687,19 @@ def poser_valeur(cle, valeur):
         _poser(p, cle, v)
     else:
         _retirer(p, cle)
+    ecrire(p)
+
+
+def poser_fournisseur(fid):
+    """Le moteur d'IA de l'application (claude, codex, gemini, grok) : celui qui vient de se connecter."""
+    from .moteur.fournisseurs import TOUS
+    if fid not in TOUS:
+        raise ProfilInvalide("moteur inconnu")
+    p = copy.deepcopy(charger())
+    if fid == "claude":
+        _retirer(p, "ia.fournisseur")                 # la valeur par défaut
+    else:
+        _poser(p, "ia.fournisseur", fid)
     ecrire(p)
 
 
