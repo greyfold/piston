@@ -131,9 +131,12 @@ def test_un_seul_fichier_css_et_pas_de_ressource_externe():
     for f in _gabarits():
         for balise in re.findall(r"<(?:link|script)\b[^>]*>", f.read_text(encoding="utf-8")):
             url = re.search(r"""(?:href|src)\s*=\s*["'](https?:)?//([^/"']+)""", balise)
-            if url and url.group(2) not in ("fonts.googleapis.com", "fonts.gstatic.com"):
+            if url:
                 externes.append(f"{f.name} : {balise}")
-    assert not externes, f"Ni bibliothèque ni CDN : seules les polices (Quicksand, Nunito Sans) viennent de l'extérieur. {externes}"
+    assert not externes, f"Ni bibliothèque, ni CDN, ni police distante : tout est servi par l'application. {externes}"
+    assert not re.search(r"url\(\s*[\"']?(https?:)?//", CSS), "Les polices viennent de static/polices, pas du réseau."
+    for f in re.findall(r"""url\("(polices/[^"]+)"\)""", CSS):
+        assert (STATIC / f).is_file(), f"Police absente : {f}"
 
 
 def test_icones_par_la_macro():

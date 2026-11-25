@@ -1,7 +1,7 @@
 """Le tableau de bord : où la personne tranche et suit, sur le Mac ou le téléphone.
 
-Pages rendues par le serveur, formulaires simples, aucune dépendance JS : un
-clic écrit directement dans le registre (actions.appliquer), il n'y a plus
+Pages rendues par le serveur, formulaires simples, un peu de JavaScript sans
+bibliothèque (`static/*.js`) : un clic écrit directement dans le registre (actions.appliquer), il n'y a plus
 de file d'attente à rapprocher au passage suivant.
 """
 
@@ -32,6 +32,7 @@ from .. import repertoire as repertoire_mod
 from ..formatage import annonce_html, nettoyer
 from ..config import DATA, criteres, reglages
 from ..db import ECARTEES, ENVOYEES, LIBELLES_STATUT, PIPELINE, STATUTS, Registre
+from . import etat_distant
 from .auth import COOKIE, autorise, depuis_le_mac, jeton, jeton_valide, meme_origine
 
 ICI = Path(__file__).parent
@@ -42,6 +43,9 @@ async def demarrage(app):
     """Le jeton d'accès existe avant que le serveur n'écoute : l'application Mac le lit dans le
     dossier de données dès que le port répond (auth.py)."""
     jeton()
+    from ..travailleur import client as travailleur
+    if travailleur.distant():
+        etat_distant.prechauffer()            # la première page trouve l'état de la VM déjà lu
     yield
 
 
@@ -181,7 +185,14 @@ def retour_sur(retour, defaut="/"):
 
 @app.middleware("http")
 async def garde(request: Request, call_next):
-    if request.url.path.startswith("/static") or request.url.path == "/connexion":
+    if request.url.path.startswith("/static"):
+        reponse = await call_next(request)
+        # Feuille et scripts portent leur date dans l'adresse (?v=), les polices ne changent pas : la vue web
+        # les garde sans redemander à chaque page.
+        if reponse.status_code == 200 and ("v" in request.query_params or request.url.path.startswith("/static/polices/")):
+            reponse.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return reponse
+    if request.url.path == "/connexion":
         return await call_next(request)
     if not autorise(request):
         if request.url.path.startswith("/api/") or "x-jobsearch-jeton" in request.headers:
@@ -1074,8 +1085,15 @@ def navigateur_vm(request: Request):
     adresse, erreur = None, None
     if not depuis_le_mac(request):           # le mot de passe de l'écran ne sort pas du Mac
         return page(request, "navigateur.html", adresse=None, erreur="L'écran de la machine virtuelle ne s'ouvre que sur le Mac.")
+    from ..travailleur import client as travailleur
     try:
-        if (vm.instance() or {}).get("status") == "Running":
+        if travailleur.distant():                # la copie en mémoire, sans attendre `limactl`
+            etat_vm = etat_distant.lire()["vm"]
+            if "erreur" in etat_vm:
+                raise vm.VMImpossible(etat_vm["erreur"])
+        else:
+            etat_vm = {"statut": (vm.instance() or {}).get("status")}
+        if etat_vm.get("statut") == "Running":
             adresse = vm.adresse_ecran()
     except Exception as e:
         erreur = "Machine virtuelle injoignable : %s" % e
@@ -1086,7 +1104,6 @@ def navigateur_vm(request: Request):
 def api_etat():
     """Ce que l'application Mac montre dans la barre des menus : passage, IA, machine virtuelle. La
     clé « claude » garde son nom (l'application Mac la lit) : c'est l'état du moteur choisi."""
-    from .. import vm
     from ..travailleur import client as travailleur
     distant = travailleur.distant()
     reg = _reg()
@@ -1104,19 +1121,16 @@ def api_etat():
         reg.fermer()
     etat_vm, etats_vm = None, None
     if distant:
-        try:
-            e = vm.etat()
-            etat_vm = {"existe": e["existe"], "statut": e["statut"]}
-            tr = e.get("travailleur")
-            if isinstance(tr, dict) and "erreur" not in tr:
-                etats_vm = dict(tr.get("moteurs") or {})
-                etats_vm.setdefault("claude", tr.get("moteur") or {})
-            elif e.get("statut") != "Running":
-                msg = "machine virtuelle arrêtée" if e.get("existe") else "machine virtuelle absente"
-                etats_vm = {f["id"]: {"installe": False, "connecte": False, "abonnement": None, "message": msg}
-                            for f in moteur_mod.FOURNISSEURS}
-        except Exception as ex:
-            etat_vm = {"existe": False, "statut": None, "erreur": str(ex)}
+        e = etat_distant.lire()                   # la copie en mémoire : la barre des menus n'attend pas la VM
+        etat_vm = e["vm"]
+        tr = e["travailleur"]
+        if isinstance(tr, dict) and "erreur" not in tr:
+            etats_vm = dict(tr.get("moteurs") or {})
+            etats_vm.setdefault("claude", tr.get("moteur") or {})
+        elif "erreur" not in etat_vm and etat_vm.get("statut") != "Running":
+            msg = "machine virtuelle arrêtée" if etat_vm.get("existe") else "machine virtuelle absente"
+            etats_vm = {f["id"]: {"installe": False, "connecte": False, "abonnement": None, "message": msg}
+                        for f in moteur_mod.FOURNISSEURS}
     c = etat_ia(etats_vm=etats_vm)
     return {"passage": {"niveau": p["niveau"], "texte": p["texte"]}, "a_trancher": a_trancher,
             "claude": {"connecte": bool(c.get("connecte")), "message": c.get("message", ""),
@@ -1153,6 +1167,12 @@ def _connecteurs_comptes_mail(request, form):
 _ETAT_IA = {"t": 0.0, "v": None}
 
 
+def oublier_etat_ia():
+    """Un moteur vient d'être connecté ou déconnecté : la page suivante relit son état."""
+    _ETAT_IA["v"] = None
+    etat_distant.oublier()
+
+
 def ia_connectee():
     """Pour l'interface (fonctions débloquées) : l'état du moteur d'IA, relu au plus toutes les 15 s."""
     import time
@@ -1162,12 +1182,11 @@ def ia_connectee():
 
 
 def _etats_vm():
-    """{fournisseur: état} tel que le travailleur de la VM le voit ; une erreur pour tous s'il ne répond pas."""
-    from ..travailleur import client as travailleur
-    try:
-        e = travailleur.Distant.depuis_reglages().etat()
-    except Exception as ex:
-        return {f["id"]: {"installe": False, "connecte": False, "abonnement": None, "message": str(ex)}
+    """{fournisseur: état} tel que le travailleur de la VM le voit (copie en mémoire, `etat_distant`) ;
+    une erreur pour tous s'il ne répond pas."""
+    e = etat_distant.lire()["travailleur"]
+    if "erreur" in e:
+        return {f["id"]: {"installe": False, "connecte": False, "abonnement": None, "message": e["erreur"]}
                 for f in moteur_mod.FOURNISSEURS}
     out = dict(e.get("moteurs") or {})
     out.setdefault("claude", e.get("moteur") or {})
@@ -1226,7 +1245,7 @@ def ia_deconnecter(fournisseur: str):
         msg, ok = "%s est déconnecté. Tu peux te reconnecter quand tu veux." % f["nom"], 1
     except (vm.VMImpossible, subprocess.TimeoutExpired) as e:
         msg, ok = "La déconnexion n'a pas abouti : %s." % str(e).rstrip("."), 0
-    _ETAT_IA["v"] = None
+    oublier_etat_ia()
     return RedirectResponse("/ia?msg=%s&ok=%d" % (quote(msg), ok), status_code=303)
 
 
@@ -1747,7 +1766,7 @@ def ia_connexion_etat():
     from .. import connexion_ia
     e = connexion_ia.etat()
     if e.get("etat") == "connecte":
-        _ETAT_IA["v"] = None                      # l'interface se rouvre tout de suite
+        oublier_etat_ia()                         # l'interface se rouvre tout de suite
     return e
 
 

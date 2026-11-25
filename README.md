@@ -12,6 +12,178 @@ le moteur d'IA et Google Chrome tournent dans sa machine virtuelle, jamais sur l
 vivent dans `~/Library/Application Support/Recherche emploi` (dossier réservé au compte). Rien
 n'est installé à côté : pas d'agent launchd, pas de dossier de projet, pas de coffre externe.
 
+## Télécharger
+
+Piston se télécharge gratuitement sur [greyfold.ch](https://greyfold.ch).
+<!-- Adresse exacte de la page de téléchargement à confirmer. -->
+
+- **Mac** : Apple silicon (M1 ou plus récent) et macOS 14 ou plus.
+- **IA** : un abonnement de la personne à l'un des moteurs proposés (Claude Pro ou Max, ChatGPT,
+  Google AI Pro ou Ultra, SuperGrok). Aucune clé API, aucun compte chez Greyfold.
+- **Premier lancement** : l'application n'est pas encore notarisée ; macOS la bloque une première
+  fois. L'autoriser dans Réglages Système › Confidentialité et sécurité, puis la rouvrir.
+- **Premier démarrage** : l'application crée sa machine virtuelle et y installe Ubuntu, Chrome,
+  Node.js et les moteurs d'IA. Compter plusieurs minutes et quelques gigaoctets ; l'assistant
+  d'accueil se remplit pendant ce temps.
+
+## Architecture
+
+Trois couches, chacune avec un rôle et des droits précis :
+
+```
+┌──────────────────────── Mac ─────────────────────────────────────────────┐
+│  Piston.app (SwiftUI, app/)                                              │
+│   fenêtre WebKit · barre des menus · dictée · minuteries                 │
+│        │ lance                                                           │
+│        ▼                                                                 │
+│  Python embarqué : python -m jobsearch …                                 │
+│   web        tableau de bord FastAPI, 127.0.0.1:8775, jeton exigé        │
+│   echeances  toutes les 5 min : passage, alerte, rattrapage, lettres     │
+│   vm …       crée, démarre, arrête la machine virtuelle (Lima)           │
+│        │                                                                 │
+│   données : jobsearch.db, profil.yaml, dossiers/, sauvegardes/, logs/    │
+└────────┼─────────────────────────────────────────────────────────────────┘
+         │ HTTP 127.0.0.1:8776 (jeton) · écran 127.0.0.1:8777 (mot de passe)
+         │ un seul dossier partagé : partage-vm/  →  /donnees
+┌────────▼──────── Machine virtuelle (Ubuntu, Virtualization.framework) ───┐
+│  travailleur (jobsearch travailleur)                                     │
+│   moteurs d'IA : Claude Code · Codex · Antigravity CLI · Grok Build      │
+│   Google Chrome + chrome-devtools-mcp, derrière le filtre de mcp_vm.py   │
+│   écran : TigerVNC, Openbox, noVNC                                       │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Les processus
+
+L'enveloppe SwiftUI (`app/Sources/RechercheEmploi/Etat.swift`) ne contient aucune logique métier :
+elle lance des processus Python embarqués (`python3 -m jobsearch <commande>`) avec les variables
+`JOBSEARCH_HOME` (le code), `JOBSEARCH_DATA` (les données), `JOBSEARCH_PORT` et `JOBSEARCH_LIMACTL`.
+
+| Quand | Commande | Rôle |
+|---|---|---|
+| Ouverture | `jobsearch vm demarrer` | Crée ou rallume la VM ; ses lignes « étape : … » nourrissent `/demarrage`. |
+| Ouverture | `jobsearch web --hote 127.0.0.1 --port 8775` | Le tableau de bord, montré dans la fenêtre. |
+| Toutes les 30 s | lecture de `/api/etat` | Barre des menus ; relève des événements des tâches Chrome. |
+| Toutes les 5 min | `jobsearch echeances` | Ce qui est dû : passage, alerte, rattrapage de l'IA, surveillance. |
+| Fermeture | `jobsearch vm arreter` | Éteint la VM avant de quitter. |
+
+Un seul tableau de bord par port : au lancement, l'enveloppe vérifie qui écoute sur 8775 et refuse
+celui d'une autre installation. Un seul passage à la fois : il tient un verrou `flock` sur
+`passage.lock` ; un passage resté « démarré » sans verrou est clos « interrompu ».
+
+### La frontière Mac / VM
+
+Le **Mac** garde tout ce qui est à la personne et tout ce qui écrit : la base, le profil, les
+dossiers de candidature, les sauvegardes, le trousseau (clé Apify), Apple Mail, le tableau de bord
+et l'orchestration du passage. Une base SQLite ne se partage pas entre le Mac et la VM (les verrous
+ne traversent pas le dossier partagé) : seul le Mac l'ouvre.
+
+La **VM** exécute ce qui doit être isolé : les moteurs d'IA, Chrome et les sources qui passent par
+eux (Indeed, pages carrière lues par l'IA). Elle ne voit que `partage-vm/` et répond au Mac par le
+**travailleur** (`travailleur/serveur.py`), derrière un jeton partagé :
+
+- `GET /etat` : version, empreinte du code installé, connexion de chaque moteur ;
+- `POST /moteur` : une tâche du moteur ;
+- `POST /sources/{nom}/tester|offres|detail` : une source confiée à la VM ;
+- `POST /connecteurs/{nom}/tester`, courrier Gmail, connexion des moteurs ;
+- `POST /chrome/rendre`, `/chrome/pdf` : rendu d'une page, impression d'un PDF ;
+- `POST /preremplir` et les sessions Chrome de l'IA.
+
+Côté Mac, `travailleur/client.py` donne à ces services la même interface que leur version locale :
+`Distant` se comporte comme un moteur (`executer(tache, message)`), `SourceDistante` comme une
+source (`tester`, `offres`, `detail`). L'évaluation, les dossiers et le passage ne savent pas où
+tourne ce qu'ils appellent.
+
+### Le chemin d'une tâche d'IA
+
+1. Le module métier (`evaluation.py`, `dossier.py`, `parcours.py`…) construit une `Tache`
+   (`moteur/__init__.py`) : consigne fixe, contexte, schéma JSON de la réponse, outils permis,
+   modèle, effort, délai.
+2. `moteur.ouvrir()` rend un moteur `Protege` : nom, adresse, téléphone, e-mail, date de naissance
+   et numéro AVS deviennent des balises (`confidentialite.py`).
+3. `Distant` envoie la tâche au travailleur (`POST /moteur`), qui lance la commande du fournisseur
+   choisi sans tête (`moteur/fournisseurs.py`) ; la consigne passe par un fichier lisible du seul
+   compte, la demande par l'entrée standard, pour que rien n'apparaisse dans la liste des processus.
+4. La réponse revient au Mac, les balises reprennent leur valeur, Python valide la réponse contre
+   son schéma et ses propres règles (une offre dont le lien n'est pas dans la page tombe, un accès
+   « permis » sans conditions lues aussi), puis seulement écrit dans la base.
+
+Le contexte (profil, parcours, méthode) est identique d'une annonce à l'autre : le moteur le garde
+en cache pendant un passage.
+
+### Le chemin d'une session Chrome
+
+Une session (formulaire d'employeur, pré-remplissage sans IA) n'a ni la base ni le profil :
+
+1. Le Mac prépare `partage-vm/taches/<id>/donnees.json` (valeurs du formulaire, chemins des
+   documents) et copie le CV et la lettre dans `taches/<id>/documents/`.
+2. Le travailleur lance la session dans le Chrome de la VM. Une session d'IA n'a que les deux
+   serveurs MCP de l'application (`mcp_vm.py`) : un filtre devant chrome-devtools-mcp (ni exécution
+   de script, ni réseau au-delà de la page) et les commandes de sa tâche (`session_vm.py`).
+3. La session note ce qu'elle a fait dans `taches/<id>/evenements.jsonl`.
+4. Le Mac relève ces lignes (`agent_claude.relever`, à chaque `/api/etat`), vérifie chacune et
+   n'applique que ce qui est permis. Une page de confirmation vue par la session ne vaut jamais
+   envoi : c'est la personne qui note l'envoi.
+
+### Le passage du matin
+
+`pipeline.py` enchaîne des étages indépendants ; chacun écrit sa ligne dans `run_etapes` dès
+qu'il démarre, une panne est notée et les suivants tournent quand même :
+
+`sauvegarde` → `test_routes` → `courrier` → `sourcing` → `details` → `ingestion` → `doublons` →
+`pre_tri` → `originaux` → `evaluation` → `dossiers` → `echeances`
+
+- **Sourcing** : chaque source a la même interface (`sources/base.py`) et `sources/catalogue.py`
+  construit la liste du passage ; celles que les réglages confient à la VM sont remplacées par leur
+  double distant. Familles : routes publiques des plateformes (`jobroom.py`, `jobup.py` pour jobup
+  et jobs.ch), pages carrière servies par un logiciel connu (`logiciels.py` : Workday, Greenhouse,
+  Lever, SmartRecruiters, Recruitee, Personio), page quelconque lue par l'IA (`page_ia.py`),
+  Indeed par le connecteur du compte Claude, LinkedIn par Apify, alertes e-mail (`alertes.py`).
+- **Ingestion** (`ingest.py`) : une annonce vue ne revient jamais. Rapprochement par l'identifiant
+  de la plateforme, puis par l'empreinte employeur + intitulé (`fingerprint.py`) ; `doublons.py`
+  fusionne ensuite les doublons sûrs écrits autrement d'une plateforme à l'autre.
+- **Sorties** : `runs/<date>-<n>/` garde ce que chaque passage a lu (`sourcing.json`), `logs/latest`
+  le journal du dernier passage.
+
+### Les données
+
+Tout vit dans `~/Library/Application Support/Recherche emploi` (`config.DATA`, ou
+`JOBSEARCH_DATA`), en 0700, fichiers en 0600 :
+
+| Chemin | Contenu |
+|---|---|
+| `jobsearch.db` | Le registre SQLite, seule source de vérité (voir plus bas). |
+| `profil.yaml` | Le profil : identité, recherche, critères, dossier, objectifs, moteur choisi. |
+| `dossiers/` | Les dossiers de candidature (analyse, CV, lettre, fiche d'envoi ; Markdown et Word). |
+| `entretiens/` | Une préparation d'entretien par annonce (rendez-vous en YAML, puis Markdown). |
+| `sauvegardes/` | Les copies de la base faites au début de chaque passage. |
+| `runs/`, `logs/` | Ce que chaque passage a lu, et les journaux. |
+| `jeton` | Le jeton du tableau de bord. |
+| `lima/`, `vm/` | La machine virtuelle (`LIMA_HOME`) et l'état de son démarrage (`vm/demarrage.json`). |
+| `partage-vm/` | Le seul dossier que voit la VM : jeton du travailleur, mot de passe de l'écran, journaux, `taches/<id>/`. |
+
+La base (`db.py` et les modules qui la complètent) tient : `annonces` et `ids_source` (le
+registre), `journal` (en ajout seul), `actions` (les clics de la personne, appliqués dans la même
+transaction par `actions.py`), `runs` et `run_etapes` (les passages, battement de cœur de la
+surveillance), `evaluations`, `dossiers`, `parcours*` (la base d'expérience), `repertoire` (les
+sources ajoutées), `courriers`, `doublons_verdicts`, `taches_claude`, `ce_qui_compte`,
+`postes_proposes`, `veilles`, `meta`. Seul le code de `jobsearch` l'écrit.
+
+### Configuration et profil
+
+`config/` (`settings.yaml`, `criteres.yaml`, `sources.yaml`) donne les valeurs par défaut, neutres
+pour tout le monde. `profil.yaml` ne garde que ce qui en diffère ; `config.reglages()` et
+`config.criteres()` rendent la superposition des deux. Aucune valeur personnelle n'est dans le
+code, `config/` ou les gabarits (`tests/test_echeances.py` le vérifie).
+
+### Le tableau de bord
+
+FastAPI et Jinja (`web/app.py`), pages rendues par le serveur ; un peu de JavaScript sans
+bibliothèque (`web/static/*.js`) pour le tri, l'entretien et les champs. L'interface suit le design
+system Nexus traduit dans `web/static/style.css` et `web/templates/_macros.html` ; les polices sont
+servies par l'application. L'état de la VM et des moteurs, coûteux à lire, est gardé en mémoire et
+relu en arrière-plan (`web/etat_distant.py`) : aucune page n'attend la VM.
+
 ## Construire et lancer
 
 ```bash
@@ -133,9 +305,10 @@ session de l'IA reçoit les vraies coordonnées (elle doit les taper). Le pré-r
 les saisit sans l'IA.
 
 **Sécurité des données** : dossier des données en 0700 et fichiers créés en 0600 (`umask` posé à
-l'import du paquet) ; tableau de bord sur 127.0.0.1, qui exige désormais son jeton pour toute
+l'import du paquet) ; tableau de bord sur 127.0.0.1, qui exige son jeton pour toute
 requête, même locale ; l'application le pose elle-même dans sa fenêtre (`web/auth.py`) ;
-l'écran de la VM ne s'ouvre que depuis le Mac.
+l'écran de la VM ne s'ouvre que depuis le Mac. Une clé (Apify) ne vit que dans le trousseau, jamais
+dans un fichier, un journal ou une ligne de commande (`cles.py`).
 
 ## Ce que l'application ne fait pas
 
@@ -149,6 +322,7 @@ et envoie.
 uv sync
 uv run pytest                    # -m live : les vrais sites ; -m navigateur : Chrome
 uv run jobsearch web             # tableau de bord sur http://localhost:8775, données dans data/
+uv run jobsearch jeton           # le jeton à coller une fois sur /connexion
 ```
 
 Dans le dépôt, les données vont dans `data/` (hors git). Les tests tournent sur une installation
@@ -159,7 +333,16 @@ d'exemple (`tests/fixtures/config`, valeurs fictives), jamais sur `config/` ni s
 | `app/` | L'enveloppe SwiftUI (`Etat.swift` : Python embarqué, tableau de bord, échéances). |
 | `scripts/construire-app.sh` | Construit l'application autoportante. |
 | `config/` | Valeurs par défaut, neutres (vérifié par `tests/test_echeances.py`). |
-| `src/jobsearch/echeances.py` | Ce qui est dû maintenant : passage, alerte, surveillance. |
+| `src/jobsearch/echeances.py` | Ce qui est dû maintenant : passage, alerte, surveillance, date des lettres. |
+| `src/jobsearch/cli.py` | La commande `jobsearch` : tout ce que l'enveloppe et le développement lancent. |
+| `src/jobsearch/pipeline.py` | Le passage du matin, étage par étage. |
+| `src/jobsearch/db.py`, `actions.py` | Le registre SQLite et les décisions de la personne. |
+| `src/jobsearch/ingest.py`, `fingerprint.py`, `doublons.py` | Ingestion sans doublon, empreinte, fusion des doublons. |
+| `src/jobsearch/prefilter.py` | Les passes 0 et 1 du pré-tri (règles de `config/criteres.yaml`). |
+| `src/jobsearch/confidentialite.py` | Le masque des coordonnées avant chaque tâche d'IA. |
+| `src/jobsearch/dossier.py`, `lettre.py`, `modeles/` | Le dossier de candidature, la date de la lettre, les modèles Word et la méthode. |
+| `src/jobsearch/courrier.py`, `gmail.py` | Les réponses des employeurs (Apple Mail, Gmail), en lecture seule. |
+| `src/jobsearch/followups.py`, `matin.py` | Relances, rythme, alerte du matin. |
 | `src/jobsearch/moteur/` | Le moteur IA : Claude Code, Codex, Antigravity CLI, Grok Build (`fournisseurs.py`). |
 | `src/jobsearch/mcp_vm.py` | Les deux serveurs MCP des sessions Chrome, dans la VM. |
 | `src/jobsearch/sources/` | Les sources ; `catalogue.py` construit la liste du passage. |

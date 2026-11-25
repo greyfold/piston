@@ -1,6 +1,6 @@
 """Les serveurs MCP de l'application, dans la machine virtuelle : `python -m jobsearch.mcp_vm …`.
 
-Une session (Claude Code, Codex, Gemini CLI ou Grok, au choix de la personne) n'a que ces deux
+Une session (Claude Code, Codex, Antigravity CLI ou Grok, au choix de la personne) n'a que ces deux
 serveurs, quel que soit le moteur : ce qu'elle peut faire est fixé ici, dans le code de
 l'application, et non dans les réglages propres à chaque moteur.
 

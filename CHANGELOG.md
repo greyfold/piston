@@ -21,6 +21,15 @@ l'application est en essai et peut changer d'une version à l'autre.
   42 %… ») au lieu d'une panne ; la connexion à l'IA attend que la machine soit prête, et l'étape
   « Ton IA » de l'assistant montre l'avancement au lieu de boutons qui échoueraient.
 - L'écran d'attente natif du démarrage est remplacé par la page `/demarrage` du tableau de bord.
+- **Pages plus rapides** : Aujourd'hui, IA, Connecteurs et Santé n'attendent plus la machine virtuelle
+  (une à trois secondes à chaque ouverture). L'état des moteurs d'IA et de la VM est gardé en mémoire et
+  relu en arrière-plan (`web/etat_distant.py`) ; la machine virtuelle interroge ses moteurs en même temps
+  plutôt que l'un après l'autre.
+- Les lettres des dossiers sont mises à la date du jour par l'échéance quotidienne (`echeances.py`) :
+  l'onglet Dossier n'attend plus le PDF de la VM à sa première ouverture de la journée. Un PDF que la VM
+  n'a pas pu faire est refait à la lecture suivante.
+- Les polices (Quicksand, Nunito Sans, licence OFL) sont servies par l'application : plus aucune requête
+  vers Google à l'ouverture d'une page. Feuille de style, scripts et polices restent en cache.
 
 ## 0.3.0 — 2026-11-25 (version d'essai)
 

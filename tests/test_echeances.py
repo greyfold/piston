@@ -186,3 +186,21 @@ def test_passage_interrompu_n_declenche_pas_l_alerte(reg):
     _passage(reg, "2026-11-10 06:35", statut="interrompu")
     _passage(reg, "2026-11-10 06:36", statut="interrompu")
     assert echeances.dues(reg, dt.datetime(2026, 11, 10, 6, 50)) == []
+
+
+def test_lettres_datees_une_fois_par_jour_quand_le_pdf_est_fait(reg, monkeypatch):
+    from jobsearch import dossier
+    jour = dt.datetime(2026, 11, 10, 5, 0)
+    reg.poser_meta("echeance_surveillance", "2026-11-10 04:50")
+    assert echeances.dues(reg, jour) == []                               # aucun dossier : rien à dater
+    dossier._schema(reg)
+    reg.cx.execute("INSERT INTO dossiers (empreinte, etat, chemin) VALUES ('x', 'pret', '/nulle/part')")
+    reg.commit()
+    assert echeances.dues(reg, jour) == ["lettres"]
+    monkeypatch.setattr(dossier, "dater_lettres", lambda reg: {"lettres": 1, "pdf_en_retard": 1, "erreurs": 0})
+    echeances.executer(reg, jour)
+    assert echeances.dues(reg, jour) == ["lettres"]                      # PDF raté (VM éteinte) : on réessaie
+    monkeypatch.setattr(dossier, "dater_lettres", lambda reg: {"lettres": 1, "pdf_en_retard": 0, "erreurs": 0})
+    echeances.executer(reg, jour)
+    assert echeances.dues(reg, jour) == []
+    assert "lettres" in echeances.dues(reg, jour + dt.timedelta(days=1))   # le lendemain

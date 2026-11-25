@@ -239,3 +239,21 @@ def test_lettre_datee_du_jour_puis_figee_a_l_envoi(reg, isole):
     assert dossier.mettre_a_date(reg, e) == dt.date(2026, 10, 20)
     assert date_du_docx(docx) == "Lausanne, le 20 octobre 2026"
     assert dossier.mettre_a_date(reg, e) == dt.date(2026, 10, 20)        # figée : ne bouge plus
+
+
+def test_lettres_datees_d_avance_et_pdf_rate_refait(reg, isole, monkeypatch):
+    """L'échéance du jour date les lettres (l'onglet Dossier n'attend plus le PDF de la VM) ; un PDF que
+    la VM n'a pas pu faire est refait à la lecture suivante, même si la date n'a pas bougé."""
+    e = annonce(reg, entreprise="Exemple SA", titre="AI Product Manager", statut="retenue",
+                texte="Texte de l'annonce. " * 20, langue="fr")
+    lettre = "Note.\n---\n\nLausanne, novembre 2026\n\n**Objet** : candidature\n\nMadame, Monsieur,\n"
+    dossier.produire(reg, e, c=FluxFaux([ANALYSE, CV, lettre, ENVOI]))
+    docx = Path(dossier.etat(reg, e)["chemin"]) / dossier.nom_fichier(reg.get(e), "lettre")
+    assert dossier.pdf_en_retard(docx)                                   # VM éteinte : pas de PDF
+    assert dossier.dater_lettres(reg) == {"lettres": 1, "pdf_en_retard": 1, "erreurs": 0}
+    faits = []
+    monkeypatch.setattr("jobsearch.apercu.en_pdf", lambda d, langue="fr": faits.append(d) or d.with_suffix(".pdf").write_bytes(b"%PDF"))
+    assert dossier.dater_lettres(reg) == {"lettres": 1, "pdf_en_retard": 0, "erreurs": 0}
+    assert faits == [docx]
+    dossier.dater_lettres(reg)
+    assert faits == [docx]                                               # à jour : rien à refaire

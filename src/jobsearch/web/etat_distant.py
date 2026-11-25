@@ -39,7 +39,10 @@ def mesurer():
 
 def _relire():
     global _oubliee
+    debut = time.monotonic()
     with _verrou:
+        if _copie["t"] is not None and _copie["t"] >= debut and not _oubliee:
+            return dict(_copie)                  # relue par un autre fil pendant qu'on attendait
         _oubliee = False
         _copie.update(mesurer(), t=time.monotonic())
     return dict(_copie)

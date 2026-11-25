@@ -2,7 +2,7 @@
 
 Les routes, toutes derrière le jeton partagé :
 - GET  /etat                     version, connexion de chaque moteur (Claude Code, Codex,
-                                 Gemini CLI, Grok), sources confiées ;
+                                 Antigravity CLI, Grok), sources confiées ;
 - POST /moteur                   une tâche du moteur (dict de Tache + message) ;
 - POST /sources/{nom}/tester     test de route d'une source confiée ;
 - POST /sources/{nom}/offres     ses offres, avec les annonces déjà connues du Mac ;

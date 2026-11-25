@@ -5,9 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>{% block titre %}{% if reglage %}{{ reglage.nom }} · Réglages · {% endif %}Piston{% endblock %}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;700&family=Nunito+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preload" href="/static/polices/nunito-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/polices/quicksand-latin.woff2" as="font" type="font/woff2" crossorigin>
 {% from "_macros.html" import icone, flash_message, marque %}
 <link rel="stylesheet" href="/static/style.css?v={{ version_css() }}">
 <script src="/static/champs.js?v={{ version_css() }}" defer></script>
