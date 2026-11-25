@@ -3,10 +3,10 @@
    « Réglages » vers la page qui liste les réglages (il reste actif sur chacune d'elles). Le lien de la page
    ouverte porte la bordure verte et aria-current. Sous 760 px, il devient une barre en haut, en ligne,
    et Réglages passe en icône à côté de la cloche.
-   Pour un nouvel utilisateur, Offres s'ouvre avec la recherche et Candidatures avec la possibilité de postuler.
-   Les espaces viennent d'`ESPACES` (app.py). Dans l'application Mac, ce menu est natif et la page ne le dessine
-   pas (base.html, `coquille`). #}
+   Pour un nouvel utilisateur, Offres s'ouvre avec la recherche et Candidatures avec la possibilité de postuler. #}
 {% from "_macros.html" import icone, marque %}
+{% set travail = [("/", "Aujourd'hui", "accueil", none), ("/offres", "Offres", "recherche", "offres"),
+                  ("/candidatures", "Candidatures", "candidatures", "postuler")] %}
 <aside class="menu-lateral">
   <div class="tete-menu">
     {{ marque("/") }}
@@ -21,7 +21,7 @@
   </div>
   <nav class="menu-principal" aria-label="Navigation principale">
     <ul>
-      {% for href, nom, ic, fonction in ESPACES if fonctions is not defined or not fonction or fonctions[fonction] %}
+      {% for href, nom, ic, fonction in travail if fonctions is not defined or not fonction or fonctions[fonction] %}
       {% set actif = nav == href or (href != '/' and nav.startswith(href ~ '/')) %}
       <li><a href="{{ href }}" class="{{ 'actif' if actif }}"{% if actif %} aria-current="page"{% endif %}>{{ icone(ic) }}<span>{{ nom }}</span></a></li>
       {% endfor %}
