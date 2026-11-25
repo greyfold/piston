@@ -1,6 +1,6 @@
 [project]
 name = "jobsearch"
-version = "0.3.0"
+version = "0.3.1"
 description = "Piston, recherche d'emploi : application Mac locale, assistée par l'IA de la personne"
 authors = [
     { name = "greyfold" }
