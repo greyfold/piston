@@ -69,7 +69,9 @@ struct Menu_: View {
 
     var body: some View {
         Text(etat.passage)
-        Text(etat.aTrancher == 0 ? "Rien à trancher" : "\(etat.aTrancher) annonce(s) à trancher")
+        if let n = etat.aTrancher {
+            Text(n == 0 ? "Rien à trancher" : "\(n) annonce(s) à trancher")
+        }
         Text(etat.claudeConnecte ? "\(etat.iaNom) : connecté" : "\(etat.iaNom) : pas connecté")
         if etat.mode == "distant" {
             Text("Machine virtuelle : \(libelleVM)")

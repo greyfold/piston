@@ -6,7 +6,7 @@
    saisie quand l'ajout est refusé, avec le message, et sert sans JavaScript. #}
 <p class="petit"><a href="/offres">← Offres</a></p>
 <h1>Ajouter une annonce</h1>
-<p class="muet">Elle rejoint le registre sans doublon, reçoit sa note et attend ta décision dans « À trancher ».</p>
+<p class="muet">Elle rejoint le registre sans doublon{% if fonctions.trancher %}, reçoit sa note et attend ta décision dans « À trancher »{% else %} et reçoit sa note{% endif %}.</p>
 
 <form method="post" action="/offres/ajouter" class="carte profil" data-occupe="Lecture de l'annonce…" data-vide-desactive>
   {{ champs_annonce(saisi, manque=manque) }}

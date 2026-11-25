@@ -432,10 +432,12 @@
 </div>
 {%- endmacro %}
 
-{# La modale « Ajouter une annonce », une fois par page ; le bouton : bouton_ajout("ajout-annonce", "Ajouter une annonce"). #}
-{% macro modale_annonce() -%}
+{# La modale « Ajouter une annonce », une fois par page ; le bouton : bouton_ajout("ajout-annonce", "Ajouter une annonce").
+   `trancher` : fonctions.trancher (tri ouvert) ; sinon, le texte ne parle pas de décision. #}
+{% macro modale_annonce(trancher=true) -%}
 {% call modale_ajout("ajout-annonce", "Ajouter une annonce", "/offres/ajouter", occupe="Lecture de l'annonce…", vide_desactive=true,
-     texte="Elle rejoint le registre sans doublon, reçoit sa note et attend ta décision dans « À trancher ».") %}
+     texte="Elle rejoint le registre sans doublon, reçoit sa note et attend ta décision dans « À trancher »." if trancher
+           else "Elle rejoint le registre sans doublon et reçoit sa note.") %}
   {{ champs_annonce() }}
 {% endcall %}
 {%- endmacro %}

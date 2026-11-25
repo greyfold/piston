@@ -441,9 +441,11 @@ class Passage:
             lignes.append("À configurer : %s, %s. La source reprendra d'elle-même une fois le "
                           "réglage fait (page %s)." % (_libelle(nom), message,
                                                        "Sources" if _lien_reglage(nom).startswith("/sources") else "Connecteurs"))
-        lignes.append("%d nouvelles annonces, %d écartées au pré-tri (dont %d limites), %d à trancher."
+        # Parcours ou critères pas encore renseignés : la personne ne peut rien trancher, le résumé n'en parle pas.
+        trancher = profil.peut_trancher()
+        lignes.append("%d nouvelles annonces, %d écartées au pré-tri (dont %d limites)%s."
                       % (ing.get("nouvelles", 0), pt.get("ecartees", 0), pt.get("limites", 0),
-                         pt.get("a_trier", 0)))
+                         ", %d à trancher" % pt.get("a_trier", 0) if trancher else ""))
         if pt.get("reprises"):
             lignes.append("%d annonce(s) d'avant, écartée(s) par le pré-tri resserré." % pt["reprises"])
         if ev.get("evaluees"):
@@ -459,9 +461,10 @@ class Passage:
                              if ech.get("jobroom_prochaine_limite") else ""))
         else:
             lignes.append("%d relances dues." % ech.get("relances_dues", 0))
-        a_trancher = self.reg.cx.execute(
-            "SELECT COUNT(*) FROM annonces WHERE statut IN ('nouvelle','A','B')").fetchone()[0]
-        lignes.append("En attente de ta décision : %d." % a_trancher)
+        if trancher:
+            a_trancher = self.reg.cx.execute(
+                "SELECT COUNT(*) FROM annonces WHERE statut IN ('nouvelle','A','B')").fetchone()[0]
+            lignes.append("En attente de ta décision : %d." % a_trancher)
         texte = "\n".join(lignes)
         self.reg.cx.execute("UPDATE runs SET fin=?, statut=?, resume=? WHERE id=?",
                             (maintenant(), statut, texte, self.id))

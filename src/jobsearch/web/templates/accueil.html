@@ -35,7 +35,15 @@
 </section>
 {% endif %}
 
-{% if rien %}
+{% if rien and not fonctions.trancher %}
+{# Parcours ou critères pas encore renseignés : rien à trancher, et le tri ne se montre pas du tout. #}
+{% set suite = fonctions.manque.trancher[0] %}
+{% call etat_vide("dossier", "Commence par ton parcours", titre_balise="h1",
+     description="Pour savoir quelles annonces valent la peine, l'application a besoin de ton parcours et de ce qui compte pour toi.") %}
+    {% if fonctions.offres %}<a class="bouton" href="/offres">Voir les offres</a>{% endif %}
+    <a class="bouton go" href="{{ suite[2] }}">{{ suite[1] }} {{ icone("suivant") }}</a>
+{% endcall %}
+{% elif rien %}
 {% call etat_vide("recherche", "Aucun poste identifié pour le moment", titre_balise="h1",
      description="Le tri n'a encore retenu aucune annonce pour toi ; le prochain passage en cherchera de nouvelles. La page Offres montre tout ce qui a été trouvé, et ce que le tri a écarté.") %}
     {{ bouton_ajout("ajout-annonce", "Ajouter une annonce trouvée ailleurs", classe="") }}
@@ -61,7 +69,7 @@
 </div></header>
 <div class="chiffres">
 {% macro chiffre(n, libelle, ancre, chaud=false) %}{% if n %}<a class="chiffre {{ 'chaud' if chaud }}" href="#{{ ancre }}"><b>{{ n }}</b><span>{{ libelle }}</span></a>{% else %}<div class="chiffre"><b>0</b><span>{{ libelle }}</span></div>{% endif %}{% endmacro %}
-  {{ chiffre(a_trancher | length, "à trancher", "trancher") }}
+  {% if fonctions.trancher %}{{ chiffre(a_trancher | length, "à trancher", "trancher") }}{% endif %}
   {{ chiffre(retenues | length, "oui, à envoyer", "retenues") }}
   {{ chiffre(relances.dues | length, "relances dues", "relances", relances.dues) }}
   {% if fonctions.jobroom %}{{ chiffre(jobroom.a_saisir | length, "preuves Job-Room", "jobroom", jobroom.a_saisir and jobroom.a_saisir[0]._jours_restants <= 5) }}{% endif %}
@@ -257,5 +265,5 @@
 {% if relances.a_classer %}<p class="petit muet">{{ relances.a_classer | length }} candidatures ont eu leurs deux relances sans réponse : à classer (refus ou sans suite) depuis <a href="/candidatures#sans-suite">Candidatures</a>.</p>{% endif %}
 {% endif %}
 {% endif %}{# rien à faire #}
-{{ modale_annonce() }}
+{{ modale_annonce(fonctions.trancher) }}
 {% endblock %}

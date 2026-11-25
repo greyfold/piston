@@ -3,7 +3,10 @@
 Les versions suivent [SemVer](https://semver.org/lang/fr/) : tant que la version commence par 0,
 l'application est en essai et peut changer d'une version à l'autre.
 
-## Non publié
+## 0.3.1 — 2026-11-25 (version d'essai)
+
+À essayer sur un Mac neuf ou un compte neuf : il faut au moins 15 Go libres pour créer la machine
+virtuelle. Pour repartir de zéro, voir « Désinstaller » dans le README.
 
 ### Ajouté
 
@@ -19,6 +22,8 @@ l'application est en essai et peut changer d'une version à l'autre.
   « /bin/bash: Input/output error ».
 - **Journal des connexions à l'IA** : une connexion ratée laisse sa sortie entière dans
   `logs/connexion.log`, sans les adresses de connexion ; l'écran n'en montre que la dernière ligne.
+- **Désinstaller** (README) : ce que la corbeille ne retire pas (la machine virtuelle, les données, le
+  cache de Lima) et comment l'effacer.
 
 ### Modifié
 

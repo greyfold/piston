@@ -13,7 +13,7 @@
 {% call entete_page(f.titre, f.entreprise, retour=("/?ensuite=1", "Aujourd'hui"), actions=actions, menu=menu) %}
   <p class="meta-entete">{{ meta(f) }}</p>
   {{ delais(f) }}
-  {% if f.statut in ("A", "B", "nouvelle") %}{{ decision(f, raisons, retour, fonctions) }}{% endif %}
+  {% if f.statut in ("A", "B", "nouvelle") and fonctions.trancher %}{{ decision(f, raisons, retour, fonctions) }}{% endif %}
 {% endcall %}
 
 {% set onglets = [("adequation", "Adéquation")] %}

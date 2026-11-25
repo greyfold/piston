@@ -294,12 +294,27 @@ def test_interface_qui_s_ouvre_et_options(neuve, monkeypatch, reg):
     assert f["offres"] and not f["postuler"] and not f["noter"] and not f["jobroom"] and not f["objectifs"]
     assert [i for i, _, _ in f["manque"]["postuler"]] == ["identite", "dossier"]
     web = TestClient(appmod.app)
+    emp = reg.liste(["A"])[0]["empreinte"]
+    # Ni parcours ni critères : rien sur quoi trancher, le tri ne se montre nulle part.
+    assert not f["trancher"] and [i for i, _, _ in f["manque"]["trancher"]] == ["dossier", "criteres"]
+    page = web.get("/", follow_redirects=False)
+    assert page.status_code == 200 and "Commence par ton parcours" in page.text
+    assert "trancher" not in page.text.lower() and 'value="go"' not in page.text
+    assert web.get("/trier", follow_redirects=False).headers["location"].startswith("/?")
+    annonce_page = web.get("/annonce/" + emp).text
+    assert 'value="pasgo"' not in annonce_page and 'class="decision"' not in annonce_page
+    assert web.get("/api/etat").json()["a_trancher"] is None                # la barre des menus non plus
+    for type_ in ("go", "pasgo", "attendre"):
+        r = web.post("/action", data={"empreinte": emp, "type": type_, "retour": "/"}, follow_redirects=False)
+        assert "parcours" in unquote(r.headers["location"]) and reg.get(emp)["statut"] == "A"
+    # Parcours et critères renseignés : le tri s'ouvre, oui reste fermé tant qu'il manque de quoi postuler.
+    fonctions = profil.fonctions
+    monkeypatch.setattr(profil, "fonctions", lambda p=None, ia_connectee=False: {**fonctions(p, ia_connectee), "trancher": True})
     tri = web.get("/").text                                  # à l'ouverture : d'abord le tri
     assert "Pour postuler, il reste" in tri and 'disabled aria-describedby="verrou-tri"' in tri   # voir, pas postuler
     page = web.get("/?ensuite=1").text
     assert 'href="/candidatures"' not in page and 'href="/offres"' in page and 'id="jobroom"' not in page and "preuves Job-Room" not in page
     assert 'value="go"' not in page
-    emp = reg.liste(["A"])[0]["empreinte"]
     r = web.post("/action", data={"empreinte": emp, "type": "go", "retour": "/"}, follow_redirects=False)
     assert "postuler" in unquote(r.headers["location"]) and reg.get(emp)["statut"] == "A"   # refusé côté serveur aussi
     # Version 1 : ni page « Fonctions » (ni l'ancienne « Interface »), ni preuves Job-Room, même d'un profil d'avant.
@@ -332,6 +347,8 @@ def test_bien_demarrer_disparait_une_fois_tout_fait_et_etat_vide(neuve, monkeypa
     etapes = ["ia", "recherche", "identite", "dossier", "criteres"]
     faites = lambda n: [(i, i, "", "1 min", "/", k < n) for k, i in enumerate(etapes)]
     web = TestClient(appmod.app)
+    fonctions = profil.fonctions                       # parcours et critères faits : le tri est ouvert
+    monkeypatch.setattr(profil, "fonctions", lambda p=None, ia_connectee=False: {**fonctions(p, ia_connectee), "trancher": True})
     monkeypatch.setattr(profil, "premiers_pas", lambda p=None, ia_connectee=False: faites(4))
     assert "Bien démarrer" in web.get("/").text
     assert profil.charger()[profil.PREMIERS_PAS_FAITS] == ["dossier", "ia", "identite", "recherche"]   # retenues

@@ -593,6 +593,9 @@ OPTION_OBJECTIFS = "objectifs"
 DEBLOCAGES = [
     {"id": "offres", "titre": "Voir les offres trouvées", "demande": ["recherche"],
      "description": "Les annonces trouvées chaque matin sur tes sources, triées par le pré-tri."},
+    # Sans parcours ni critères, il n'y a rien sur quoi juger une annonce : le tri ne se montre pas du tout.
+    {"id": "trancher", "titre": "Trancher les annonces", "demande": ["dossier", "criteres"],
+     "description": "Oui, non ou peut-être sur chaque annonce trouvée, d'après ton parcours et ce qui compte pour toi."},
     {"id": "noter", "titre": "La note de chaque annonce", "demande": ["ia", "criteres"],
      "description": "L'IA note chaque annonce d'après ce qui compte pour toi."},
     {"id": "postuler", "titre": "Postuler : CV, lettre et suivi", "demande": ["ia", "identite", "dossier"],
@@ -641,6 +644,12 @@ def fonctions(p=None, ia_connectee=False):
         out[d["id"]] = not manque
         out["manque"][d["id"]] = manque
     return out
+
+
+def peut_trancher(p=None):
+    """Le tri des annonces s'ouvre une fois le parcours et ce qui compte pour toi renseignés ; avant, l'interface
+    ne montre ni annonces à trancher ni décision (la connexion de l'IA n'y compte pas)."""
+    return fonctions(p)["trancher"]
 
 
 OBJECTIFS_RYTHME = ("objectifs.semaine_min", "objectifs.mois_min")

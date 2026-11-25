@@ -204,6 +204,17 @@ Le script construit `dist/Piston.app` :
 
 Signature locale seulement, pas encore de notarisation. Rien à installer sur le Mac.
 
+## Désinstaller
+
+Mettre `Piston.app` à la corbeille ne retire que l'application. Quitter Piston d'abord (elle éteint
+sa machine virtuelle), puis, selon ce qu'on veut effacer :
+
+```bash
+rm -rf ~/Library/Application\ Support/Recherche\ emploi/lima   # la VM seule (plusieurs Go), recréée au lancement
+rm -rf ~/Library/Caches/lima                                    # l'image Ubuntu en cache (si Lima ne sert à rien d'autre)
+rm -rf ~/Library/Application\ Support/Recherche\ emploi        # tout, données comprises
+```
+
 ## La machine virtuelle : le moteur d'IA et Chrome
 
 `vm.py` crée la VM (Ubuntu, Virtualization.framework d'Apple) au premier démarrage, dans
