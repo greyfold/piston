@@ -26,6 +26,8 @@
 {% endblock %}
 <main>
 {% if profil_manquants and not accueil and not concentre and not premiers_pas_affiches and not nav.startswith(('/profil', '/connexion')) %}<div class="bandeau attention"><span class="point"></span><span>Profil incomplet ({{ profil_manquants | map('last') | join(', ') }}) : <a href="/profil">le compléter</a>.</span></div>{% endif %}
+{# La machine virtuelle démarre encore (« Continuer sans attendre ») : où elle en est, tenu à jour ci-dessous. #}
+{% if demarrage_vm %}<div class="bandeau info" data-avancement-vm data-fin="bandeau" data-faites="{{ demarrage_vm.etapes | selectattr('etat', 'equalto', 'faite') | list | length }}"><span class="point"></span><span data-texte>La machine virtuelle démarre (<span data-pourcentage>{{ demarrage_vm.pourcentage }}</span> %) : l'IA et le navigateur seront prêts dans environ <span data-reste>{{ demarrage_vm.reste_min }}</span> min. Le reste de l'application marche déjà. <a href="/demarrage">Voir l'avancement</a></span></div>{% endif %}
 {% if a_configurer and not accueil and nav in ('/', '/sante') %}{% for c in a_configurer %}<div class="bandeau attention"><span class="point"></span><span>{{ c.nom }} n'est pas branché : {{ c.message }}. Les autres sources tournent normalement, et {{ c.nom }} reprendra de lui-même une fois le réglage fait. <a href="{{ c.lien }}">Que faire</a></span></div>{% endfor %}{% endif %}
 {# Réglages : la page ouverte sur une seule colonne, de la largeur d'un formulaire, avec un retour vers la
    page Réglages (sauf sur celle-ci), ou vers `retour_cadre` pour une sous-page (le détail d'une source). #}
@@ -84,6 +86,42 @@ document.querySelectorAll("[data-suivi-dossier]").forEach(function (el) {
       })
       .catch(function () {});
   }, 5000);
+});
+
+// Démarrage de la machine virtuelle (macro avancement_vm, bandeau) : l'avancement toutes les 3 s. Une étape
+// finie recharge l'écran de démarrage (son Stepper) ; tout fini : Aujourd'hui, ou le bandeau devient « prête ».
+document.querySelectorAll("[data-avancement-vm]").forEach(function (el) {
+  var poser = function (cle, valeur) {
+    var c = el.querySelector("[data-" + cle + "]");
+    if (c) c.textContent = valeur;
+  };
+  var minuterie = setInterval(function () {
+    fetch("/api/demarrage", {credentials: "same-origin"})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (a) {
+        if (!a) return;
+        var faites = a.etapes.filter(function (e) { return e.etat === "faite"; }).length;
+        if (!a.en_cours) {
+          clearInterval(minuterie);
+          if (el.dataset.fin === "accueil" && a.fini) { location.replace("/"); return; }
+          if (el.dataset.fin !== "bandeau") { location.reload(); return; }
+          el.className = "bandeau " + (a.fini ? "ok" : "attention");
+          poser("texte", a.fini ? "La machine virtuelle est prête : l'IA et le navigateur répondent."
+            : "La machine virtuelle n'a pas démarré (" + a.erreur + ") : relance-la par le menu Piston de la barre des menus.");
+          return;
+        }
+        if (el.dataset.fin !== "bandeau" && String(faites) !== el.dataset.faites) { location.reload(); return; }
+        var barre = el.querySelector(".progression");
+        if (barre) {
+          barre.setAttribute("aria-valuenow", a.pourcentage);
+          barre.querySelector("i").style.width = a.pourcentage + "%";
+        }
+        poser("pourcentage", a.pourcentage);
+        poser("reste", a.reste_min);
+        if (a.detail) poser("detail", a.detail + "…");
+      })
+      .catch(function () {});
+  }, 3000);
 });
 
 // Tâche en arrière-plan (évaluation d'une annonce ajoutée) : la page se recharge jusqu'au résultat.

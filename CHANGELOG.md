@@ -3,6 +3,25 @@
 Les versions suivent [SemVer](https://semver.org/lang/fr/) : tant que la version commence par 0,
 l'application est en essai et peut changer d'une version à l'autre.
 
+## Non publié
+
+### Ajouté
+
+- **Écran de bienvenue** à la première ouverture, avant l'assistant : ce que fait l'application,
+  comment elle protège tes données, et la préparation de la machine virtuelle qui se fait pendant ce
+  temps. Ta recherche et tes sources se règlent sans l'attendre.
+- **Barre d'avancement** du démarrage de la machine virtuelle (page `/demarrage`) : les étapes, un
+  pourcentage et le temps qui reste, estimé d'après la durée de chaque étape la dernière fois.
+- Après « Continuer sans attendre », un **bandeau** en haut des pages suit l'avancement et dit quand
+  la machine virtuelle est prête.
+
+### Modifié
+
+- Pendant le démarrage, ce qui demande l'IA le dit clairement (« la machine virtuelle démarre encore,
+  42 %… ») au lieu d'une panne ; la connexion à l'IA attend que la machine soit prête, et l'étape
+  « Ton IA » de l'assistant montre l'avancement au lieu de boutons qui échoueraient.
+- L'écran d'attente natif du démarrage est remplacé par la page `/demarrage` du tableau de bord.
+
 ## 0.3.0 — 2026-11-25 (version d'essai)
 
 Première version construite pour être essayée hors du poste de développement.

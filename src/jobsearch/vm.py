@@ -406,11 +406,141 @@ def mettre_les_ports_a_jour():
         raise VMImpossible("ports de la VM non mis à jour : %s" % (res.stderr or "").strip()[-300:])
 
 
+# --- Avancement du démarrage -----------------------------------------------------------
+#
+# L'écran de démarrage (page /demarrage) et le bandeau des autres pages montrent où en est le
+# démarrage : les étapes prévues, l'étape en cours, un pourcentage. Chaque étape a une durée
+# attendue : celle qu'elle a prise la dernière fois sur ce Mac, sinon une valeur par défaut. Dans
+# une étape, la barre avance avec le temps sans jamais dépasser 95 % de l'étape : elle n'annonce
+# jamais fini ce qui ne l'est pas.
+
+ETAPES = {
+    # id : (libellé court du Stepper, ce qui se passe, durée attendue par défaut en secondes)
+    "creation": ("Création", "Téléchargement d'Ubuntu et création de la machine virtuelle", 240),
+    "systeme": ("Système", "Installation du système, de Chrome et des moteurs d'IA", 900),
+    "demarrage": ("Démarrage", "Démarrage de la machine virtuelle", 45),
+    "installation": ("Application", "Installation de l'application dans la machine virtuelle", 300),
+    "verification": ("Vérification", "Vérification des moteurs d'IA", 20),
+    "lancement": ("Lancement", "Lancement du travailleur", 15),
+}
+PLAFOND_ETAPE = .95
+
+
+def _fichier_avancement():
+    return DATA / "vm" / "demarrage.json"
+
+
+def _fichier_durees():
+    return DATA / "vm" / "durees.json"
+
+
+def _lire_json(f, defaut):
+    try:
+        return json.loads(f.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return defaut
+
+
+class Avancement:
+    """Le démarrage en cours, écrit dans `vm/demarrage.json` à chaque étape (le tableau de bord le lit)."""
+
+    def __init__(self, plan, premiere, annoncer):
+        self.durees = _lire_json(_fichier_durees(), {})
+        self.annoncer = annoncer
+        self.etat = {"debut": time.time(), "premiere": premiere, "fin": None, "erreur": None,
+                     "plan": list(plan), "faites": [], "etape": None, "debut_etape": None}
+        self._ecrire()
+
+    def _ecrire(self):
+        f = _fichier_avancement()
+        f.parent.mkdir(parents=True, exist_ok=True)
+        tmp = f.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self.etat, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(f)
+
+    def _clore_etape(self):
+        e = self.etat
+        if e["etape"]:
+            self.durees[e["etape"]] = round(time.time() - e["debut_etape"])
+            e["faites"].append(e["etape"])
+
+    def etape(self, id_, remplace=None):
+        """Passe à l'étape `id_` ; `remplace` : l'étape prévue qu'elle prend à sa place (le code a changé)."""
+        e = self.etat
+        self._clore_etape()
+        if remplace in e["plan"]:
+            e["plan"][e["plan"].index(remplace)] = id_
+        elif id_ not in e["plan"]:
+            e["plan"].append(id_)
+        e["etape"], e["debut_etape"] = id_, time.time()
+        e["attendues"] = {i: self.durees.get(i, ETAPES[i][2]) for i in e["plan"]}
+        self._ecrire()
+        self.annoncer(ETAPES[id_][1])
+
+    def finir(self, erreur=None):
+        e = self.etat
+        if erreur is None:
+            self._clore_etape()
+            try:
+                _fichier_durees().write_text(json.dumps(self.durees), encoding="utf-8")
+            except OSError:
+                pass
+        e["etape"], e["fin"], e["erreur"] = (e["etape"] if erreur else None), time.time(), erreur
+        self._ecrire()
+
+
+def en_demarrage():
+    """Vrai pendant que `demarrer` tourne (il tient le verrou `vm/demarrer.lock`), dans ce processus
+    ou dans un autre (l'application lance `jobsearch vm demarrer`)."""
+    import fcntl
+    f = DATA / "vm" / "demarrer.lock"
+    if not f.exists():
+        return False
+    with open(f, "a") as verrou:
+        try:
+            fcntl.flock(verrou, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return True
+        fcntl.flock(verrou, fcntl.LOCK_UN)
+    return False
+
+
+def avancement(maintenant=None):
+    """Où en est le démarrage de la VM, pour l'écran de démarrage et le bandeau ; None si aucun n'a
+    jamais été suivi. `en_cours`, `pourcentage`, `etapes` [{id, libelle, etat}], `detail` (l'étape en
+    cours, en clair), `reste_min` (estimation), `erreur` (le dernier démarrage a échoué)."""
+    e = _lire_json(_fichier_avancement(), None)
+    if not e:
+        return None
+    maintenant = maintenant or time.time()
+    en_cours = e.get("fin") is None and en_demarrage()
+    attendues = e.get("attendues") or {i: ETAPES[i][2] for i in e.get("plan", [])}
+    total = sum(attendues.values()) or 1
+    fait = sum(attendues.get(i, 0) for i in e.get("faites", []))
+    courante = e.get("etape")
+    reste = total - fait
+    if courante and en_cours:
+        attendue = attendues.get(courante, ETAPES[courante][2])
+        ecoule = maintenant - (e.get("debut_etape") or maintenant)
+        fait += min(ecoule, attendue * PLAFOND_ETAPE)
+        reste = max(attendue - ecoule, 0) + sum(attendues.get(i, 0) for i in e["plan"]
+                                                if i not in e.get("faites", []) and i != courante)
+    fini = e.get("fin") is not None and not e.get("erreur")
+    etapes = [{"id": i, "libelle": ETAPES[i][0],
+               "etat": "faite" if fini or i in e.get("faites", []) else "en_cours" if i == courante else "a_faire"}
+              for i in e.get("plan", []) if i in ETAPES]
+    return {"en_cours": en_cours, "premiere": bool(e.get("premiere")), "fini": fini,
+            "erreur": e.get("erreur") or (None if fini or en_cours else "le démarrage s'est interrompu"),
+            "pourcentage": 100 if fini else min(99, int(100 * fait / total)),
+            "etapes": etapes, "detail": ETAPES[courante][1] if courante in ETAPES else None,
+            "reste_min": max(1, round(reste / 60)) if en_cours else 0}
+
+
 def demarrer(attente_s=60, annoncer=None):
     """Démarre la VM (la crée au besoin), installe le code s'il a changé, lance le travailleur. Un seul
     à la fois : l'ouverture de l'application et un passage peuvent le demander ensemble ; le second
     attend, puis trouve le travailleur à jour et n'a rien à refaire. `annoncer(texte)` reçoit chaque
-    étape (l'écran d'attente de l'application les montre)."""
+    étape ; `vm/demarrage.json` suit l'avancement (écran de démarrage, bandeau des pages)."""
     import fcntl
     (DATA / "vm").mkdir(parents=True, exist_ok=True)
     with open(DATA / "vm" / "demarrer.lock", "w") as verrou:
@@ -421,30 +551,48 @@ def demarrer(attente_s=60, annoncer=None):
 def _demarrer(attente_s, annoncer):
     from .travailleur import jeton
     jeton.lire()                                  # créé côté Mac, lu par la VM dans /donnees
-    if not instance():
-        annoncer("Création de la machine virtuelle : la première fois, jusqu'à une demi-heure")
+    i = instance()
+    if i and i.get("status") == "Running":
+        # VM déjà allumée (l'application a été quittée sans l'éteindre) : rien à refaire si son
+        # travailleur tourne sur le code de ce Mac ; aucun avancement à montrer.
+        e = etat_a_jour()
+        if e is not None:
+            return e
+    if not i:
+        a = Avancement(["creation", "systeme", "installation", "lancement"], True, annoncer)
+    elif i.get("status") != "Running":
+        a = Avancement(["demarrage", "verification", "lancement"], False, annoncer)
+    else:
+        a = Avancement(["verification", "lancement"], False, annoncer)
+    try:
+        e = _demarrer_suivi(a, i, attente_s)
+    except BaseException as ex:
+        a.finir(erreur=str(ex) or type(ex).__name__)
+        raise
+    a.finir()
+    return e
+
+
+def _demarrer_suivi(a, i, attente_s):
+    if not i:
+        a.etape("creation")
         creer()
-    elif not ports_a_jour(instance()):
+    elif not ports_a_jour(i):
         mettre_les_ports_a_jour()
     if (instance() or {}).get("status") != "Running":
-        annoncer("Démarrage de la machine virtuelle")
+        # La première fois, le premier démarrage installe aussi le système (provision de Lima).
+        a.etape("systeme" if a.etat["premiere"] else "demarrage")
         _tuer_agents()                            # VM éteinte : un agent resté ne doit pas la doubler
         res = _lima("start", "--tty=false", nom(), timeout=1800)
         if res.returncode != 0:
             raise VMImpossible("démarrage refusé par Lima : %s" % (res.stderr or "").strip()[-300:])
-    else:
-        # VM déjà allumée (l'application a été quittée sans l'éteindre) : rien à refaire si son
-        # travailleur tourne sur le code de ce Mac.
-        e = etat_a_jour()
-        if e is not None:
-            return e
     if code_installe() != empreinte_code():
-        annoncer("Mise à jour de l'application dans la machine virtuelle")
+        a.etape("installation", remplace="verification")
         installer_code()
     else:
-        annoncer("Vérification des moteurs d'IA")
+        a.etape("verification")
         installer_moteurs()                       # s'ils manquent seulement
-    annoncer("Lancement du travailleur")
+    a.etape("lancement")
     ecran_motdepasse()
     _shell(LANCER % {"donnees": DONNEES, "code": CODE, "port": port(), "ecran": port_ecran(),
                      "vnc": PORT_VNC, "devtools": PORT_DEVTOOLS, "politique": json.dumps(POLITIQUE_CHROME)}, timeout=120)

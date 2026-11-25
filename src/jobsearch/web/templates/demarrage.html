@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icone, avancement_vm %}
+{% block titre %}{{ "Bienvenue" if decouverte else "Démarrage" }} · Piston{% endblock %}
+{% block contenu %}
+{# L'écran d'ouverture (spec Nexus « 03 Onboarding » : une carte, une action principale). La première fois :
+   ce que fait l'application et comment elle protège la personne, avant l'assistant, pendant que la machine
+   virtuelle se crée. Ensuite : l'avancement du démarrage seul, et « Continuer sans attendre ». #}
+<div class="coquille-accueil">
+<div class="carte-accueil">
+{% if decouverte %}
+  <h1>Bienvenue dans Piston</h1>
+  <p class="intro">Chaque matin, l'application cherche les offres pour toi, t'aide à les trier et prépare tes dossiers avec ton IA : c'est toi qui décides et qui envoies.</p>
+
+  <div class="apercu-accueil">
+    <p class="surtitre">Comment ça marche</p>
+    <div class="ligne-apercu">
+      <span class="pastille">{{ icone("recherche") }}</span>
+      <div><p class="fort">Les annonces viennent à toi</p>
+        <p>Les sites d'emploi et les pages carrière que tu choisis sont lus chaque matin, sans doublon.</p></div>
+    </div>
+    <div class="ligne-apercu">
+      <span class="pastille">{{ icone("pretri") }}</span>
+      <div><p class="fort">Un tri à ta mesure</p>
+        <p>Ton IA note chaque annonce selon ton parcours : oui, peut-être ou non. Tu tranches en un clic.</p></div>
+    </div>
+    <div class="ligne-apercu">
+      <span class="pastille">{{ icone("dossier") }}</span>
+      <div><p class="fort">Des dossiers prêts à relire</p>
+        <p>CV et lettre adaptés à chaque annonce, puis les relances à faire. Rien ne part sans toi.</p></div>
+    </div>
+    <div class="ligne-apercu">
+      <span class="pastille">{{ icone("cadenas") }}</span>
+      <div><p class="fort">Tes données restent chez toi</p>
+        <p>L'IA et le navigateur tournent dans une machine virtuelle, à l'écart de ton Mac. Ton nom et tes coordonnées ne partent jamais vers l'IA.</p></div>
+    </div>
+  </div>
+
+  {% if avancement and (avancement.en_cours or avancement.erreur) %}
+  <section class="preparation-vm" aria-labelledby="titre-preparation">
+    <h2 class="section-base" id="titre-preparation">En ce moment</h2>
+    {% if avancement.en_cours %}
+    <p class="aide-accueil">Ta machine virtuelle se prépare.{% if avancement.premiere %} La première fois, il faut compter 15 à 30 minutes : Ubuntu, Chrome et les moteurs d'IA s'installent.{% endif %}</p>
+    {{ avancement_vm(avancement, "recharger") }}
+    <p class="aide-accueil">Pas besoin d'attendre : ta recherche et tes sources se règlent sans l'IA. L'étape « Ton IA » attendra que la machine soit prête.</p>
+    {% else %}
+    <div class="etat-tache erreur">{{ icone("alerte") }}<div><p class="fort">La machine virtuelle n'a pas démarré</p>
+      <p>{{ avancement.erreur }}. Tu peux commencer quand même, puis la relancer par le menu Piston de la barre des menus : « Démarrer la machine virtuelle ».</p></div></div>
+    {% endif %}
+  </section>
+  {% elif avancement and avancement.fini %}
+  <div class="etat-tache ok">{{ icone("fin") }}<div><p class="fort">Ta machine virtuelle est prête</p>
+    <p>L'IA et le navigateur t'attendent : tu les connecteras pendant la mise en route.</p></div></div>
+  {% endif %}
+
+  <div class="actions-accueil">
+    <span class="aide-accueil">Quatre étapes, quelques minutes.</span>
+    <a class="bouton go grand" href="/bienvenue/recherche">Commencer {{ icone("suivant") }}</a>
+  </div>
+{% else %}
+  <h1>Démarrage de la machine virtuelle</h1>
+  <p class="intro">{{ ia }} et le navigateur tournent dans une machine virtuelle, à l'écart de ton Mac : elle redémarre à chaque ouverture de l'application.</p>
+  {{ avancement_vm(avancement, "accueil") }}
+  <div class="plus-tard">
+    <p class="fort">Sans attendre, tu peux déjà</p>
+    <ul>
+      <li>trancher tes annonces, suivre tes candidatures et tes relances ;</li>
+      <li>modifier ta recherche, tes sources et ton profil.</li>
+    </ul>
+    <p>Ce qui demande l'IA ou le navigateur (notes, dossiers, connexion à {{ ia }}) attend la fin du démarrage. Un bandeau en haut des pages te dit où il en est.</p>
+  </div>
+  <div class="actions-accueil">
+    <span></span>
+    <a class="bouton" href="/">Continuer sans attendre</a>
+  </div>
+{% endif %}
+</div>
+</div>
+{% endblock %}

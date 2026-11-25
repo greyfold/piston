@@ -72,7 +72,7 @@ struct Menu_: View {
         if etat.mode == "distant" {
             Text("Machine virtuelle : \(libelleVM)")
         }
-        if let o = etat.occupe { Text("En cours : \(o)…") }
+        if let o = etat.occupe { Text("En cours : \(etat.etapeVM ?? o)…") }
         if let m = etat.dernierMessage { Text(m) }
         Divider()
         Button("Ouvrir le tableau de bord") {
@@ -126,12 +126,8 @@ struct Tableau: View {
         Group {
             if etat.arretEnCours {
                 EcranArret()
-            } else if etat.tableauPret && etat.attenteVM {
-                EcranAttente(titre: "Démarrage de la machine virtuelle",
-                             detail: etat.etapeVM ?? "Préparation",
-                             note: "L'IA, Indeed et le navigateur tournent dans la machine virtuelle. Elle s'éteint quand tu quittes l'application.",
-                             action: ("Continuer sans attendre", { etat.continuerSansAttendre() }))
             } else if etat.tableauPret {
+                // Le démarrage de la machine virtuelle se montre dans la page (/demarrage, Etat.swift).
                 PageWeb(url: etat.base, etat: etat)
             } else if let e = etat.erreurTableau {
                 VStack(spacing: 12) {
@@ -146,8 +142,8 @@ struct Tableau: View {
     }
 }
 
-/// Écran d'attente natif (lancement, fermeture) : un indicateur, ce qui se passe, l'étape en cours,
-/// et au besoin une action secondaire. Sobre, aux couleurs du système (clair et sombre).
+/// Écran d'attente natif (ouverture du tableau de bord, fermeture) : un indicateur, ce qui se passe,
+/// l'étape en cours, et au besoin une action secondaire. Sobre, aux couleurs du système (clair et sombre).
 struct EcranAttente: View {
     let titre: String
     let detail: String

@@ -78,7 +78,11 @@ def test_accueil_recherche_ia_offres_puis_checklist(neuve, monkeypatch, reg):
     web = TestClient(appmod.app)
     assert profil.en_accueil()
     assert web.get("/", follow_redirects=False).headers["location"] == "/bienvenue"
-    assert web.get("/bienvenue", follow_redirects=False).headers["location"] == "/bienvenue/recherche"   # la recherche d'abord
+    # L'écran informatif d'abord (ce que fait l'application, comment elle protège), puis la recherche.
+    assert web.get("/bienvenue", follow_redirects=False).headers["location"] == "/demarrage"
+    page = web.get("/demarrage").text
+    assert 'class="menu-lateral"' not in page and "Bienvenue dans Piston" in page and "Comment ça marche" in page
+    assert 'href="/bienvenue/recherche"' in page and "avancement-vm\" data-avancement-vm" not in page   # mode local : pas de VM
     page = web.get("/bienvenue/recherche").text
     assert 'class="menu-lateral"' not in page and 'aria-current="step"' in page and "Ta recherche" in page
     assert page.index("Ta recherche") < page.index("Tes sources") < page.index("Ton IA") < page.index("Premières offres")
@@ -355,3 +359,42 @@ def test_bien_demarrer_disparait_une_fois_tout_fait_et_etat_vide(neuve, monkeypa
     page = web.get("/").text
     assert "À trancher" in page and "Aucun poste identifié" not in page
     assert "Dossiers prêts à envoyer" not in page and "Courrier des employeurs" not in page and "Relances dues" not in page
+
+
+def test_vm_en_demarrage_ecran_bandeau_et_protections(neuve, monkeypatch, reg):
+    """« Continuer sans attendre » : la VM finit de démarrer en arrière-plan. L'écran de démarrage montre
+    l'avancement, les autres pages un bandeau ; la connexion à l'IA et les tâches de l'IA le disent
+    clairement au lieu d'échouer sur une panne."""
+    import httpx
+    from fastapi.testclient import TestClient
+    from jobsearch import vm
+    from jobsearch.travailleur import client
+    from jobsearch.web import app as appmod
+    a = {"en_cours": True, "premiere": True, "fini": False, "erreur": None, "pourcentage": 42, "reste_min": 12,
+         "detail": "Installation du système, de Chrome et des moteurs d'IA",
+         "etapes": [{"id": "creation", "libelle": "Création", "etat": "faite"},
+                    {"id": "systeme", "libelle": "Système", "etat": "en_cours"}]}
+    monkeypatch.setattr(appmod, "_reg", lambda: type(reg)(reg.chemin))
+    monkeypatch.setattr(appmod, "_demarrage_vm", lambda: a)
+    web = TestClient(appmod.app)
+    page = web.get("/demarrage").text                       # première ouverture : découverte + avancement
+    assert "Bienvenue dans Piston" in page and "En ce moment" in page and "15 à 30 minutes" in page
+    assert 'aria-valuenow="42"' in page and 'data-faites="1"' in page and "Installation du système" in page
+    assert web.get("/api/demarrage").json()["pourcentage"] == 42
+    r = web.post("/ia/connexion/claude/demarrer")
+    assert r.status_code == 409 and "démarre encore (42 %)" in r.json()["message"]
+
+    profil.terminer_accueil()                                # ouvertures suivantes : l'avancement seul
+    page = web.get("/demarrage").text
+    assert "Démarrage de la machine virtuelle" in page and "Continuer sans attendre" in page and 'data-fin="accueil"' in page
+    page = web.get("/sources").text                          # ailleurs : le bandeau
+    assert 'class="bandeau info" data-avancement-vm' in page and "environ <span data-reste>12</span> min" in page
+    a["en_cours"] = False
+    assert web.get("/demarrage", follow_redirects=False).headers["location"] == "/"
+    assert "data-avancement-vm data-fin" not in web.get("/sources").text
+
+    monkeypatch.setattr(vm, "en_demarrage", lambda: True)    # une tâche de l'IA pendant le démarrage
+    monkeypatch.setattr(vm, "avancement", lambda: dict(a, en_cours=True))
+    assert client.message_injoignable(httpx.ConnectError("x")).startswith("la machine virtuelle démarre encore (42 %")
+    monkeypatch.setattr(vm, "en_demarrage", lambda: False)
+    assert "travailleur injoignable" in client.message_injoignable(httpx.ConnectError("x"))

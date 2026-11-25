@@ -42,6 +42,17 @@ def _http():
     return _HTTP
 
 
+def message_injoignable(e):
+    """Le travailleur ne répond pas. Pendant le démarrage de la VM (lancement de l'application, « Continuer
+    sans attendre »), c'est normal : le message le dit, avec l'avancement, au lieu d'une panne."""
+    from .. import vm
+    a = vm.avancement() if vm.en_demarrage() else None
+    if a and a["en_cours"]:
+        return ("la machine virtuelle démarre encore (%d %%, encore environ %d min) : l'IA sera prête ensuite, "
+                "réessaie à ce moment-là" % (a["pourcentage"], a["reste_min"]))
+    return "travailleur injoignable (%s) : la machine virtuelle est-elle démarrée ?" % type(e).__name__
+
+
 class Distant:
     def __init__(self, adresse=ADRESSE, jeton_=None, http=None):
         self.adresse = adresse.rstrip("/")
@@ -59,8 +70,8 @@ class Distant:
                 kw["timeout"] = delai
             r = self.http.request(methode, self.adresse + chemin, headers=self.entetes, **kw)
         except httpx.HTTPError as e:
-            raise erreur("travailleur injoignable (%s) : la machine virtuelle est-elle démarrée ?"
-                         % type(e).__name__, **({"bloquant": True} if erreur is moteur.MoteurImpossible else {})) from e
+            raise erreur(message_injoignable(e),
+                         **({"bloquant": True} if erreur is moteur.MoteurImpossible else {})) from e
         if r.status_code == 401:
             raise erreur("travailleur : jeton refusé", **({"bloquant": True} if erreur is moteur.MoteurImpossible else {}))
         if r.status_code == 422:

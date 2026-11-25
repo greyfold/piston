@@ -53,9 +53,7 @@ final class Etat: ObservableObject {
     /// répond, l'accueil se recharge pour dire si l'IA est connectée (bandeau de l'accueil).
     @Published var rechargerAccueil = false
     @Published var ouvertureAuto = SMAppService.mainApp.status == .enabled
-    /// Écran d'attente du lancement : la machine virtuelle démarre (montré si cela dure plus d'un instant).
-    @Published var attenteVM = false
-    /// L'étape en cours, annoncée par `jobsearch vm demarrer` (« étape : … »).
+    /// L'étape en cours, annoncée par `jobsearch vm demarrer` (« étape : … ») ; montrée dans le menu.
     @Published var etapeVM: String?
     /// La fermeture attend que la machine virtuelle soit éteinte.
     @Published var arretEnCours = false
@@ -73,7 +71,6 @@ final class Etat: ObservableObject {
     private var minuterieEcheances: Timer?
     private var demarre = false
     private var commande: Process?        // la commande du menu en cours (`executer`)
-    private var vmEnDemarrage = false
     private var modeLu = false            // `mode` vient de /api/etat (sinon : valeur par défaut)
     private var fenetreArret: NSWindow?
     /// Le jeton du tableau de bord (fichier `jeton` du dossier de données, écrit par le serveur avant
@@ -171,14 +168,16 @@ final class Etat: ObservableObject {
         }
     }
 
-    /// `jobsearch vm demarrer` au lancement, avec ses étapes. L'écran d'attente ne paraît que si le
-    /// démarrage dure (VM éteinte, code à réinstaller) ; « Continuer sans attendre » le referme.
+    /// `jobsearch vm demarrer` au lancement, avec ses étapes. Dès qu'il annonce une étape (VM à créer,
+    /// éteinte, code à réinstaller : rien si elle tourne déjà à jour), la fenêtre montre l'écran de
+    /// démarrage du tableau de bord (/demarrage) : avancement, « Continuer sans attendre », et la
+    /// première fois la découverte de l'application. Il suit `vm/demarrage.json` et revient seul à
+    /// l'accueil une fois la VM prête ; après « Continuer sans attendre », un bandeau des pages le relaie.
     private func demarrerVMAuLancement(ensuite: @escaping @MainActor () -> Void) {
         guard occupe == nil else { ensuite(); return }
         let titre = "Démarrage de la machine virtuelle"
         occupe = titre
-        vmEnDemarrage = true
-        etapeVM = vmStatut == "Running" ? "Vérification de la machine virtuelle" : titre
+        etapeVM = nil
         let p = processus(["vm", "demarrer"])
         let sortie = Pipe()
         let tampon = Tampon()
@@ -189,7 +188,10 @@ final class Etat: ObservableObject {
             let lignes = String(decoding: d, as: UTF8.self).split(separator: "\n")
             if let e = lignes.last(where: { $0.hasPrefix("étape : ") }) {
                 let texte = String(e.dropFirst("étape : ".count))
-                Task { @MainActor in self.etapeVM = texte }
+                Task { @MainActor in
+                    if self.etapeVM == nil { self.pageDemandee = "demarrage" }   // la première étape seulement
+                    self.etapeVM = texte
+                }
             }
         }
         p.standardOutput = sortie
@@ -201,8 +203,6 @@ final class Etat: ObservableObject {
             Task { @MainActor in
                 self.commande = nil
                 self.occupe = nil
-                self.vmEnDemarrage = false
-                self.attenteVM = false
                 self.etapeVM = nil
                 guard !self.quitte else { return }
                 let derniere = texte.split(separator: "\n").last.map(String.init) ?? ""
@@ -214,23 +214,12 @@ final class Etat: ObservableObject {
         }
         do { try p.run() } catch {
             occupe = nil
-            vmEnDemarrage = false
             dernierMessage = "\(titre) : impossible de lancer la commande (\(error.localizedDescription))."
             ensuite()
             return
         }
         commande = p
         Etat.garde(p, secondes: 3600)
-        Task {
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            if self.vmEnDemarrage { self.attenteVM = true }
-        }
-    }
-
-    /// « Continuer sans attendre » : le tableau de bord s'ouvre, la VM finit de démarrer en arrière-plan.
-    func continuerSansAttendre() {
-        vmEnDemarrage = false
-        attenteVM = false
     }
 
     /// Un processus Python embarqué : `python3 -m jobsearch <arguments>`.

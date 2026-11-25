@@ -202,7 +202,11 @@ def page(request, nom, **ctx):
     ctx["raisons"] = criteres().get("raisons") or {}
     ctx["aujourdhui"] = dt.date.today().isoformat()
     ctx["profil_manquants"] = profil_mod.manquants()
-    ctx["accueil"] = request.url.path.startswith("/bienvenue") and profil_mod.en_accueil()   # sans menu
+    ctx["accueil"] = ((request.url.path.startswith("/bienvenue") and profil_mod.en_accueil())   # sans menu
+                      or request.url.path == "/demarrage")
+    # La VM démarre encore (« Continuer sans attendre ») : un bandeau d'avancement sur les autres pages.
+    a = None if ctx["accueil"] else _demarrage_vm()
+    ctx["demarrage_vm"] = a if a and a["en_cours"] else None
     ctx["notifs"] = {"liste": [], "nouvelles": 0} if ctx["accueil"] else _notifications(request)
     p = profil_mod.charger()
     ctx["premiers_pas_affiches"] = p.get(profil_mod.PREMIERS_PAS) == "affichee"
@@ -1522,6 +1526,41 @@ def _page_profil(request, ident, saisi=None, **ctx):
                 manquants=profil_mod.manquants(p), **ctx)
 
 
+# --- Démarrage de la machine virtuelle : écran d'ouverture, bandeau, avancement ---------
+
+def _demarrage_vm():
+    """L'avancement du démarrage de la VM (`vm.avancement`), ou None hors du mode distant."""
+    from .. import vm
+    from ..travailleur import client as travailleur
+    if not travailleur.distant():
+        return None
+    try:
+        return vm.avancement()
+    except Exception:
+        return None
+
+
+@app.get("/api/demarrage")
+def api_demarrage():
+    """Lu toutes les quelques secondes par l'écran de démarrage et le bandeau des pages."""
+    a = _demarrage_vm()
+    return a or {"en_cours": False, "fini": True, "erreur": None, "pourcentage": 100, "etapes": [],
+                 "detail": None, "reste_min": 0, "premiere": False}
+
+
+@app.get("/demarrage", response_class=HTMLResponse)
+def demarrage(request: Request):
+    """L'écran d'ouverture. La toute première fois (assistant pas encore fait) : ce que fait
+    l'application et comment elle protège la personne, avant de commencer, avec l'avancement de la
+    machine virtuelle qui se crée pendant ce temps. Aux ouvertures suivantes, quand la VM met un moment
+    à démarrer : l'avancement seul, et « Continuer sans attendre »."""
+    a = _demarrage_vm()
+    decouverte = profil_mod.en_accueil()
+    if not decouverte and not (a and a["en_cours"]):
+        return RedirectResponse("/", status_code=303)
+    return page(request, "demarrage.html", decouverte=decouverte, avancement=a, ia=nom_ia())
+
+
 # --- Accueil (spec Nexus « 03 Onboarding ») : IA, recherche, premières offres ----------
 
 # La recherche d'abord, l'IA ensuite : on ne commence pas par confier ses informations à une IA.
@@ -1555,7 +1594,8 @@ def _page_accueil(request, ecran, **ctx):
 def bienvenue():
     if not profil_mod.en_accueil():
         return RedirectResponse("/", status_code=303)
-    suite = ("/bienvenue/recherche" if not _recherche_faite() else
+    suite = ("/demarrage" if not _recherche_faite() and not _sources_faites() else
+             "/bienvenue/recherche" if not _recherche_faite() else
              "/bienvenue/sources" if not _sources_faites() else "/bienvenue/ia")
     return RedirectResponse(suite, status_code=303)
 
@@ -1569,7 +1609,9 @@ def bienvenue_ia(request: Request):
     claude = etat_ia()
     if claude.get("connecte") and request.query_params.get("etape") != "ia":
         return RedirectResponse("/bienvenue/offres", status_code=303)          # étape déjà faite
-    return _page_accueil(request, "ia", claude=claude, fournisseurs=moteur_mod.FOURNISSEURS)
+    a = _demarrage_vm()
+    return _page_accueil(request, "ia", claude=claude, fournisseurs=moteur_mod.FOURNISSEURS,
+                         avancement=a if a and a["en_cours"] else None)
 
 
 @app.get("/bienvenue/recherche", response_class=HTMLResponse)
@@ -1689,6 +1731,10 @@ def ia_connexion_demarrer(fournisseur: str):
     from .. import connexion_ia
     if fournisseur not in {f["id"] for f in moteur_mod.FOURNISSEURS}:
         return JSONResponse({"etat": "echec", "message": "fournisseur inconnu"}, status_code=404)
+    a = _demarrage_vm()
+    if a and a["en_cours"]:                       # la connexion se fait dans la VM : elle doit être prête
+        return JSONResponse({"etat": "echec", "message": "la machine virtuelle démarre encore (%d %%) : tu pourras "
+                             "te connecter dans environ %d min" % (a["pourcentage"], a["reste_min"])}, status_code=409)
     autre = next((f for f in etats_fournisseurs() if f["id"] != fournisseur and f["etat"].get("connecte")), None)
     if autre:                                     # un seul fournisseur actif à la fois
         return JSONResponse({"etat": "echec", "message": "déconnecte d'abord %s : un seul fournisseur à la fois"

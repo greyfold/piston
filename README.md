@@ -43,9 +43,13 @@ noVNC. Le **travailleur** (`travailleur/`) y répond sur 127.0.0.1:8776 (jeton) 
 
 La VM ne tourne que pendant que l'application est ouverte. Quitter l'éteint d'abord (`vm arreter`,
 écran « Fermeture de l'application » ; un passage en cours est interrompu et reprend au lancement
-suivant). À l'ouverture, `vm demarrer` la rallume pendant un écran d'attente qui montre ses étapes
-(lignes « étape : … ») ; le tableau de bord s'ouvre ensuite, ou tout de suite avec « Continuer sans
-attendre ». Le code n'est réinstallé que s'il a changé : son empreinte (`vm.empreinte_code`) est
+suivant). À l'ouverture, `vm demarrer` la rallume ; dès sa première étape (lignes « étape : … »), la
+fenêtre montre la page `/demarrage` : les étapes, une barre d'avancement et le temps qui reste
+(`vm.avancement`, d'après `vm/demarrage.json` et la durée de chaque étape la dernière fois). La toute
+première fois, cette page est aussi l'écran de bienvenue, avant l'assistant. « Continuer sans
+attendre » ouvre l'application : la VM finit de démarrer en arrière-plan, un bandeau des pages suit
+l'avancement, les échéances attendent la fin, et ce qui demande l'IA (tâches, connexion) répond que
+la machine démarre encore (`vm.en_demarrage`, verrou de `vm demarrer`) au lieu d'échouer. Le code n'est réinstallé que s'il a changé : son empreinte (`vm.empreinte_code`) est
 posée dans la VM à la fin de l'installation (`vm.code_installe`) et rendue par le travailleur dans
 `/etat` ; le passage vérifie aussi avant de confier une source (`vm.assurer_a_jour`).
 
