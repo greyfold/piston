@@ -387,7 +387,10 @@ COOKIE_TRI = "tri_passe"
 
 
 def a_trancher_par_urgence(reg, evals):
-    """Les annonces qui attendent une décision, la plus pressée d'abord (délai, puis note, puis fraîcheur)."""
+    """Les annonces qui attendent une décision, la plus pressée d'abord (délai, puis note, puis fraîcheur).
+    Parcours ou critères pas encore renseignés : aucune, la personne n'a rien sur quoi trancher."""
+    if not profil_mod.peut_trancher():
+        return []
     note = lambda f: evals[f["empreinte"]]["note_globale"] if f["empreinte"] in evals else None
     return sorted(reg.liste(["A", "B", "nouvelle"]), key=lambda f: priorite(f, note(f)))
 
@@ -1150,7 +1153,8 @@ def api_etat():
                 pass
         p = etat_passage(reg)
         a_trancher = reg.cx.execute(
-            "SELECT COUNT(*) FROM annonces WHERE statut IN ('A', 'B', 'nouvelle')").fetchone()[0]
+            "SELECT COUNT(*) FROM annonces WHERE statut IN ('A', 'B', 'nouvelle')").fetchone()[0] \
+            if profil_mod.peut_trancher() else None     # tri fermé : la barre des menus n'en parle pas
     finally:
         reg.fermer()
     etat_vm, etats_vm = None, None
@@ -2268,6 +2272,11 @@ def _action(request, form):
     donnees["raisons"] = form.getlist("raisons")
     en_json = "application/json" in request.headers.get("accept", "")
     p = profil_mod.charger()
+    if type_ in ("go", "pasgo", "attendre") and not profil_mod.peut_trancher(p):
+        msg = "Renseigne d'abord ton parcours et ce qui compte pour toi."
+        if en_json:
+            return JSONResponse({"ok": False, "msg": msg})
+        return RedirectResponse("%s?msg=%s" % (retour.split("#")[0], quote(msg)), status_code=303)
     if type_ in ("go", "candidature") and profil_mod.progressif(p) and \
             not profil_mod.fonctions(p, ia_connectee())["postuler"]:
         manque = profil_mod.fonctions(p, ia_connectee())["manque"]["postuler"]

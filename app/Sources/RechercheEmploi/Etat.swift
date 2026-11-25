@@ -23,7 +23,7 @@ struct EtatAPI: Decodable {
     let pid: Int32?          // le processus du tableau de bord qui répond
     let racine: String?      // le dossier (résolu) du paquet `jobsearch` qu'il sert ; absent : ancien serveur
     let passage: Passage
-    let a_trancher: Int
+    let a_trancher: Int?     // nul : tri fermé (parcours ou critères pas encore renseignés)
     let claude: Claude
     let mode: String
     let vm: VM?
@@ -35,7 +35,7 @@ final class Etat: ObservableObject {
     @Published var erreurTableau: String?
     @Published var passage = "Lecture de l'état…"
     @Published var niveau = "ok"
-    @Published var aTrancher = 0
+    @Published var aTrancher: Int?
     @Published var claudeConnecte = false
     @Published var claudeMessage = ""
     @Published var iaId = "claude"
