@@ -3,6 +3,30 @@
 Les versions suivent [SemVer](https://semver.org/lang/fr/) : tant que la version commence par 0,
 l'application est en essai et peut changer d'une version à l'autre.
 
+## 0.4.0 — 2026-11-26 (version d'essai)
+
+Première version signée et notarisée par Apple. Si tu as la 0.3.1, télécharge celle-ci une fois à la
+main et remplace l'ancienne dans Applications : tes données sont gardées. Les suivantes arriveront
+toutes seules.
+
+### Ajouté
+
+- **Mises à jour** : l'application vérifie une fois par jour s'il existe une nouvelle version, te montre
+  ses nouveautés et propose de l'installer, puis se relance. « Rechercher les mises à jour… » est dans le
+  menu Piston et dans celui de la barre des menus, où tu peux couper la vérification quotidienne.
+- **Confidentialité** : la page dit ce que la vérification des mises à jour envoie (le numéro de version,
+  rien de ton profil).
+
+### Modifié
+
+- **Ouverture sans détour** : l'application est signée Developer ID et notarisée ; macOS l'ouvre sans
+  passer par Réglages Système › Confidentialité et sécurité.
+- **Installation** par une image disque : glisser Piston dans Applications.
+- **Le menu latéral revient** dans la fenêtre de l'application, à la place de la barre latérale et de la
+  barre d'outils du Mac.
+- **Tant que ton parcours et ce qui compte pour toi manquent**, le tri des annonces ne s'affiche pas :
+  l'accueil t'invite d'abord à les remplir.
+
 ## 0.3.1 — 2026-11-25 (version d'essai)
 
 À essayer sur un Mac neuf ou un compte neuf : il faut au moins 15 Go libres pour créer la machine
