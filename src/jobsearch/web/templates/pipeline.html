@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% from "_macros.html" import icone, etat_vide %}
+{% from "_macros.html" import icone, etat_vide, titre_liste, ligne_liste, repere_date, puce_statut %}
 {% block titre %}Candidatures · Piston{% endblock %}
 {% block contenu %}
-{# Comme le tableau de bord : une section vide ne s'affiche pas ; rien du tout, un état vide remplace la page. #}
+{# Comme Aujourd'hui : une section vide ne s'affiche pas ; rien du tout, un état vide remplace la page. #}
 {% if not (en_cours or a_classer or sans_reponse or refus) %}
 {% call etat_vide("envoyer", "Aucune candidature pour le moment", titre_balise="h1",
      description="Une annonce arrive ici dès que tu lui dis oui ; l'envoi, les relances et les réponses y sont suivis jusqu'au bout.") %}
@@ -10,56 +10,60 @@
     <a class="bouton go" href="/">Aujourd'hui {{ icone("suivant") }}</a>
 {% endcall %}
 {% else %}
-<h1>Candidatures</h1>
+{# Vue liste-détail (comme Aujourd'hui) : les candidatures par section à gauche, l'annonce choisie à droite. #}
+{% set ici = "/candidatures?sel=" %}
+{% set choisie = f.empreinte if (f is defined and f) else "" %}
+<div class="liste-detail{{ ' selection' if selection_explicite }}">
+<section class="volet-liste" aria-labelledby="titre-liste">
+  <header class="tete-liste"><div class="ligne-tete-liste"><h1 id="titre-liste">Candidatures</h1></div></header>
 
 {% if en_cours %}
-<h2>En cours <span class="compte">{{ en_cours | length }}</span></h2>
-<div class="tableau"><table>
-  <thead><tr><th>Annonce</th><th>Statut</th><th>Envoyée</th><th>Prochaine action</th><th>Échéance</th></tr></thead>
-  <tbody>
-  {% for f in en_cours %}
-    <tr>
-      <td><a href="/annonce/{{ f.empreinte }}">{{ f.entreprise }}</a><div class="muet petit">{{ f.titre }}</div>
-        {% if dossiers.get(f.empreinte) %}<a class="petit" href="/annonce/{{ f.empreinte }}?onglet=dossier">dossier →</a>{% endif %}</td>
-      <td><span class="puce {{ f.statut }}">{{ f.statut | statut }}</span></td>
-      <td class="petit">{{ f.postulee_le | date_fr(True) }}{% if f.canal_envoi %}<div class="muet">{{ f.canal_envoi }}</div>{% endif %}</td>
-      <td class="petit">{{ f.prochaine_action or "" }}</td>
-      <td>{% if f.echeance %}<span class="puce {{ 'retard' if f.echeance < aujourdhui }}">{{ f.echeance | date_fr(True) }}</span>{% endif %}</td>
-    </tr>
+  {{ titre_liste("en-cours", "En cours", en_cours | length) }}
+  <ul class="liste-volet">
+  {% for f in en_cours %}{% set r = f.echeance | repere_fr if f.echeance else none %}
+    {{ ligne_liste(ici ~ f.empreinte, f.entreprise,
+         f.titre ~ (" · envoyée le " ~ (f.postulee_le | date_fr(True)) if f.postulee_le else "") ~ (" · " ~ f.prochaine_action if f.prochaine_action else ""),
+         actif=f.empreinte == choisie, repere=repere_date(r[0], r[1]) if r else "",
+         ton="retard" if f.echeance and f.echeance < aujourdhui else "",
+         puce=puce_statut(f.statut | statut, f.statut)) }}
   {% endfor %}
-  </tbody>
-</table></div>
+  </ul>
 {% endif %}
 
 {% if a_classer %}
-<h2 id="sans-suite">Deux relances, toujours rien <span class="compte">{{ a_classer | length }}</span></h2>
-<div class="tableau"><table><tbody>
-{% for f in a_classer %}
-  <tr><td><a href="/annonce/{{ f.empreinte }}">{{ f.entreprise }}</a><div class="muet petit">{{ f.titre }}</div></td>
-      <td class="petit">envoyée le {{ f.postulee_le | date_fr(True) }}</td>
-      <td><form method="post" action="/action"><input type="hidden" name="empreinte" value="{{ f.empreinte }}"><input type="hidden" name="type" value="sans_suite"><input type="hidden" name="retour" value="/candidatures#sans-suite"><button class="discret">Classer sans suite</button></form></td></tr>
-{% endfor %}
-</tbody></table></div>
+  {{ titre_liste("sans-suite", "Deux relances, toujours rien", a_classer | length) }}
+  <ul class="liste-volet">
+  {% for f in a_classer %}
+    {% set action %}<form method="post" action="/action"><input type="hidden" name="empreinte" value="{{ f.empreinte }}"><input type="hidden" name="type" value="sans_suite"><input type="hidden" name="retour" value="/candidatures#sans-suite"><button class="discret petit">Classer sans suite</button></form>{% endset %}
+    {{ ligne_liste(ici ~ f.empreinte, f.entreprise, f.titre ~ " · envoyée le " ~ (f.postulee_le | date_fr(True)),
+         actif=f.empreinte == choisie, action=action) }}
+  {% endfor %}
+  </ul>
 {% endif %}
 
 {% if sans_reponse %}
-<h2>Sans réponse depuis 21 jours <span class="compte">{{ sans_reponse | length }}</span></h2>
-<div class="tableau"><table><tbody>
-{% for f in sans_reponse %}
-  <tr><td><a href="/annonce/{{ f.empreinte }}">{{ f.entreprise }}</a><div class="muet petit">{{ f.titre }}</div></td>
-      <td class="nb">{{ f._jours }} j</td><td class="petit">{{ "accusé reçu" if f.accuse_le else "pas d'accusé" }}{% if f.flag_rh %} · flag RH{% endif %}</td></tr>
-{% endfor %}
-</tbody></table></div>
+  {{ titre_liste("sans-reponse", "Sans réponse depuis 21 jours", sans_reponse | length) }}
+  <ul class="liste-volet">
+  {% for f in sans_reponse %}
+    {{ ligne_liste(ici ~ f.empreinte, f.entreprise,
+         f.titre ~ " · " ~ ("accusé reçu" if f.accuse_le else "pas d'accusé") ~ (" · flag RH" if f.flag_rh else ""),
+         actif=f.empreinte == choisie, puce=puce_statut("%d j" % f._jours)) }}
+  {% endfor %}
+  </ul>
 {% endif %}
 
 {% if refus %}
-<h2>Refus <span class="compte">{{ refus | length }}</span></h2>
-<div class="tableau"><table><tbody>
-{% for f in refus %}
-  <tr><td><a href="/annonce/{{ f.empreinte }}">{{ f.entreprise }}</a><div class="muet petit">{{ f.titre }}</div></td>
-      <td class="petit">{{ f.reponse_le | date_fr(True) }}</td><td class="petit">{{ f.motif_refus or f.motif or "" }}</td></tr>
-{% endfor %}
-</tbody></table></div>
+  {{ titre_liste("refus", "Refus", refus | length) }}
+  <ul class="liste-volet">
+  {% for f in refus %}{% set r = f.reponse_le | repere_fr if f.reponse_le else none %}
+    {{ ligne_liste(ici ~ f.empreinte, f.entreprise, f.titre ~ (" · " ~ (f.motif_refus or f.motif) if (f.motif_refus or f.motif) else ""),
+         actif=f.empreinte == choisie, repere=repere_date(r[0], r[1]) if r else "") }}
+  {% endfor %}
+  </ul>
 {% endif %}
+</section>
+{% set retour_volet_href = "/candidatures#" ~ (retour_volet[0] if retour_volet is defined and retour_volet else "titre-liste") %}
+{% include "_volet_detail.html" %}
+</div>
 {% endif %}
 {% endblock %}

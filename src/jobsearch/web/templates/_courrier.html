@@ -1,0 +1,32 @@
+{# Un courrier d'employeur à classer (détail d'une ligne de « Courrier des employeurs », Aujourd'hui) : la
+   candidature à laquelle il répond et le type de réponse, à appliquer ou à ignorer. Reçoit `c`. #}
+<article class="carte">
+  <div class="tete"><div>
+    <h2 class="titre-carte">{{ c.objet }}</h2>
+    <div class="meta">{{ c.recu_le | date_fr(True) }} · {{ c.expediteur }} · {{ c.message or "" }}</div>
+  </div><span class="puce">{{ {"offre": "offre ?", "refus": "refus ?", "entretien": "entretien ?", "accuse": "accusé ?", "ambigu": "ambigu", "inconnu": "à lire"}.get(c.classe_proposee or c.classe, c.classe) }}</span></div>
+  {% if c.extrait %}<p class="extrait">{{ c.extrait }}</p>{% endif %}
+  <form method="post" action="/courrier/{{ c.id }}" class="boutons courrier">
+    {% set probables = (c.classement | selectattr(0, '>', 0) | list)[:4] %}
+    {% set deja = probables | map(attribute=1) | map(attribute='empreinte') | list %}
+    <div class="choix-candidature">
+      <input type="search" class="filtre" data-filtre="cand-{{ c.id }}" placeholder="Chercher une candidature…" aria-label="Chercher une candidature" autocomplete="off">
+      <select id="cand-{{ c.id }}" name="empreinte" aria-label="Candidature" required>
+        <option value="">— choisir la candidature —</option>
+        {% if probables %}<optgroup label="Les plus probables">
+          {% for s, o, raisons in probables %}<option value="{{ o.empreinte }}" {{ 'selected' if o.empreinte == c.proposee }} title="{{ raisons | join(', ') }}">{{ o.entreprise }} — {{ o.titre[:45] }}</option>{% endfor %}
+        </optgroup>{% endif %}
+        <optgroup label="{{ 'Autres candidatures' if probables else 'Candidatures' }}">
+          {% for s, o, raisons in c.classement if o.empreinte not in deja %}<option value="{{ o.empreinte }}">{{ o.entreprise }} — {{ o.titre[:45] }}</option>{% endfor %}
+        </optgroup>
+      </select>
+    </div>
+    <select name="classe" aria-label="Type de réponse" required>
+      <option value="">— type de réponse —</option>
+      {% for k, v in [("accuse", "Accusé de réception"), ("entretien", "Entretien"), ("refus", "Refus"), ("offre", "Offre")] %}<option value="{{ k }}" {{ 'selected' if k == c.classe_proposee }}>{{ v }}</option>{% endfor %}
+    </select>
+    <button name="decision" value="applique">Appliquer</button>
+    <button class="discret" name="decision" value="ignore" formnovalidate>Ignorer</button>
+    {% if c.lien %}<a class="petit" href="{{ c.lien }}">ouvrir dans Mail</a>{% endif %}
+  </form>
+</article>

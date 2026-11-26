@@ -3,6 +3,23 @@
 Les versions suivent [SemVer](https://semver.org/lang/fr/) : tant que la version commence par 0,
 l'application est en essai et peut changer d'une version à l'autre.
 
+## 0.5.0 — 2026-11-26 (version d'essai)
+
+### Modifié
+
+- **Aujourd'hui, Offres et Candidatures en deux volets** : la liste à gauche, et le détail de la ligne choisie à
+  droite, sans changer de page. Un clic sur une annonce ouvre son dossier, son adéquation, ses sources et son
+  journal ; un courrier d'employeur à classer s'ouvre de la même façon. Sur une fenêtre étroite, la liste et le
+  détail se suivent, avec un retour vers la liste.
+- **Le dossier d'abord** : quand une annonce a un dossier, son onglet vient en premier et s'ouvre par défaut.
+- Les boutons d'une annonce (réévaluer, recharger l'original, refaire le dossier, mots-clés) ramènent là où tu étais.
+
+### Ajouté
+
+- **Conditions d'utilisation**, en français (le texte qui fait foi), en anglais et en allemand : à accepter une fois
+  avant de commencer (et à chaque nouvelle version du texte), puis consultables dans Réglages › Application et
+  depuis la page Confidentialité.
+
 ## 0.4.0 — 2026-11-26 (version d'essai)
 
 Première version signée et notarisée par Apple. Si tu as la 0.3.1, télécharge celle-ci une fois à la

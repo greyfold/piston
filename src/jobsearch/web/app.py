@@ -74,6 +74,15 @@ def jour_fr(v):
     return "aujourd'hui" if n == 0 else "demain" if n == 1 else "%s %s" % (JOURS[d.weekday()], date_fr(d, True))
 
 
+def repere_fr(v, jour=False):
+    """Le repère d'une ligne de liste : (« jeu. », « 14 ») pour un jour, (« nov. », « 24 ») sinon."""
+    try:
+        d = v if isinstance(v, dt.date) else dt.date.fromisoformat(str(v)[:10])
+    except ValueError:
+        return ("", str(v))
+    return (JOURS[d.weekday()][:3] + ".", str(d.day)) if jour else (MOIS[d.month - 1], str(d.day))
+
+
 def il_y_a(v):
     if not v:
         return ""
@@ -142,7 +151,7 @@ def texte_html(t):
     return Markup(md.markdown(t or "", extensions=["sane_lists", "tables", _SansHtmlBrut()]))
 
 
-tpl.env.filters.update(date_fr=date_fr, jour_fr=jour_fr, il_y_a=il_y_a, texte_html=texte_html, annonce_html=annonce_html, nettoyer=nettoyer,
+tpl.env.filters.update(date_fr=date_fr, jour_fr=jour_fr, repere_fr=repere_fr, il_y_a=il_y_a, texte_html=texte_html, annonce_html=annonce_html, nettoyer=nettoyer,
                        jours_restants=jours_restants, statut=lambda s: LIBELLES_STATUT.get(s, s))
 tpl.env.globals.update(TYPES=actions.TYPES, STATUTS=STATUTS, libelle_dossier=dossier.libelle,
                        categories_adequation=adequation.lire, libelles_categories=adequation.LIBELLES)
@@ -217,7 +226,8 @@ def page(request, nom, **ctx):
     ctx["raisons"] = criteres().get("raisons") or {}
     ctx["aujourdhui"] = dt.date.today().isoformat()
     ctx["profil_manquants"] = profil_mod.manquants()
-    ctx["accueil"] = ((request.url.path.startswith("/bienvenue") and profil_mod.en_accueil())   # sans menu
+    ctx["accueil"] = (ctx.get("accueil")                                   # sans menu
+                      or (request.url.path.startswith("/bienvenue") and profil_mod.en_accueil())
                       or request.url.path == "/demarrage")
     # La VM démarre encore (« Continuer sans attendre ») : un bandeau d'avancement sur les autres pages.
     a = None if ctx["accueil"] else _demarrage_vm()
@@ -367,6 +377,8 @@ def a_trancher_par_urgence(reg, evals):
 
 @app.get("/", response_class=HTMLResponse)
 def accueil(request: Request, ensuite: str = "", ouverture: str = ""):
+    if profil_mod.conditions_a_accepter():         # avant tout : les conditions d'utilisation, une fois par version
+        return RedirectResponse("/conditions", status_code=303)
     if profil_mod.en_accueil():                    # premier lancement : les avantages, puis l'assistant
         return RedirectResponse("/bienvenue", status_code=303)
     reg = _reg()
@@ -377,7 +389,8 @@ def accueil(request: Request, ensuite: str = "", ouverture: str = ""):
         # À l'ouverture, ce qui est à trancher passe avant tout le reste. « Tableau de bord » (ensuite=1)
         # ou un message de retour d'action laissent le tableau de bord s'afficher.
         tri_passe = request.cookies.get(COOKIE_TRI) and not ouverture
-        if a_trancher and not ensuite and not tri_passe and "msg" not in request.query_params:
+        if a_trancher and not ensuite and not tri_passe and "msg" not in request.query_params \
+                and "sel" not in request.query_params:
             return RedirectResponse("/trier", status_code=303)
         dossiers = {f["empreinte"]: infos_dossier(reg, f) for f in reg.liste(["retenue"])}
         from .. import agent_claude
@@ -394,15 +407,28 @@ def accueil(request: Request, ensuite: str = "", ouverture: str = ""):
                 premiers = []
         # L'IA joignable mais plus connectée (hors checklist, qui le dit déjà) : un bandeau à l'ouverture, pas le tutoriel.
         ia_deconnectee = bool(claude.get("installe")) and not claude.get("connecte") and not premiers
+        # Vue liste-détail : la liste à gauche, l'annonce choisie à droite (par défaut le premier dossier à envoyer).
+        a_venir = entretiens.a_venir(reg)
+        rel = followups.relances(reg)
+        sections = ([("retenues", "Dossiers prêts à envoyer", [f["empreinte"] for f in retenues]),
+                     ("entretiens", "Entretiens à venir", [e["_annonce"]["empreinte"] for e in a_venir]),
+                     ("relances", "Relances dues", [f["empreinte"] for f in rel["dues"]])])
+        ordre = [emp for _, _, emps in sections for emp in emps]
+        section = lambda emp: next(((a, n) for a, n, emps in sections if emp in emps), None)
+        sel = request.query_params.get("sel", "")
+        courrier_a_trancher = courrier.pour_le_tableau(reg, reg.liste(["candidature", "entretien", "offre"]))
+        courrier_sel = next((c for c in courrier_a_trancher if sel == "courrier-%s" % c["id"]), None)
+        detail, explicite = ({}, True) if courrier_sel else detail_liste(reg, request, ordre, lambda emp: lien_sel("/", emp), section)
         reponse = page(request, "accueil.html", a_trancher=a_trancher, evals=evals,
                     premiers_pas=premiers, ia_deconnectee=ia_deconnectee,
                     tache_jobroom=tache_jobroom, etats_taches=agent_claude.ETATS,
-                    dossiers=dossiers, courrier_a_trancher=courrier.pour_le_tableau(reg, reg.liste(["candidature", "entretien", "offre"])),
+                    dossiers=dossiers, courrier_a_trancher=courrier_a_trancher, courrier_sel=courrier_sel,
+                    selection_explicite=explicite, **detail,
                     courrier_recent=courrier.recents(reg), ouvertes=reg.liste(["candidature", "entretien", "offre"]),
-                    retenues=retenues, postules=postules, relances=followups.relances(reg),
+                    retenues=retenues, postules=postules, relances=rel,
                     jobroom=followups.jobroom(reg),
                     sans_reponse=followups.sans_reponse(reg), stats=reg.stats(),
-                    entretiens=entretiens.a_venir(reg),
+                    entretiens=a_venir,
                     rythme=followups.rythme(reg))
         if ensuite:
             reponse.set_cookie(COOKIE_TRI, "1", httponly=True, samesite="strict")
@@ -429,30 +455,65 @@ def trier(request: Request):
         reg.fermer()
 
 
-# Les onglets de la page d'une annonce, dans l'ordre ; « dossier » et « entretien » seulement s'ils existent.
-ONGLETS_ANNONCE = ("adequation", "dossier", "sources", "journal", "entretien")
+# Les onglets d'une annonce, dans l'ordre ; « dossier » et « entretien » seulement s'ils existent. Le dossier,
+# quand il y en a un, vient en premier et s'ouvre par défaut : c'est ce qu'il reste à faire de l'annonce.
+ONGLETS_ANNONCE = ("dossier", "adequation", "sources", "journal", "entretien")
+
+
+def contexte_annonce(reg, emp, onglet="", doc="", base=None):
+    """Ce que montre le détail d'une annonce (`_annonce_detail.html`), sur sa page ou dans le volet de droite
+    d'une vue liste-détail. `base` : l'adresse à laquelle s'ajoute « onglet=… » (la page qui montre le détail).
+    None si l'annonce n'existe pas."""
+    plein = reg.resoudre(emp) or emp
+    f = reg.get(plein)
+    if not f:
+        return None
+    hist = [dict(r) for r in reg.cx.execute(
+        "SELECT * FROM actions WHERE empreinte=? ORDER BY id DESC LIMIT 20", (plein,))]
+    jr_limite = followups.echeance_jobroom(f["postulee_le"]) if f.get("postulee_le") else None
+    ent = entretiens.lire(plein)
+    dos = infos_dossier(reg, f)
+    defaut = "dossier" if dos else "adequation"
+    if onglet not in ONGLETS_ANNONCE or (onglet == "dossier" and not dos) or (onglet == "entretien" and not ent):
+        onglet = defaut
+    contexte = contexte_dossier(reg, f, dos, doc) if onglet == "dossier" else {}
+    base = base or "/annonce/%s" % plein
+    sep = "&" if "?" in base else "?"
+    return dict(f=f, journal=reg.journal(plein), historique=hist,
+                ev=evaluation.lire(reg, plein), dos=dos, postule=postuler_ouvert(reg, plein),
+                jr_limite=jr_limite, envoyee=f["statut"] in ENVOYEES, ent=ent,
+                evaluation_en_cours=plein in ajout.EN_COURS, onglet=onglet, onglet_defaut=defaut,
+                base_onglets=base, retour_detail=base if onglet == defaut else base + sep + "onglet=" + onglet,
+                **contexte)
+
+
+def detail_liste(reg, request, emps, base, section=None):
+    """Le volet de droite d'une vue liste-détail : l'annonce choisie (`sel`), sinon la première de `emps`.
+    Renvoie (contexte du détail ou {}, sélection explicite). `base(emp)` : l'adresse de la page qui la montre ;
+    `section(emp)` : (ancre, nom) de la section de la liste où elle se trouve, pour le retour du détail."""
+    q = request.query_params
+    sel = q.get("sel", "")
+    emp = (reg.resoudre(sel) or sel) if sel else (emps[0] if emps else None)
+    detail = contexte_annonce(reg, emp, q.get("onglet", ""), q.get("doc", ""), base(emp)) if emp else None
+    if not detail:
+        return {}, bool(sel)
+    detail["retour_volet"] = section(detail["f"]["empreinte"]) if section else None
+    return detail, bool(sel)
+
+
+def lien_sel(base, emp):
+    """L'adresse d'une page liste-détail avec `emp` choisie, en gardant ses autres paramètres (filtres)."""
+    return base + ("&" if "?" in base else "?") + "sel=" + quote(emp)
 
 
 @app.get("/annonce/{emp}", response_class=HTMLResponse)
-def annonce(request: Request, emp: str, onglet: str = "adequation", doc: str = ""):
+def annonce(request: Request, emp: str, onglet: str = "", doc: str = ""):
     reg = _reg()
     try:
-        plein = reg.resoudre(emp) or emp
-        f = reg.get(plein)
-        if not f:
+        detail = contexte_annonce(reg, emp, onglet, doc)
+        if not detail:
             return HTMLResponse("Annonce introuvable.", status_code=404)
-        hist = [dict(r) for r in reg.cx.execute(
-            "SELECT * FROM actions WHERE empreinte=? ORDER BY id DESC LIMIT 20", (plein,))]
-        jr_limite = followups.echeance_jobroom(f["postulee_le"]) if f.get("postulee_le") else None
-        ent = entretiens.lire(plein)
-        dos = infos_dossier(reg, f)
-        if onglet not in ONGLETS_ANNONCE or (onglet == "dossier" and not dos) or (onglet == "entretien" and not ent):
-            onglet = "adequation"
-        contexte = contexte_dossier(reg, f, dos, doc) if onglet == "dossier" else {}
-        return page(request, "annonce.html", f=f, journal=reg.journal(plein), historique=hist,
-                    ev=evaluation.lire(reg, plein), dos=dos, postule=postuler_ouvert(reg, plein),
-                    jr_limite=jr_limite, envoyee=f["statut"] in ENVOYEES, ent=ent,
-                    evaluation_en_cours=plein in ajout.EN_COURS, onglet=onglet, **contexte)
+        return page(request, "annonce.html", **detail)
     finally:
         reg.fermer()
 
@@ -495,8 +556,16 @@ def contexte_dossier(reg, f, d, choix=""):
             "date_lettre": date_cible(f)}
 
 
+def _vers(retour, defaut, msg, ok, ancre=""):
+    """Redirige vers `retour` (adresse du site, sinon `defaut`) avec le message d'une action."""
+    base, _, a = retour_sur(retour, defaut).partition("#")
+    a = ancre or a
+    return RedirectResponse("%s%smsg=%s&ok=%d%s" % (base, "&" if "?" in base else "?", quote(msg), int(ok),
+                                                     "#" + a if a else ""), status_code=303)
+
+
 @app.post("/annonce/{emp}/original")
-def annonce_original(emp: str):
+def annonce_original(emp: str, retour: str = Form("")):
     from .. import originaux
     from ..pipeline import Passage
     reg = _reg()
@@ -506,13 +575,13 @@ def annonce_original(emp: str):
             return HTMLResponse("Annonce introuvable.", status_code=404)
         ok = originaux.recharger(reg, f, Passage(reg).sources())
         msg = "Texte original rechargé." if ok else "Annonce originale introuvable (retirée des plateformes ?)."
-        return RedirectResponse("/annonce/%s?msg=%s&ok=%d" % (emp, quote(msg), int(ok)), status_code=303)
+        return _vers(retour, "/annonce/%s?onglet=sources" % emp, msg, ok)
     finally:
         reg.fermer()
 
 
 @app.post("/annonce/{emp}/evaluer")
-def annonce_evaluer(emp: str):
+def annonce_evaluer(emp: str, retour: str = Form("")):
     reg = _reg()
     try:
         f = reg.get(emp)
@@ -524,7 +593,7 @@ def annonce_evaluer(emp: str):
             msg = "Annonce évaluée." if ok else "Évaluation impossible : %s" % "; ".join(bilan["erreurs"])
         except (evaluation.EvaluationImpossible, FileNotFoundError) as e:
             ok, msg = False, "Évaluation impossible : %s" % e
-        return RedirectResponse("/annonce/%s?msg=%s&ok=%d#evaluation" % (emp, quote(msg), int(ok)), status_code=303)
+        return _vers(retour, "/annonce/%s?onglet=adequation" % emp, msg, ok, "evaluation")
     finally:
         reg.fermer()
 
@@ -667,7 +736,7 @@ def _dossier_mots_cles(request, emp: str, form):
     else:
         dossier.reviser_en_tache(emp, termes, form.get("precision") or "")
         msg, ok = "CV en révision avec %d mot(s)-clé(s) (une à deux minutes)." % len(termes), True
-    return RedirectResponse(adresse_dossier(emp, msg=msg, ok=int(ok)) + "#mots-cles", status_code=303)
+    return _vers(form.get("retour"), adresse_dossier(emp), msg, ok, "mots-cles")
 
 
 @app.post("/annonce/{emp}/preremplir")
@@ -733,13 +802,13 @@ def tache_etat(tache: int):
 
 
 @app.post("/dossier/{emp}/refaire")
-def dossier_refaire(emp: str):
+def dossier_refaire(emp: str, retour: str = Form("")):
     try:
         dossier.produire_en_tache(emp)
         msg, ok = "Dossier relancé (quelques minutes, notification à la fin).", True
     except evaluation.EvaluationImpossible as e:
         msg, ok = "Dossier impossible : %s" % e, False
-    return RedirectResponse(adresse_dossier(emp, msg=msg, ok=int(ok)), status_code=303)
+    return _vers(retour, adresse_dossier(emp), msg, ok)
 
 
 @app.get("/dossier/{emp}/etat")
@@ -776,9 +845,16 @@ def pipeline(request: Request):
         en_cours = reg.liste(PIPELINE, ordre="echeance IS NULL, echeance, entreprise")
         dossiers = {f["empreinte"]: infos_dossier(reg, f) for f in en_cours}
         refus = reg.liste(["refus"], ordre="reponse_le DESC, entreprise")
+        sans_reponse = followups.sans_reponse(reg)
+        a_classer = followups.relances(reg)["a_classer"]
+        sections = [("en-cours", "En cours", en_cours), ("sans-suite", "Deux relances, toujours rien", a_classer),
+                    ("sans-reponse", "Sans réponse depuis 21 jours", sans_reponse), ("refus", "Refus", refus)]
+        ordre = [f["empreinte"] for _, _, l in sections for f in l]
+        section = lambda emp: next(((a, n) for a, n, l in sections if any(f["empreinte"] == emp for f in l)), None)
+        detail, explicite = detail_liste(reg, request, ordre, lambda emp: lien_sel("/candidatures", emp), section)
         return page(request, "pipeline.html", en_cours=en_cours, refus=refus,
-                    sans_reponse=followups.sans_reponse(reg), dossiers=dossiers,
-                    a_classer=followups.relances(reg)["a_classer"])
+                    sans_reponse=sans_reponse, dossiers=dossiers, a_classer=a_classer,
+                    selection_explicite=explicite, **detail)
     finally:
         reg.fermer()
 
@@ -802,9 +878,17 @@ def registre(request: Request, statut: str = "", q: str = "", source: str = ""):
         if source:
             fiches = [f for f in fiches if source in (f.get("sources") or [])]
         stats = reg.stats()
-        return page(request, "registre.html", fiches=fiches[:400], total=len(fiches),
-                    statut=statut, q=q, source=source, stats=stats,
-                    ecartees=sum(stats["par_statut"].get(s, 0) for s in ECARTEES))
+        total = len(fiches)
+        fiches = fiches[:400]
+        filtres = urlencode({k: v for k, v in (("q", q), ("statut", statut), ("source", source)) if v})
+        page_offres = "/offres" + ("?" + filtres if filtres else "")
+        detail, explicite = detail_liste(reg, request, [f["empreinte"] for f in fiches],
+                                         lambda emp: lien_sel(page_offres, emp), lambda emp: ("liste", "Offres"))
+        evals = evaluation.toutes(reg)
+        return page(request, "registre.html", fiches=fiches, total=total,
+                    statut=statut, q=q, source=source, stats=stats, page_offres=page_offres, evals=evals,
+                    ecartees=sum(stats["par_statut"].get(s, 0) for s in ECARTEES),
+                    selection_explicite=explicite, **detail)
     finally:
         reg.fermer()
 
@@ -1343,12 +1427,29 @@ GROUPES_REGLAGES = (
     ("Application", (
         ("/confidentialite", "Confidentialité", "cadenas", "Ce que l'IA voit de toi, et ce qui lui est masqué."),
         ("/sante", "Système", "systeme", "Les 30 derniers matins, les sauvegardes et les clés d'accès."),
+        ("/conditions", "Conditions d'utilisation", "info", "Ce que l'application fait et ne fait pas, et les limites de responsabilité."),
     )),
 )
 # Textes écrits ici, sans rien de saisi : Markup, pour que l'apostrophe sorte telle quelle comme dans un gabarit.
 GROUPES_REGLAGES = tuple((t, tuple((h, Markup(n), i, Markup(d)) for h, n, i, d in lignes)) for t, lignes in GROUPES_REGLAGES)
 PAGES_REGLAGES = tuple({"href": h, "nom": n, "icone": i, "description": d} for _, lignes in GROUPES_REGLAGES for h, n, i, d in lignes)
 REGLAGES = ("/reglages",) + tuple(r["href"] for r in PAGES_REGLAGES)
+
+
+@app.get("/conditions", response_class=HTMLResponse)
+def conditions(request: Request, langue: str = "fr"):
+    """Les conditions d'utilisation, en français (le texte qui fait foi), en anglais ou en allemand ; tant
+    qu'elles ne sont pas acceptées, la page n'a que la marque et le bouton « J'accepte » (Aujourd'hui y renvoie)."""
+    a_accepter = profil_mod.conditions_a_accepter()
+    return page(request, "conditions.html", a_accepter=a_accepter, accueil=a_accepter,
+                langue=langue if langue in ("fr", "en", "de") else "fr",
+                version_conditions=profil_mod.VERSION_CONDITIONS)
+
+
+@app.post("/conditions/accepter")
+def conditions_accepter():
+    profil_mod.accepter_conditions()
+    return RedirectResponse("/", status_code=303)
 
 
 @app.get("/reglages", response_class=HTMLResponse)
@@ -2246,14 +2347,14 @@ def _action(request, form):
         msg = "Renseigne d'abord ton parcours et ce qui compte pour toi."
         if en_json:
             return JSONResponse({"ok": False, "msg": msg})
-        return RedirectResponse("%s?msg=%s" % (retour.split("#")[0], quote(msg)), status_code=303)
+        return _vers(retour.split("#")[0], "/", msg, False)
     if type_ in ("go", "candidature") and profil_mod.progressif(p) and \
             not profil_mod.fonctions(p, ia_connectee())["postuler"]:
         manque = profil_mod.fonctions(p, ia_connectee())["manque"]["postuler"]
         msg = "Pour postuler, il reste : %s." % ", ".join(l[:1].lower() + l[1:] for _, l, _ in manque)
         if en_json:
             return JSONResponse({"ok": False, "msg": msg})
-        return RedirectResponse("%s?msg=%s" % (retour.split("#")[0], quote(msg)), status_code=303)
+        return _vers(retour.split("#")[0], "/", msg, False)
     reg = _reg()
     try:
         msg, ok = actions.appliquer(reg, emp, type_, donnees), True

@@ -1,12 +1,12 @@
 {# Onglet Dossier de l'annonce (annonce.html) : état du dossier, documents avec aperçu, mots-clés, contrôles et
    pièces. Reçoit f, dos, fichiers, apercu, motscles, date_lettre, pieces, envoyee. #}
-{% set base_dossier = "/annonce/" ~ f.empreinte ~ "?onglet=dossier" %}
+{% set base_dossier = (base_onglets ~ ("&" if "?" in base_onglets else "?") ~ "onglet=dossier") if base_onglets is defined else "/annonce/" ~ f.empreinte ~ "?onglet=dossier" %}
 <div class="bandeau {{ 'ok' if dos.etat == 'pret' else 'alerte' if dos.etat in ('echec', 'interrompu') else 'attention' }} bandeau-dossier">
   <span class="point"></span>
   {% if dos.etat == "en_cours" %}<span data-suivi-dossier="{{ f.empreinte }}">{{ libelle_dossier(dos) }}</span>
   {% else %}<span>{{ {"interrompu": "Interrompu : la tâche s'est arrêtée (tableau de bord redémarré ?). Refaire le dossier.", "pret": "Prêt : relis-le, puis postule sur le site.", "a_revoir": "À revoir avant envoi : voir les contrôles.", "echec": "Échec : " ~ (dos.erreur or "")}.get(dos.etat) }}
   {% if dos.couverture is not none %} · couverture des mots-clés {{ dos.couverture }} %{% endif %}</span>{% endif %}
-  {% if dos.etat != "en_cours" %}<form method="post" action="/dossier/{{ f.empreinte }}/refaire" class="action-bandeau"><button class="discret">Refaire</button></form>{% endif %}
+  {% if dos.etat != "en_cours" %}<form method="post" action="/dossier/{{ f.empreinte }}/refaire" class="action-bandeau"><input type="hidden" name="retour" value="{{ base_dossier }}"><button class="discret">Refaire</button></form>{% endif %}
 </div>
 
 {% if fichiers %}
@@ -47,7 +47,7 @@
     ({{ motscles.presents | length }} sur {{ motscles.presents | length + motscles.absents | length }} ; seuil de la méthode : 80 %).</p>
 
   {% if motscles.absents %}
-  <form method="post" action="/dossier/{{ f.empreinte }}/mots-cles">
+  <form method="post" action="/dossier/{{ f.empreinte }}/mots-cles"><input type="hidden" name="retour" value="{{ base_dossier }}">
     <p class="petit consigne-mots-cles"><b>Manquants</b> : coche ceux qui sont vrais pour toi. Les autres sont des écarts, à traiter dans la lettre.</p>
     <div class="tags mots">
       {% for t, n in motscles.absents %}<label{% if f.langue %} lang="{{ f.langue }}"{% endif %}><input type="checkbox" name="termes" value="{{ t }}">{{ t }} <small>×{{ n }}</small></label>{% endfor %}

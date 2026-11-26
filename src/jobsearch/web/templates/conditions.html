@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% from "_macros.html" import entete_reglage %}
+{% block contenu %}
+{# Conditions d'utilisation (Réglages › Application). Tant que la version en cours (`version_conditions`, profil.py)
+   n'est pas acceptée, Aujourd'hui renvoie ici : la page n'a que la marque, et « J'accepte » en bas. Texte générique :
+   aucun nom de personne ni d'éditeur (règle de CLAUDE.md). À faire relire par un juriste avant de s'y fier. #}
+<div class="conditions">
+{% call entete_reglage(reglage or {"nom": "Conditions d'utilisation"}) %}{% if a_accepter %}Avant de commencer, lis ce que l'application fait et ne fait pas, puis accepte ces conditions.{% else %}Ce que l'application fait et ne fait pas, et les limites de responsabilité.{% endif %}{% endcall %}
+
+{% set langues = [("fr", "Français"), ("en", "English"), ("de", "Deutsch")] %}
+<nav class="onglets-annonce" aria-label="Langue des conditions">
+  {% for code, nom in langues %}<a href="/conditions{{ '?langue=' ~ code if code != 'fr' }}" lang="{{ code }}" class="{{ 'actif' if langue == code }}"{% if langue == code %} aria-current="page"{% endif %}>{{ nom }}</a>{% endfor %}
+</nav>
+<div class="carte texte-annonce" lang="{{ langue }}">
+  <p class="petit muet">{{ {"fr": "Version du ", "en": "Version of ", "de": "Fassung vom "}[langue] }}{{ version_conditions | date_fr if langue == "fr" else version_conditions }}.
+    {%- if langue != "fr" %} {{ {"en": "Translation: if it differs from the French text, the French text prevails.", "de": "Übersetzung: Bei Abweichungen gilt der französische Text."}[langue] }}{% endif %}</p>
+{% include "_conditions_" ~ langue ~ ".html" %}
+</div>
+
+{% if a_accepter %}
+<form method="post" action="/conditions/accepter" class="boutons pied">
+  <button class="go">J'accepte</button>
+</form>
+{% endif %}
+</div>
+{% endblock %}
