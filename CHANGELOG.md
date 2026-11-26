@@ -27,13 +27,6 @@ virtuelle. Pour repartir de zéro, voir « Désinstaller » dans le README.
 
 ### Modifié
 
-- **Cadre natif** dans l'application Mac : la barre latérale (Aujourd'hui, Offres, Candidatures,
-  Réglages), la barre d'outils (page précédente et suivante, notifications) et un menu « Aller » sont
-  ceux du Mac, avec leurs raccourcis : ⌘1 à ⌘3 pour les espaces, ⌘, pour Réglages, ⌘[ et ⌘] pour
-  revenir et avancer, ⌘R pour recharger, ⇧⌘N pour les notifications. La barre latérale se replie dans
-  le tri et les entretiens, et disparaît pendant l'accueil. Dans un navigateur, le tableau de bord
-  garde son menu latéral.
-- Plus de page blanche à l'ouverture de la fenêtre : le fond de la fenêtre reste jusqu'à la première page.
 - Pendant le démarrage, ce qui demande l'IA le dit clairement (« la machine virtuelle démarre encore,
   42 %… ») au lieu d'une panne ; la connexion à l'IA attend que la machine soit prête, et l'étape
   « Ton IA » de l'assistant montre l'avancement au lieu de boutons qui échoueraient.

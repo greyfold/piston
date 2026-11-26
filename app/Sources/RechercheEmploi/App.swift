@@ -34,10 +34,10 @@ struct RechercheEmploiApp: App {
                 .frame(minWidth: 900, minHeight: 640)
         }
         .defaultSize(width: 1180, height: 820)
+        // Pas de barre de titre grise : la page monte jusqu'en haut, sous les boutons de la fenêtre (Tableau).
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(after: .appInfo) { BoutonConnexion().environmentObject(etat) }
-            SidebarCommands()
-            CommandesAller(pilote: Pilote.partage)
         }
 
         MenuBarExtra {
@@ -131,9 +131,8 @@ struct Tableau: View {
             if etat.arretEnCours {
                 EcranArret()
             } else if etat.tableauPret {
-                // Le démarrage de la machine virtuelle se montre dans la page (/demarrage, Etat.swift) ;
-                // autour, le cadre natif : barre latérale, barre d'outils (Cadre.swift).
-                CadreNatif()
+                // Le démarrage de la machine virtuelle se montre dans la page (/demarrage, Etat.swift).
+                PageWeb(url: etat.base, etat: etat)
             } else if let e = etat.erreurTableau {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle").font(.largeTitle)
@@ -144,7 +143,33 @@ struct Tableau: View {
                 EcranAttente(titre: "Ouverture de l'application", detail: "Démarrage du tableau de bord")
             }
         }
+        // Le contenu passe sous la barre de titre, transparente ; on déplace la fenêtre par sa bande du haut,
+        // que la page laisse vide (`body.fenetre-mac` dans style.css).
+        .overlay(alignment: .top) { BandeDeTitre().frame(height: BandeDeTitre.hauteur) }
+        .ignoresSafeArea(.container, edges: .top)
     }
+}
+
+/// La bande du haut de la fenêtre, au-dessus de la page : un glisser déplace la fenêtre, un double clic fait ce que
+/// les Réglages Système demandent (agrandir par défaut). Les boutons de la fenêtre restent au-dessus d'elle.
+struct BandeDeTitre: NSViewRepresentable {
+    /// La hauteur de la barre de titre ; la même que `--barre-fenetre` dans style.css.
+    static let hauteur: CGFloat = 28
+
+    final class Vue: NSView {
+        override func mouseDown(with evenement: NSEvent) {
+            guard let fenetre = window else { return }
+            guard evenement.clickCount == 2 else { return fenetre.performDrag(with: evenement) }
+            switch UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") {
+            case "Minimize": fenetre.performMiniaturize(nil)
+            case "None": break
+            default: fenetre.performZoom(nil)
+            }
+        }
+    }
+
+    func makeNSView(context: Context) -> Vue { Vue() }
+    func updateNSView(_ vue: Vue, context: Context) {}
 }
 
 /// Écran d'attente natif (ouverture du tableau de bord, fermeture) : un indicateur, ce qui se passe,

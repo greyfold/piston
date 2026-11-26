@@ -163,11 +163,10 @@ def _date_suisse(iso):
 
 
 tpl.env.globals["decomposer_tel"] = _decomposer_tel
-# Les espaces de travail : (adresse, nom, icône, fonction qui l'ouvre ou None). Le menu latéral de la page
-# (_menu_lateral.html) et la barre latérale native de l'application Mac (`etat_coquille`) en sont faits.
-ESPACES = (("/", "Aujourd'hui", "accueil", None), ("/offres", "Offres", "recherche", "offres"),
-           ("/candidatures", "Candidatures", "candidatures", "postuler"))
-tpl.env.globals["ESPACES"] = ESPACES
+# La vue web de l'application Mac se signale dans son agent utilisateur (PageWeb.swift,
+# `applicationNameForUserAgent`). Sa fenêtre n'a pas de barre de titre : la page laisse la place aux boutons
+# de la fenêtre (base.html, `fenetre-mac`). Un navigateur ordinaire n'a rien de plus.
+tpl.env.globals["dans_fenetre_mac"] = lambda request: "RechercheEmploi" in request.headers.get("user-agent", "")
 # Le moteur d'IA choisi (Claude, Codex, Antigravity, Grok) : les textes des pages le nomment.
 tpl.env.globals["ia_active"] = lambda: moteur_mod.fournisseur().vue
 tpl.env.globals["noms_ia"] = lambda: {f["id"]: f["nom"] for f in moteur_mod.FOURNISSEURS}
@@ -229,36 +228,7 @@ def page(request, nom, **ctx):
     ctx["fonctions"] = profil_mod.fonctions(p, ia_connectee() if profil_mod.progressif(p) else True)
     if "a_configurer" not in ctx:            # le bandeau ne paraît que sur ces pages (base.html)
         ctx["a_configurer"] = _a_configurer() if ctx["nav"] in ("/", "/sante") else []
-    ctx["coquille"] = dans_la_coquille(request)
-    if ctx["coquille"]:
-        ctx["etat_coquille"] = etat_coquille(ctx)
     return tpl.TemplateResponse(request, nom, ctx)
-
-
-# La vue web de l'application Mac se signale dans son agent utilisateur (PageWeb.swift,
-# `applicationNameForUserAgent`). Elle a son propre cadre natif (barre latérale, barre d'outils, menu Aller) :
-# la page n'y dessine pas son menu latéral. Un navigateur ordinaire garde le menu de la page.
-AGENT_COQUILLE = "RechercheEmploi"
-
-
-def dans_la_coquille(request):
-    return AGENT_COQUILLE in request.headers.get("user-agent", "")
-
-
-def etat_coquille(ctx):
-    """Ce que le cadre natif montre autour de la page (base.html le pose en JSON, PageWeb.swift le lit) :
-    les espaces ouverts, celui de la page, si le profil est à compléter, les notifications nouvelles. Le mode
-    (normal, concentré, accueil) s'ajoute dans base.html, qui seul connaît la classe du corps de la page."""
-    fonctions = ctx.get("fonctions") or {}
-    espaces = [{"href": h, "nom": n} for h, n, _, f in ESPACES if not f or fonctions.get(f)]
-    nav = ctx["nav"]
-    section = next((e["href"] for e in espaces
-                    if nav == e["href"] or (e["href"] != "/" and nav.startswith(e["href"] + "/"))), None)
-    if section is None and ctx.get("dans_reglages"):
-        section = "/reglages"
-    notifs = ctx.get("notifs") or {}
-    return {"section": section, "espaces": espaces, "a_completer": bool(ctx.get("profil_manquants")),
-            "notifications": int(notifs.get("nouvelles") or 0), "niveau": notifs.get("niveau") or "ok"}
 
 
 def _a_configurer():

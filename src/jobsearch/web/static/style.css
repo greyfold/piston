@@ -738,9 +738,18 @@ body:has(> .menu-lateral) > main { width: 100%; max-width: 1200px; padding: 1.75
   gap: 1rem; padding: 1rem .75rem 1.5rem 0; background: var(--surface); border-right: 1px solid var(--bord); }
 .tete-menu { display: flex; flex-direction: column; gap: .5rem; }
 .tete-menu .marque { padding: .2rem .75rem .2rem 1.05rem; }
-/* Dans l'application Mac, le menu est natif (barre latérale SwiftUI) : la page garde les marges qu'elle a à côté du
-   menu latéral. Accueil et entretien gardent les leurs. */
-body.coquille:not(.accueil):not(.entretien-fixe) > main { max-width: 1200px; padding: 1.75rem 2.5rem 4rem; }
+/* Fenêtre de l'application Mac, sans barre de titre : la page monte jusqu'en haut, sous les boutons de la fenêtre.
+   Une bande vide de la hauteur de la barre (`BandeDeTitre` dans App.swift) reste au fond de la page et sert à
+   déplacer la fenêtre ; le menu latéral y monte avec sa propre couleur, le contenu défile dessous. */
+body.fenetre-mac { --barre-fenetre: 28px; padding-top: var(--barre-fenetre); }
+body.fenetre-mac::before { content: ""; position: fixed; z-index: 6; inset: 0 0 auto 0; height: var(--barre-fenetre);
+  background: var(--fond); }
+body.fenetre-mac > .menu-lateral { z-index: 7; margin-top: calc(-1 * var(--barre-fenetre));
+  padding-top: calc(1rem + var(--barre-fenetre)); }
+body.fenetre-mac.entretien-fixe::before { background: var(--surface); }     /* l'entretien : la couleur de son entête */
+body.fenetre-mac .tete-salle { top: var(--barre-fenetre); }
+body.fenetre-mac .salle-entretien { min-height: calc(100dvh - var(--barre-fenetre)); }
+body.fenetre-mac dialog.volet { padding-top: var(--barre-fenetre); }
 .menu-lateral ul { list-style: none; margin: 0; padding: 0; }
 .menu-principal { flex: 1 1 auto; display: flex; flex-direction: column; }
 .menu-lateral ul.pied-menu { margin-top: auto; padding-top: .6rem; border-top: 1px solid var(--bord); }
@@ -783,9 +792,9 @@ body.coquille:not(.accueil):not(.entretien-fixe) > main { max-width: 1200px; pad
 @media (max-width: 760px) {
   body:has(> .menu-lateral) { display: block; }
   body:has(> .menu-lateral) > main { padding: 1.25rem 16px 4rem; }
-  body.coquille:not(.accueil):not(.entretien-fixe) > main { padding: 1.25rem 16px 4rem; }
   .menu-lateral { position: sticky; z-index: 5; height: auto; overflow: visible; flex-direction: column; gap: .35rem;
     padding: .5rem 16px 0; border-right: 0; border-bottom: 1px solid var(--bord); }
+  body.fenetre-mac > .menu-lateral { padding-top: calc(.5rem + var(--barre-fenetre)); }
   .tete-menu { flex-direction: row; align-items: center; justify-content: space-between; }
   .tete-menu .marque { padding-left: 0; }
   .bouton-notifications { width: auto; border-left: 0; border-radius: 8px; }

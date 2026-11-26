@@ -12,15 +12,14 @@
 <script src="/static/champs.js?v={{ version_css() }}" defer></script>
 <script src="/static/compositeur.js?v={{ version_css() }}" defer></script>
 </head>
-<body class="{% block classe_corps %}{{ 'accueil' if accueil }}{% endblock %}{{ ' coquille' if coquille }}">
+<body class="{% block classe_corps %}{{ 'accueil' if accueil }}{% endblock %}{{ ' fenetre-mac' if dans_fenetre_mac(request) }}">
 {# Une page peut retirer le menu latéral (mode concentré : le tri, l'entretien de « Ton parcours »). L'accueil
-   n'a que la marque, centrée. Dans l'application Mac (`coquille`), le menu est natif : la page n'a que le volet
-   des notifications, que la barre d'outils ouvre (window.ouvrirNotifications). #}
+   n'a que la marque, centrée. #}
 {% block barre %}
 {% if accueil %}
 <header class="barre-accueil">{{ marque() }}</header>
 {% else %}
-{% if not coquille %}{% include "_menu_lateral.html" %}{% endif %}
+{% include "_menu_lateral.html" %}
 {% include "_notifications.html" %}
 {% endif %}
 {% endblock %}
@@ -39,11 +38,6 @@
 {% if cadre_reglages %}</div>{% endif %}
 </main>
 {% include "_connexion_ia.html" %}
-{# Pour le cadre natif de l'application Mac (PageWeb.swift le lit à chaque page) : espaces, section ouverte,
-   notifications, et le mode de la page : normal (barre latérale), concentré (repliée), accueil (aucune). #}
-{% if coquille %}{% set corps = self.classe_corps().split() %}
-<script type="application/json" id="etat-page">{{ dict(etat_coquille or {}, mode="accueil" if accueil else ("concentre" if "concentre" in corps else "normal")) | tojson }}</script>
-{% endif %}
 <script>
 // Notifications (volet à droite, _notifications.html) : s'ouvrent par le bouton du menu ou l'adresse
 // #notifications ; les ouvrir marque les passages comme vus (cookie lu par le serveur) et retire le compte.
@@ -71,7 +65,6 @@
   });
   if (location.hash === "#notifications") ouvrir();
   window.addEventListener("hashchange", function () { if (location.hash === "#notifications") ouvrir(); });
-  window.ouvrirNotifications = function () { ouvrir(); };   // la cloche de la barre d'outils de l'application Mac
 })();
 
 // Dossier en préparation : l'étape se met à jour toutes les 5 s, la page se recharge quand il est fait.
