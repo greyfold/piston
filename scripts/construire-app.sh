@@ -5,7 +5,8 @@
 #   scripts/construire-app.sh --publier   construit une version à distribuer : signée Developer ID avec le
 #                                         runtime renforcé, notarisée par Apple, en image disque, et ajoutée
 #                                         au flux de mises à jour (Sparkle) ; voir « Publier une version »
-#                                         dans le README
+#                                         dans le README ; sans --ouvrir, l'application de dist/ n'est ni
+#                                         quittée ni remplacée : seule l'image disque est produite
 #
 # L'application est autoportante : elle embarque son Python (python-build-standalone, installé
 # par uv), les dépendances et le code (Contents/Resources/racine : src, config, pyproject.toml).
@@ -247,6 +248,15 @@ if [[ -n "$PUBLIER" ]]; then
     exit 1
   fi
   cp "$DMG" "$RACINE/dist/Piston.dmg"              # le lien fixe de la page produit
+fi
+
+# Une publication seule ne touche pas l'application du Mac : la version part dans l'image disque et le flux.
+if [[ -n "$PUBLIER" && -z "$OUVRIR" ]]; then
+  print "\nVersion $VERSION prête : $VERSIONS/Piston-$VERSION.dmg (l'application de dist/ n'a pas été remplacée)"
+  print "Mise en ligne dans $ADRESSE_MAJ/, depuis le dépôt du site (~/Projets/greyfold) :"
+  print "  npm run deploy:piston     (images et deltas, Piston.dmg, puis appcast.xml en dernier)"
+  print "puis committer src/data/releases.json et npm run deploy (bouton et version de la page produit)."
+  exit 0
 fi
 
 # Tout a réussi : on quitte l'application en cours (elle ne doit pas tourner pendant le

@@ -845,16 +845,9 @@ def pipeline(request: Request):
         en_cours = reg.liste(PIPELINE, ordre="echeance IS NULL, echeance, entreprise")
         dossiers = {f["empreinte"]: infos_dossier(reg, f) for f in en_cours}
         refus = reg.liste(["refus"], ordre="reponse_le DESC, entreprise")
-        sans_reponse = followups.sans_reponse(reg)
-        a_classer = followups.relances(reg)["a_classer"]
-        sections = [("en-cours", "En cours", en_cours), ("sans-suite", "Deux relances, toujours rien", a_classer),
-                    ("sans-reponse", "Sans réponse depuis 21 jours", sans_reponse), ("refus", "Refus", refus)]
-        ordre = [f["empreinte"] for _, _, l in sections for f in l]
-        section = lambda emp: next(((a, n) for a, n, l in sections if any(f["empreinte"] == emp for f in l)), None)
-        detail, explicite = detail_liste(reg, request, ordre, lambda emp: lien_sel("/candidatures", emp), section)
         return page(request, "pipeline.html", en_cours=en_cours, refus=refus,
-                    sans_reponse=sans_reponse, dossiers=dossiers, a_classer=a_classer,
-                    selection_explicite=explicite, **detail)
+                    sans_reponse=followups.sans_reponse(reg), dossiers=dossiers,
+                    a_classer=followups.relances(reg)["a_classer"])
     finally:
         reg.fermer()
 
@@ -878,17 +871,9 @@ def registre(request: Request, statut: str = "", q: str = "", source: str = ""):
         if source:
             fiches = [f for f in fiches if source in (f.get("sources") or [])]
         stats = reg.stats()
-        total = len(fiches)
-        fiches = fiches[:400]
-        filtres = urlencode({k: v for k, v in (("q", q), ("statut", statut), ("source", source)) if v})
-        page_offres = "/offres" + ("?" + filtres if filtres else "")
-        detail, explicite = detail_liste(reg, request, [f["empreinte"] for f in fiches],
-                                         lambda emp: lien_sel(page_offres, emp), lambda emp: ("liste", "Offres"))
-        evals = evaluation.toutes(reg)
-        return page(request, "registre.html", fiches=fiches, total=total,
-                    statut=statut, q=q, source=source, stats=stats, page_offres=page_offres, evals=evals,
-                    ecartees=sum(stats["par_statut"].get(s, 0) for s in ECARTEES),
-                    selection_explicite=explicite, **detail)
+        return page(request, "registre.html", fiches=fiches[:400], total=len(fiches),
+                    statut=statut, q=q, source=source, stats=stats,
+                    ecartees=sum(stats["par_statut"].get(s, 0) for s in ECARTEES))
     finally:
         reg.fermer()
 

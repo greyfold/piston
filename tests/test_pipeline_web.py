@@ -149,9 +149,9 @@ def test_etats_vides(web, reg):
     """L'état vide Nexus (EmptyState, macro etat_vide), le même partout, adapté à chaque page."""
     offres, cands, sante, accueil = (web.get(u).text for u in ("/offres", "/candidatures", "/sante", "/"))
     assert '<h1 class="titre-vide" id="etat-vide-titre">Aucune annonce pour le moment</h1>' in offres
-    assert 'class="liste-volet"' not in offres and 'class="filtres' not in offres and 'data-ouvrir-modale="ajout-annonce"' in offres
+    assert "<table" not in offres and 'class="filtres"' not in offres and 'data-ouvrir-modale="ajout-annonce"' in offres
     assert '<h1 class="titre-vide" id="etat-vide-titre">Aucune candidature pour le moment</h1>' in cands
-    assert 'class="liste-volet"' not in cands
+    assert "<table" not in cands
     assert '<div class="etat-vide compact">' in sante and '<h3 class="titre-vide" id="notifications-vide">' in sante
     for html in (offres, cands, sante, accueil):
         assert 'class="etat-vide' in html and 'class="pastille-vide" aria-hidden="true"' in html
@@ -159,15 +159,14 @@ def test_etats_vides(web, reg):
     annonce(reg, statut="A", texte=FR)
     filtre = web.get("/offres?q=introuvable").text
     assert '<h2 class="titre-vide" id="etat-vide-titre">Aucun résultat pour « introuvable »</h2>' in filtre
-    assert 'class="filtres filtres-liste"' in filtre and 'class="liste-volet"' not in filtre
+    assert 'class="filtres"' in filtre and "<table" not in filtre
     assert "Aucune annonce avec ces filtres" in web.get("/offres?statut=refus").text
     offres = web.get("/offres").text
-    liste = offres.split("<main>")[1].split('id="detail"')[0]          # le volet de gauche
-    assert 'class="liste-volet"' in liste and "etat-vide" not in liste
+    assert "<table" in offres and "etat-vide" not in offres.split("<main>")[1]
     annonce(reg, titre="UX Lead", statut="candidature", postulee_le="2026-11-02")
     cands = web.get("/candidatures").text
-    assert "etat-vide" not in cands.split("<main>")[1] and 'class="liste-volet"' in cands and 'id="en-cours">En cours' in cands
-    assert 'id="refus"' not in cands and 'id="sans-suite"' not in cands        # sections vides masquées
+    assert "etat-vide" not in cands.split("<main>")[1] and "<table" in cands and "<h2>En cours" in cands
+    assert "<h2>Refus" not in cands and 'id="sans-suite"' not in cands        # sections vides masquées
 
 
 def test_anciennes_adresses_redirigees(web, reg):
@@ -253,10 +252,9 @@ def test_registre_montre_la_source(web, reg):
     annonce(reg, titre="UX Lead", sources=["jobup", "linkedin"], url="https://www.jobup.ch/fr/emplois/detail/1/")
     annonce(reg, titre="Head of Design", sources=[])
     html = web.get("/offres").text
-    assert "jobup, linkedin" in html                                    # la source dans la ligne
-    ux = reg.cx.execute("SELECT empreinte FROM annonces WHERE titre='UX Lead'").fetchone()[0]
-    detail = web.get("/offres?sel=%s&onglet=sources" % ux).text.split('id="detail"')[1]
-    assert 'href="https://www.jobup.ch/fr/emplois/detail/1/"' in detail     # et le lien en ligne dans son détail
+    assert "<th>Source</th>" in html
+    assert '>jobup</a>, <a class="lien-neutre" href="?source=linkedin"' in html
+    assert 'href="https://www.jobup.ch/fr/emplois/detail/1/"' in html
 
 def test_clic_go_ecrit_tout_de_suite(web, reg):
     e = annonce(reg, statut="A")

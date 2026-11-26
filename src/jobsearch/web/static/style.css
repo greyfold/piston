@@ -1280,10 +1280,30 @@ form[data-postuler] { display: inline; margin: 0; }
    960 px, une seule colonne : la liste, ou le détail de la ligne choisie avec un retour vers elle. */
 body:has(> .menu-lateral) > main:has(> .liste-detail) { max-width: none; padding: 0; }
 main:has(> .liste-detail) > .bandeau { margin: .75rem 1.5rem; }
-.liste-detail { display: grid; grid-template-columns: minmax(20rem, 25rem) minmax(0, 1fr);
-  height: calc(100dvh - var(--barre-fenetre, 0px)); }
-.volet-liste { background: var(--surface); border-right: 1px solid var(--bord); overflow-y: auto; padding-bottom: .75rem; }
-.volet-detail { min-width: 0; overflow-y: auto; padding: 1.4rem 1.75rem 1.5rem; }
+.volet-liste { background: var(--surface); border-right: 1px solid var(--bord); padding-bottom: .75rem; }
+.volet-detail { min-width: 0; padding: 1.4rem 1.75rem 1.5rem; }
+/* Au-dessus de 960 px, la vue tient dans la fenêtre : la page ne défile jamais (le menu reste en place), les
+   bandeaux éventuels prennent leur hauteur et les deux volets le reste, chacun avec sa barre de défilement. */
+@media (min-width: 961px) {
+  body:has(> .menu-lateral) > main:has(> .liste-detail) { display: flex; flex-direction: column;
+    height: calc(100dvh - var(--barre-fenetre, 0px)); }
+  main:has(> .liste-detail) > .bandeau { flex: none; }
+  main:has(> .liste-detail) > .bandeau + .bandeau { margin-top: 0; }
+  .liste-detail { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(20rem, 25rem) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr); }
+  .volet-liste, .volet-detail { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  /* Fenêtre Mac : chaque volet monte jusqu'en haut avec sa couleur, la bande de la barre de titre comprise (sa
+     bordure du haut, qui ne défile pas), au lieu d'une bande de la couleur du fond au-dessus des deux. */
+  body.fenetre-mac:has(> main > .liste-detail)::before { display: none; }
+  body.fenetre-mac > main:has(> .liste-detail) { margin-top: calc(-1 * var(--barre-fenetre)); height: 100dvh; }
+  body.fenetre-mac main > .liste-detail > .volet-liste { border-top: var(--barre-fenetre) solid var(--surface); }
+  body.fenetre-mac main > .liste-detail > .volet-detail { border-top: var(--barre-fenetre) solid var(--fond); }
+  body.fenetre-mac main:has(> .liste-detail) > .bandeau:first-of-type { margin-top: calc(var(--barre-fenetre) + .75rem); }
+  body.fenetre-mac main > .bandeau ~ .liste-detail > .volet-liste,
+  body.fenetre-mac main > .bandeau ~ .liste-detail > .volet-detail { border-top-width: 0; }
+}
+/* Fenêtre Mac : pas de rebond de la page au bout du défilement, qui montrait une bande noire ou blanche. */
+html:has(> body.fenetre-mac) { overscroll-behavior: none; }
 .tete-liste { display: flex; flex-direction: column; gap: .5rem; padding: 1.4rem 1rem .9rem 1.25rem; border-bottom: 1px solid var(--bord); }
 .tete-liste > p, .tete-liste .bandeau, .tete-liste .filtres { margin: 0; }
 .tete-liste .bandeau { font-size: .78rem; color: var(--texte-2); }
@@ -1325,8 +1345,6 @@ main:has(> .liste-detail) > .bandeau { margin: .75rem 1.5rem; }
 .volet-liste .premiers-pas { margin: 1rem; }
 .volet-detail .titre-entete-page { flex-basis: 14rem; }
 @media (max-width: 960px) {
-  .liste-detail { display: block; height: auto; }
-  .volet-liste, .volet-detail { overflow: visible; }
   .volet-liste { border-right: 0; }
   .liste-detail:not(.selection) .volet-detail, .liste-detail.selection .volet-liste { display: none; }
 }

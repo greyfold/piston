@@ -3,6 +3,19 @@
 Les versions suivent [SemVer](https://semver.org/lang/fr/) : tant que la version commence par 0,
 l'application est en essai et peut changer d'une version à l'autre.
 
+## 0.5.1 — 2026-11-26 (version d'essai)
+
+### Corrigé
+
+- **Aujourd'hui tient dans la fenêtre** : la page ne défile plus en entier, le menu reste en place, et la liste
+  défile seule quand elle dépasse la fenêtre, comme le détail à droite. Plus de bande noire ou blanche en haut :
+  chaque colonne monte jusqu'en haut de la fenêtre avec sa couleur.
+
+### Modifié
+
+- **Offres et Candidatures reviennent en tableaux**, comme en 0.4.0. Seule la page Aujourd'hui garde la liste et
+  le détail côte à côte.
+
 ## 0.5.0 — 2026-11-26 (version d'essai)
 
 ### Modifié
