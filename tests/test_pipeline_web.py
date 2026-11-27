@@ -525,9 +525,8 @@ def test_apercu_et_mots_cles_dans_la_page(web, reg, tmp_path, monkeypatch):
 
 
 def test_carte_go_courte_le_detail_sur_l_annonce(web, reg):
-    """La carte d'un oui reste courte : note, salaire, et une ligne qui compte ce qui est à vérifier et mène à
-    l'annonce ; le résumé, les pour et contre et le détail des critères restent sur la page de l'annonce.
-    La date et le canal d'envoi se notent dans une modale."""
+    """La ligne d'un oui reste courte : la note, l'intitulé, l'employeur et l'état du dossier ; un clic ouvre le
+    détail à droite, avec l'adéquation complète (critères non tenus, signaux)."""
     from jobsearch import evaluation
     from jobsearch.evaluation import Alerte, Critere
     from test_evaluation import FauxMoteur, _ev
@@ -536,12 +535,13 @@ def test_carte_go_courte_le_detail_sur_l_annonce(web, reg):
     ev.criteres = [Critere(critere="langue", etat="ko", note="Allemand B2–C1 exigé."),
                    Critere(critere="présence", etat="incertain", note="Rien sur le télétravail.")]
     evaluation.evaluer_lot(reg, [reg.get(e)], c=FauxMoteur([ev]), texte_profil="P")
-    carte = web.get("/").text.split('id="retenues"')[1].split("<script")[0]
-    assert "35<small>/100</small>" in carte and "130–150 k CHF" in carte
-    assert 'class="a-verifier" href="/annonce/%s"' % e in carte
-    assert "1 critère non tenu · 1 signal à vérifier" in carte
-    assert "✕ langue" not in carte and "Bon alignement produit et IA." not in carte and "Le profil couvre" not in carte
-    assert "Marquer envoyée" not in carte and "data-postuler" not in carte       # pas de dossier : rien à envoyer
+    page = web.get("/").text
+    ligne = page.split('id="retenues"')[1].split('id="detail"')[0]
+    assert "35<small>/100</small>" in ligne and 'href="/?sel=%s"' % e in ligne and "dossier à faire" in ligne
+    assert "Bon alignement produit et IA." not in ligne and "Marquer envoyée" not in ligne
+    detail = page.split('id="detail"')[1]                               # le premier oui est ouvert par défaut
+    assert "Bon alignement produit et IA." in detail and "Allemand B2–C1 exigé." in detail
+    assert 'aria-current="page">Adéquation' in detail                   # pas de dossier : l'adéquation
 
 
 def test_carte_go_marquer_envoyee_remplace_postuler(web, reg, tmp_path):
@@ -552,14 +552,15 @@ def test_carte_go_marquer_envoyee_remplace_postuler(web, reg, tmp_path):
     reg.cx.executescript(dmod.SCHEMA)
     reg.cx.execute("INSERT INTO dossiers (empreinte, etat, chemin) VALUES (?,?,?)", (e, "pret", str(tmp_path)))
     reg.commit()
-    carte = web.get("/?ensuite=1").text.split('id="retenues"')[1].split("<script")[0]
-    assert 'data-postuler="https://exemple.ch/postuler"' in carte and 'value="/#retenues"' in carte
-    assert "Marquer envoyée" not in carte and "Ouvrir le dossier" not in carte
-    r = web.post("/action", data={"empreinte": e, "type": "postuler", "retour": "/#retenues"}, follow_redirects=False)
-    assert r.status_code == 303
-    carte = web.get("/?ensuite=1").text.split('id="retenues"')[1].split("<script")[0]
-    assert "data-postuler" not in carte and "Ouvrir le dossier" not in carte
-    assert 'data-ouvrir-modale="envoi-%s"' % e[:12] in carte and '<dialog class="modale large" id="envoi-%s"' % e[:12] in carte
+    detail = web.get("/?ensuite=1").text.split('id="detail"')[1]
+    assert 'data-postuler="https://exemple.ch/postuler"' in detail
+    assert ('value="/?sel=%s&amp;onglet=dossier#fichiers"' % e) in detail      # le retour reste dans le volet
+    assert "Fichiers à joindre" not in detail
+    r = web.post("/action", data={"empreinte": e, "type": "postuler", "retour": "/?sel=%s#fichiers" % e},
+                 follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/?sel=%s&msg=" % e)
+    detail = web.get("/?sel=%s" % e).text.split('id="detail"')[1]
+    assert "Fichiers à joindre" in detail and "Marquer envoyée" in detail
 
 
 def test_rythme_et_alerte_du_vendredi(reg, sans_notification):
@@ -584,7 +585,7 @@ def test_rythme_et_alerte_du_vendredi(reg, sans_notification):
 def test_accueil_montre_le_rythme(web, reg, jobroom_en_service):
     annonce(reg, statut="candidature", postulee_le=dt.date.today().isoformat())
     html = web.get("/").text
-    assert "<span>cette semaine</span>" in html and "<span>ce mois</span>" in html
+    assert "cette semaine</span>" in html and "ce mois</span>" in html
 
 
 def test_objectifs_choisis_par_periode(web, reg, sans_notification):
@@ -595,13 +596,13 @@ def test_objectifs_choisis_par_periode(web, reg, sans_notification):
                  follow_redirects=False)
     assert r.status_code == 303 and "ok=1" in r.headers["location"]
     html = web.get("/?ensuite=1").text
-    assert "<span>ce mois</span>" in html and "<span>cette semaine</span>" not in html
+    assert "ce mois</span>" in html and "cette semaine</span>" not in html
     vendredi = dt.datetime(2026, 10, 30, 10, 0)
     assert not followups.rythme(reg, vendredi.date())["alerte"]      # pas d'objectif de semaine : pas de rappel
     assert not pipeline.rappel_rythme(reg, vendredi)["alerte"] and not sans_notification
     assert 'value="10"' in web.get("/profil/objectifs").text            # dans Ma recherche › Objectifs
     web.post("/profil/objectifs", data={"objectifs.semaine_min": "", "objectifs.mois_min": ""})
-    assert "<span>ce mois</span>" not in web.get("/").text
+    assert "ce mois</span>" not in web.get("/").text
     assert "nombre entier" in web.post("/profil/objectifs", data={"objectifs.semaine_min": "x",
                                                                    "objectifs.mois_min": ""}).text
 
@@ -710,7 +711,8 @@ def test_courrier_a_trancher_propose_et_se_cherche(web, reg, jobroom_en_service)
                    "'inconnu','a_trancher','pas de réponse claire','2026-11-03')")
     reg.commit()
     page = web.get("/").text
-    bloc = page[page.index('id="courrier"'):page.index('id="jobroom"')]
+    assert 'href="/?sel=courrier-c1"' in page[page.index('id="courrier"'):page.index('id="detail"')]
+    bloc = web.get("/?sel=courrier-c1").text.split('id="detail"')[1]   # le courrier choisi s'ouvre à droite
     assert 'data-filtre="cand-c1"' in bloc and 'optgroup label="Les plus probables"' in bloc
     assert ('<option value="%s" selected' % e) in bloc                  # l'ancien rattachement à Losinger est oublié
     assert '<option value="accuse" selected>Accusé de réception</option>' in bloc

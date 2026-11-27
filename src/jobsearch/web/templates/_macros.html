@@ -204,12 +204,12 @@
 {# En-tête de page (Nexus PageHeader) : retour, titre et sous-titre à gauche ; à droite, les opérations de la
    page puis le menu d'actions (`actions`, `menu` : HTML déjà rendu, par {% set … %}{% endset %}) ; sous le
    titre, ce que la page passe par {% call %} (méta, délais…). #}
-{% macro entete_page(titre, sous_titre="", retour=none, actions="", menu="") -%}
+{% macro entete_page(titre, sous_titre="", retour=none, actions="", menu="", niveau="h1") -%}
 <header class="entete-page">
   {% if retour %}<a class="retour" href="{{ retour[0] }}">{{ icone("precedent") }}<span>{{ retour[1] }}</span></a>{% endif %}
   <div class="ligne-entete-page">
     <div class="titre-entete-page">
-      <h1>{{ titre }}</h1>
+      <{{ niveau }} class="titre-entete">{{ titre }}</{{ niveau }}>
       {% if sous_titre %}<p class="sous-titre-entete">{{ sous_titre }}</p>{% endif %}
     </div>
     {% if actions | trim or menu | trim %}<div class="actions-entete">{{ actions }}{{ menu }}</div>{% endif %}
@@ -351,6 +351,30 @@
 {# Message après une action (Nexus FlashMessage) : flottant en bas à droite de la fenêtre, donc visible où que
    soit la page. Rendu par base.html pour toute page qui reçoit `msg`/`ok` : ne pas l'appeler ailleurs ni
    fabriquer un autre message. Un succès se referme seul (champs.js) ; un refus reste jusqu'à sa croix. #}
+{# Vue liste-détail (maquette « Aujourd'hui — fenêtre Mac, trois volets ») : une liste à gauche, le détail de la
+   ligne choisie à droite (_volet_detail.html). À utiliser pour toute liste dont chaque ligne a un détail à ouvrir
+   (une annonce) ; une liste sans détail reste un `.tableau`.
+   - titre_liste(id, titre, n, ton) : le titre d'une section de la liste, en petites capitales, avec son compte ;
+   - ligne_liste(href, titre, ...) : une ligne ; un clic ouvre son détail à droite. `repere` (date, heure ou note)
+     à gauche, `puce` (statut) puis le chevron à droite ; `action` (un bouton) prend la place du chevron, hors du
+     lien. `ton` colore le repère : `proche` (vert, demain) ou `retard` (alerte). #}
+{% macro titre_liste(id, titre, n=none, ton="") -%}
+<h2 class="section-base titre-liste" id="{{ id }}">{{ titre }}{% if n is not none %} <span class="compte-liste {{ ton }}">{{ n }}</span>{% endif %}</h2>
+{%- endmacro %}
+{% macro ligne_liste(href, titre, sous_titre="", actif=false, repere="", puce="", action="", ton="") -%}
+<li class="ligne-liste{{ ' actif' if actif }}">
+  <a href="{{ href }}"{% if actif %} aria-current="true"{% endif %}>
+    {%- if repere | trim %}<span class="repere {{ ton }}">{{ repere }}</span>{% endif %}
+    <span class="texte-ligne"><span class="titre-ligne">{{ titre }}</span>{% if sous_titre %}<span class="sous-titre-ligne">{{ sous_titre }}</span>{% endif %}</span>
+    {%- if puce | trim %}{{ puce }}{% endif %}
+    {%- if not action | trim %}{{ icone("suivant", "icone chevron-ligne") }}{% endif %}</a>
+  {%- if action | trim %}<div class="action-ligne">{{ action }}</div>{% endif %}
+</li>
+{%- endmacro %}
+{# Une puce de statut (.puce et sa variante) à passer à ligne_liste. #}
+{% macro puce_statut(texte, classe="") -%}<span class="puce {{ classe }}">{{ texte }}</span>{%- endmacro %}
+{# Le repère d'une ligne : une petite étiquette en capitales (jour, mois) au-dessus d'une valeur (heure, jour). #}
+{% macro repere_date(haut, bas) -%}<span class="repere-haut">{{ haut | upper }}</span><span class="repere-bas">{{ bas }}</span>{%- endmacro %}
 {% macro flash_message(texte, ok=true) -%}
 <div class="flash-message{{ '' if ok else ' ko' }}" role="{{ 'status' if ok else 'alert' }}" data-flash-message>
   {{ icone("coche" if ok else "info") }}<span>{{ texte }}</span>

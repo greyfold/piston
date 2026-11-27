@@ -1,0 +1,17 @@
+{# Volet de droite d'une vue liste-détail (titre_liste / ligne_liste, _macros.html) : le détail de la ligne
+   choisie. Une annonce (contexte de `contexte_annonce`, app.py, posé à plat dans la page), un courrier
+   d'employeur à classer (`courrier_sel`, Aujourd'hui), ou rien : un état vide. Sous 960 px, il ne s'affiche
+   que pour une ligne choisie, à la place de la liste, avec un retour vers elle. #}
+{% from "_macros.html" import etat_vide %}
+<section class="volet-detail" id="detail" aria-label="Détail">
+{% if courrier_sel %}{% set c = courrier_sel %}
+  {% include "_courrier.html" %}
+{% elif f is defined and f and base_onglets is defined %}
+  {% set retour_entete = (retour_volet_href, retour_volet[1]) if retour_volet else none %}
+  {% set niveau_titre = "h2" %}
+  {% include "_annonce_detail.html" %}
+{% else %}
+  {% call etat_vide("dossier", "Choisis une ligne", titre_balise="h2", compact=true,
+       description="Son détail s'ouvre ici.") %}{% endcall %}
+{% endif %}
+</section>

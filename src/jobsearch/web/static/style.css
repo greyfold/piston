@@ -1192,7 +1192,8 @@ form[data-postuler] { display: inline; margin: 0; }
 .entete-page { margin-bottom: 1rem; }
 .ligne-entete-page { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: .75rem 1.5rem; }
 .titre-entete-page { flex: 1 1 24rem; min-width: 0; }
-.titre-entete-page h1 { overflow-wrap: anywhere; }
+.titre-entete-page .titre-entete { overflow-wrap: anywhere; }
+.titre-entete-page h2.titre-entete { display: block; margin: 0 0 .25rem; font-size: 1.3rem; }
 .sous-titre-entete { margin: 0; font-size: 1.05rem; font-weight: 600; color: var(--texte-2); }
 .actions-entete { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; flex: none; }
 .meta-entete { margin: .35rem 0 0; font-size: .85rem; color: var(--texte-3); }
@@ -1273,3 +1274,77 @@ form[data-postuler] { display: inline; margin: 0; }
 .consigne-mots-cles { margin: 0 0 .35rem; }
 .aide-mots-cles { margin: .35rem 0 0; }
 .detail-mots-cles { margin-top: .7rem; }
+
+/* Vue liste-détail (maquette Figma « Aujourd'hui — fenêtre Mac, trois volets ») : la liste à gauche, le détail de la
+   ligne choisie à droite, chacun défile seul ; macros titre_liste / ligne_liste, partiel _volet_detail.html. Sous
+   960 px, une seule colonne : la liste, ou le détail de la ligne choisie avec un retour vers elle. */
+body:has(> .menu-lateral) > main:has(> .liste-detail) { max-width: none; padding: 0; }
+main:has(> .liste-detail) > .bandeau { margin: .75rem 1.5rem; }
+.volet-liste { background: var(--surface); border-right: 1px solid var(--bord); padding-bottom: .75rem; }
+.volet-detail { min-width: 0; padding: 1.4rem 1.75rem 1.5rem; }
+/* Au-dessus de 960 px, la vue tient dans la fenêtre : la page ne défile jamais (le menu reste en place), les
+   bandeaux éventuels prennent leur hauteur et les deux volets le reste, chacun avec sa barre de défilement. */
+@media (min-width: 961px) {
+  body:has(> .menu-lateral) > main:has(> .liste-detail) { display: flex; flex-direction: column;
+    height: calc(100dvh - var(--barre-fenetre, 0px)); }
+  main:has(> .liste-detail) > .bandeau { flex: none; }
+  main:has(> .liste-detail) > .bandeau + .bandeau { margin-top: 0; }
+  .liste-detail { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(20rem, 25rem) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr); }
+  .volet-liste, .volet-detail { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  /* Fenêtre Mac : chaque volet monte jusqu'en haut avec sa couleur, la bande de la barre de titre comprise (sa
+     bordure du haut, qui ne défile pas), au lieu d'une bande de la couleur du fond au-dessus des deux. */
+  body.fenetre-mac:has(> main > .liste-detail)::before { display: none; }
+  body.fenetre-mac > main:has(> .liste-detail) { margin-top: calc(-1 * var(--barre-fenetre)); height: 100dvh; }
+  body.fenetre-mac main > .liste-detail > .volet-liste { border-top: var(--barre-fenetre) solid var(--surface); }
+  body.fenetre-mac main > .liste-detail > .volet-detail { border-top: var(--barre-fenetre) solid var(--fond); }
+  body.fenetre-mac main:has(> .liste-detail) > .bandeau:first-of-type { margin-top: calc(var(--barre-fenetre) + .75rem); }
+  body.fenetre-mac main > .bandeau ~ .liste-detail > .volet-liste,
+  body.fenetre-mac main > .bandeau ~ .liste-detail > .volet-detail { border-top-width: 0; }
+}
+/* Fenêtre Mac : pas de rebond de la page au bout du défilement, qui montrait une bande noire ou blanche. */
+html:has(> body.fenetre-mac) { overscroll-behavior: none; }
+.tete-liste { display: flex; flex-direction: column; gap: .5rem; padding: 1.4rem 1rem .9rem 1.25rem; border-bottom: 1px solid var(--bord); }
+.tete-liste > p, .tete-liste .bandeau, .tete-liste .filtres { margin: 0; }
+.tete-liste .bandeau { font-size: .78rem; color: var(--texte-2); }
+.ligne-tete-liste { display: flex; align-items: center; gap: .5rem; }
+.ligne-tete-liste h1 { flex: 1; margin: 0; font-size: 1.3rem; }
+.filtres-liste input[name=q] { flex: 1 1 100%; }
+.filtres-liste select { flex: 1 1 8rem; min-width: 0; }
+.rythme-liste { display: flex; align-items: center; gap: .5rem; margin: 0; font-size: .78rem; color: var(--texte-2); }
+.rythme-liste b { font-family: var(--police-titres); font-size: .85rem; color: var(--texte); }
+.rythme-liste .jauge { flex: none; width: 3rem; margin: 0; }
+.rythme-liste.atteint .jauge i { background: var(--reussite); }
+.titre-liste { margin: 0; padding: 1rem 1rem .4rem 1.25rem; font-size: .72rem; font-weight: 700; gap: .4rem; }
+.compte-liste { font-family: var(--police-titres); letter-spacing: 0; }
+.compte-liste.retard { color: var(--alerte); }
+.liste-volet { margin: 0; padding: 0; list-style: none; }
+.ligne-liste { display: flex; align-items: center; border-top: 1px solid var(--bord); }
+.ligne-liste > a { flex: 1; min-width: 0; display: flex; align-items: center; gap: .75rem; color: var(--texte);
+  padding: .7rem .9rem .7rem calc(1.25rem - 3px); border-left: 3px solid transparent; }
+.ligne-liste > a:hover { text-decoration: none; background: var(--surface-2); }
+.ligne-liste > a:focus-visible { outline: 2px solid var(--vert); outline-offset: -2px; }
+.ligne-liste.actif { background: var(--surface-2); }
+.ligne-liste.actif > a { border-left-color: var(--lien); }
+.ligne-sans-detail { gap: .75rem; padding: .75rem 1rem .75rem 1.25rem; }
+.action-ligne { flex: none; padding-right: .9rem; }
+.ligne-sans-detail .action-ligne { padding: 0; }
+.action-ligne form { margin: 0; }
+.repere { flex: none; width: 2.75rem; display: flex; flex-direction: column; align-items: center; line-height: 1.3; color: var(--texte); }
+.repere-haut { font-size: .72rem; font-weight: 700; letter-spacing: .04em; color: var(--texte-2); }
+.repere-bas { font-family: var(--police-titres); font-weight: 700; font-size: .95rem; }
+.repere.proche, .repere.proche .repere-haut { color: var(--vert); }
+.repere.retard, .repere.retard .repere-haut { color: var(--alerte); }
+.texte-ligne { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.35; }
+.titre-ligne { font-size: .85rem; font-weight: 600; color: var(--lien); overflow-wrap: anywhere; }
+.ligne-sans-detail .titre-ligne { color: var(--texte); }
+.sous-titre-ligne { font-size: .75rem; color: var(--texte-3); overflow-wrap: anywhere; }
+.ligne-liste .puce { flex: none; }
+.chevron-ligne { flex: none; width: .95rem; height: .95rem; color: var(--texte-3); }
+.pied-liste { margin: .5rem 1rem 0 1.25rem; }
+.volet-liste .premiers-pas { margin: 1rem; }
+.volet-detail .titre-entete-page { flex-basis: 14rem; }
+@media (max-width: 960px) {
+  .volet-liste { border-right: 0; }
+  .liste-detail:not(.selection) .volet-detail, .liste-detail.selection .volet-liste { display: none; }
+}

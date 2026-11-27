@@ -14,14 +14,17 @@ n'est installé à côté : pas d'agent launchd, pas de dossier de projet, pas d
 
 ## Télécharger
 
-Piston se télécharge gratuitement sur [greyfold.ch](https://greyfold.ch).
-<!-- Adresse exacte de la page de téléchargement à confirmer. -->
+Piston se télécharge gratuitement sur [greyfold.ch](https://greyfold.ch/product/piston/).
 
 - **Mac** : Apple silicon (M1 ou plus récent) et macOS 14 ou plus.
 - **IA** : un abonnement de la personne à l'un des moteurs proposés (Claude Pro ou Max, ChatGPT,
   Google AI Pro ou Ultra, SuperGrok). Aucune clé API, aucun compte chez Greyfold.
-- **Premier lancement** : l'application n'est pas encore notarisée ; macOS la bloque une première
-  fois. L'autoriser dans Réglages Système › Confidentialité et sécurité, puis la rouvrir.
+- **Installer** : ouvrir l'image disque et glisser Piston dans Applications. Une version publiée est
+  signée Developer ID et notarisée : macOS l'ouvre sans détour. (Jusqu'à la 0.3.1, l'application
+  n'était pas notarisée ; macOS la bloquait une première fois, à autoriser dans Réglages Système ›
+  Confidentialité et sécurité.)
+- **Mises à jour** : Piston vérifie une fois par jour s'il existe une nouvelle version et propose de
+  l'installer (Sparkle) ; voir « Mises à jour » plus bas.
 - **Premier démarrage** : l'application crée sa machine virtuelle et y installe Ubuntu, Chrome,
   Node.js et les moteurs d'IA. Compter plusieurs minutes et quelques gigaoctets ; l'assistant
   d'accueil se remplit pendant ce temps.
@@ -201,7 +204,73 @@ Le script construit `dist/Piston.app` :
 - Lima 2.3.0 (`limactl` et l'agent de la VM seulement), somme de contrôle vérifiée, signé avec
   le droit `com.apple.security.virtualization`.
 
-Signature locale seulement, pas encore de notarisation. Rien à installer sur le Mac.
+Sans option, la signature est locale : de quoi lancer l'application sur ce Mac. Rien à installer sur le Mac.
+
+## Publier une version
+
+```bash
+scripts/construire-app.sh --publier
+```
+
+construit la même application, puis :
+
+1. signe chaque binaire (Python, ses bibliothèques, `limactl`, Sparkle, l'application) avec le
+   certificat « Developer ID Application » du trousseau (ou `PISTON_IDENTITE`), runtime renforcé et
+   horodatage ; l'application reçoit le droit `com.apple.security.device.audio-input` (la dictée) ;
+2. la fait notariser par Apple et agrafe le ticket ;
+3. fait l'image disque `Piston-<version>.dmg` (l'application et un raccourci vers Applications), la
+   signe, la fait notariser et l'agrafe ;
+4. l'ajoute à `dist/versions/` et y réécrit `appcast.xml` avec `generate_appcast` de Sparkle : signature
+   EdDSA de l'image, deltas depuis les versions précédentes, notes tirées de la section de
+   `CHANGELOG.md` pour cette version ;
+5. copie l'image en `dist/Piston.dmg`, le lien fixe de la page produit.
+
+Puis, dans le dépôt du site (`~/Projets/greyfold`) :
+
+```bash
+npm run deploy:piston
+```
+
+envoie dans `https://greyfold.ch/downloads/piston/` (`ADRESSE_MAJ` du script ; pas `/piston/`, qui redirige vers
+la page produit) les images, les deltas, `Piston.dmg`, et **`appcast.xml` en dernier**, puisque c'est lui qui
+annonce la version aux applications installées ; vérifie les fichiers en ligne et met à jour
+`src/data/releases.json`. Committer ce fichier et `npm run deploy` : le bouton « Download Piston » et la ligne de
+version de la page produit suivent. Le déploiement du site ne touche jamais `/downloads/`.
+
+Avant la première publication, une fois pour toutes :
+
+- **Clé des mises à jour** : `app/.build/artifacts/sparkle/Sparkle/bin/generate_keys` crée la clé EdDSA
+  dans le trousseau et affiche la clé publique, à poser dans `CLE_PUBLIQUE_MAJ` du script. La clé
+  privée ne quitte pas le trousseau ; l'exporter (`generate_keys -x <fichier>`) et ranger ce fichier en lieu sûr : sans elle,
+  plus aucune mise à jour n'atteint les installations existantes.
+- **Notarisation** : `xcrun notarytool store-credentials piston-notarisation` (identifiant Apple, équipe,
+  mot de passe pour application) range les identifiants dans le trousseau.
+- **Garder `dist/versions/`** : les deltas se calculent depuis les images déjà publiées.
+
+Chaque publication demande une version nouvelle dans `pyproject.toml` (elle devient `CFBundleVersion`,
+que Sparkle compare) et sa section `## <version> — <date>` dans `CHANGELOG.md`.
+
+## Mises à jour
+
+Sparkle (`app/Sources/RechercheEmploi/MisesAJour.swift`) interroge `appcast.xml` une fois par jour et, si
+une version plus récente existe, montre ses nouveautés et propose de l'installer. Il n'accepte qu'une image
+signée par la clé de publication et une application de la même équipe Developer ID. L'installation quitte
+Piston par le chemin habituel (la machine virtuelle s'éteint d'abord), remplace l'application et la
+relance. Le menu Piston et celui de la barre des menus ont « Rechercher les mises à jour… » ; la barre des
+menus permet de couper la vérification quotidienne.
+
+Ce qui suit la nouvelle version sans rien faire :
+
+- les données, hors du paquet, ne bougent pas ; la base ajoute ses colonnes au lancement (`db.py`) ;
+- le code de la machine virtuelle est réinstallé dès que son empreinte diffère (`vm.empreinte_code`) ;
+- un tableau de bord resté sur l'ancien code est arrêté et remplacé (`Etat.swift`).
+
+Ce qui ne suit pas : la VM elle-même n'est jamais recréée. Un changement de `PROVISION_SYSTEME` (paquets,
+Chrome) n'atteint pas une VM déjà créée ; seuls les moteurs manquants sont installés au démarrage.
+
+L'application doit être dans Applications : lancée depuis Téléchargements ou depuis l'image disque, macOS
+l'exécute d'un emplacement temporaire que Sparkle ne peut pas remplacer. Les personnes qui ont la 0.3.1
+(sans Sparkle) téléchargent une fois la version suivante à la main.
 
 ## Désinstaller
 

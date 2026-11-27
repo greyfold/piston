@@ -19,6 +19,8 @@ def configuration_de_test(monkeypatch):
     pas sur le config/ livré, qui est neutre (voir test_installation)."""
     from jobsearch import config, profil
     monkeypatch.setattr(config, "CONFIG", FIXTURES / "config")
+    # Les conditions d'utilisation sont tenues pour acceptées (test_conditions.py les vérifie à part).
+    monkeypatch.setattr(profil, "conditions_a_accepter", lambda p=None: False)
     profil.oublier()
     yield
     profil.oublier()

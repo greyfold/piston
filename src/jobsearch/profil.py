@@ -267,6 +267,23 @@ def terminer_accueil():
 
 # --- Accueil : l'objectif et la recherche, en un écran -------------------------------
 
+# Conditions d'utilisation (web/templates/conditions.html) : la version acceptée, et quand. Une nouvelle version
+# (texte modifié) se fait accepter de nouveau à l'ouverture d'Aujourd'hui.
+VERSION_CONDITIONS = "2026-11-26"
+CONDITIONS = "conditions_acceptees"
+
+
+def conditions_a_accepter(p=None):
+    """Vrai tant que la version en cours des conditions d'utilisation n'a pas été acceptée."""
+    return ((p or charger()).get(CONDITIONS) or {}).get("version") != VERSION_CONDITIONS
+
+
+def accepter_conditions():
+    p = copy.deepcopy(charger())
+    p[CONDITIONS] = {"version": VERSION_CONDITIONS, "le": dt.date.today().isoformat()}
+    ecrire(p)
+
+
 PREMIERS_PAS = "premiers_pas"          # checklist du tableau de bord : affichee · masquee · terminee
 PREMIERS_PAS_FAITS = "premiers_pas_faits"   # étapes déjà vues faites : une étape faite ne redevient pas « à faire »
 

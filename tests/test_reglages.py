@@ -10,7 +10,7 @@ def test_meme_nom_dans_la_liste_le_titre_et_l_onglet(reg, monkeypatch):
     monkeypatch.setattr(appmod, "_reg", lambda: type(reg)(reg.chemin))
     web = TestClient(appmod.app)
     liste = web.get("/reglages").text
-    assert len(appmod.PAGES_REGLAGES) == 7
+    assert len(appmod.PAGES_REGLAGES) == 8
     for r in appmod.PAGES_REGLAGES:
         assert 'href="%s"' % r["href"] in liste and r["nom"] in liste
         page = web.get(r["href"]).text

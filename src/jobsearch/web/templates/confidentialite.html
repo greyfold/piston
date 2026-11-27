@@ -54,6 +54,13 @@
   </ul>
 </div>
 
+<h2>Les mises à jour</h2>
+<div class="carte">
+  <p>Une fois par jour, l'application demande au site de Piston s'il existe une nouvelle version. Elle n'y envoie que son
+    numéro de version, et ton Mac son adresse IP comme pour toute connexion, rien de ton profil ni de ta recherche. Tu peux
+    couper cette vérification dans le menu de la barre des menus, « Vérifier les mises à jour chaque jour ».</p>
+</div>
+
 <h2>Ton réglage chez {{ ia.editeur }}</h2>
 <div class="carte">
   <p>{{ ia.entrainement }} Ce réglage vaut aussi pour l'application, qui passe par ton compte :
@@ -78,5 +85,6 @@
 {% elif not profil_present %}
 <p class="petit muet">Quand ton parcours sera dans le profil, cette page montrera aussi les lignes masquées avant l'envoi.</p>
 {% endif %}
+<p class="petit muet">Ce que l'application fait et ne fait pas, et les limites de responsabilité : <a href="/conditions">conditions d'utilisation</a>.</p>
 </div>
 {% endblock %}

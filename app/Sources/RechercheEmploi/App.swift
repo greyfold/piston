@@ -8,7 +8,10 @@ final class Delegue: NSObject, NSApplicationDelegate {
     /// (ouverture à la connexion) ; tableau de bord et échéances n'attendent pas la fenêtre.
     @MainActor static let etat = Etat()
     func applicationDidFinishLaunching(_ notification: Notification) {
-        MainActor.assumeIsolated { Delegue.etat.demarrer() }
+        MainActor.assumeIsolated {
+            Delegue.etat.demarrer()
+            _ = MisesAJour.partage                  // Sparkle : vérification quotidienne (MisesAJour.swift)
+        }
     }
     // La fenêtre se ferme, l'application reste dans la barre des menus.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
@@ -37,7 +40,10 @@ struct RechercheEmploiApp: App {
         // Pas de barre de titre grise : la page monte jusqu'en haut, sous les boutons de la fenêtre (Tableau).
         .windowStyle(.hiddenTitleBar)
         .commands {
-            CommandGroup(after: .appInfo) { BoutonConnexion().environmentObject(etat) }
+            CommandGroup(after: .appInfo) {
+                BoutonMisesAJour()
+                BoutonConnexion().environmentObject(etat)
+            }
         }
 
         MenuBarExtra {
@@ -106,6 +112,8 @@ struct Menu_: View {
         Divider()
         Toggle("Ouvrir à la connexion", isOn: Binding(get: { etat.ouvertureAuto },
                                                        set: { _ in etat.basculerOuvertureAuto() }))
+        BasculeMisesAJour()
+        BoutonMisesAJour()
         Divider()
         Button("Quitter Piston") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
