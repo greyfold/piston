@@ -154,7 +154,7 @@
     }
     function retour(m) {
       if (m.type === "pret") afficher(true, { texte: "J'écoute…" });
-      else if (m.type === "installation") afficher(true, { texte: "Installation de la langue…" });
+      else if (m.type === "installation") afficher(true, { texte: m.texte || "Installation de la langue…" });
       else if (m.type === "partiel" || m.type === "final") inserer(m.texte);
       else if (m.type === "erreur") afficher(false, { texte: "Dictée impossible : " + m.message + ".", erreur: true, reglages: m.reglages });
       else if (m.type === "fin") { if (dicte) afficher(false); zone.focus(); }

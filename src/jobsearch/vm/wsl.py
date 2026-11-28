@@ -133,6 +133,18 @@ def _env():
     return dict(os.environ, WSL_UTF8="1")       # wsl.exe écrit ses propres messages en UTF-8, pas UTF-16
 
 
+def _decoder(octets):
+    """Sortie de wsl.exe en texte : avant l'installation de WSL, le programme système ignore WSL_UTF8=1
+    et écrit en UTF-16LE ; une fois WSL installé, c'est de l'UTF-8."""
+    if not isinstance(octets, (bytes, bytearray)):
+        return octets or ""
+    if octets.startswith(b"\xff\xfe") or (
+        len(octets) >= 2 and len(octets) % 2 == 0 and octets[1::2].count(0) >= len(octets) // 4
+    ):
+        return octets.decode("utf-16-le", "replace").lstrip("\ufeff")
+    return octets.decode("utf-8", "replace")
+
+
 def _wsl(*args, input=None, **kw):
     """wsl.exe, en octets : en mode texte, Python traduirait sous Windows les fins de ligne de l'entrée en
     CRLF, et bash refuserait le script (« $'\\r': command not found »). Les sorties reviennent en texte."""
@@ -147,8 +159,7 @@ def _wsl(*args, input=None, **kw):
         r = v.EXECUTER(["wsl.exe", *args], input=input, **kw)
     except FileNotFoundError:
         raise v.VMImpossible(PAS_DE_WSL)
-    texte = lambda b: b.decode("utf-8", "replace") if isinstance(b, (bytes, bytearray)) else (b or "")
-    return subprocess.CompletedProcess(r.args, r.returncode, stdout=texte(r.stdout), stderr=texte(r.stderr))
+    return subprocess.CompletedProcess(r.args, r.returncode, stdout=_decoder(r.stdout), stderr=_decoder(r.stderr))
 
 
 PAS_DE_WSL = ("WSL n'est pas installé sur ce PC : ouvre PowerShell en administrateur, tape "
@@ -159,7 +170,7 @@ def _noms(*options):
     r = _wsl("--list", "--quiet", *options, timeout=60)
     if r.returncode != 0:
         if not options:
-            texte = (r.stdout or "") + (r.stderr or "")
+            texte = ((r.stdout or "") + (r.stderr or "")).replace("\u2019", "'")
             if "--install" in texte or "not installed" in texte.lower() or "n'est pas installé" in texte.lower():
                 raise _vm().VMImpossible(PAS_DE_WSL)
         return []

@@ -20,6 +20,7 @@ LIBELLES = {
     "gestionnaire": "Gestionnaire des tâches", "systeme": "Windows", "en": "your PC", "de": "Ihrem PC",
     "de_gen": "Ihres PCs", "cmd": "Ctrl", "courrier": "Outlook",
     "dictee": "Saisie vocale de Windows : touche Windows + H",
+    "barre": "la zone de notification",
 }
 
 APPLICATION = "app.rechercheemploi.piston"

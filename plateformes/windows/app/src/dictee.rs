@@ -210,7 +210,7 @@ fn modele(app: &AppHandle) -> Result<PathBuf, Echec> {
     if chemin.exists() {
         return Ok(chemin);
     }
-    envoyer(app, json!({"type": "partiel", "texte": "Préparation de la dictée : téléchargement du modèle (190 Mo, une seule fois)…"}));
+    envoyer(app, json!({"type": "installation", "texte": "Préparation de la dictée : téléchargement du modèle (190 Mo, une seule fois)…"}));
     std::fs::create_dir_all(&dossier).map_err(|e| (e.to_string(), None))?;
     let partiel = dossier.join(format!("{MODELE}.part"));
     let reponse = ureq::get(ADRESSE).call().map_err(|e| (format!("téléchargement du modèle de dictée impossible ({e})"), None))?;

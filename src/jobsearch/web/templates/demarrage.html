@@ -44,7 +44,7 @@
     <p class="aide-accueil">Pas besoin d'attendre : ta recherche et tes sources se règlent sans l'IA. L'étape « Ton IA » attendra que la machine soit prête.</p>
     {% else %}
     <div class="etat-tache erreur">{{ icone("alerte") }}<div><p class="fort">La machine virtuelle n'a pas démarré</p>
-      <p>{{ avancement.erreur }}. Tu peux commencer quand même, puis la relancer par le menu Piston de la barre des menus : « Démarrer la machine virtuelle ».</p></div></div>
+      <p>{{ avancement.erreur }}. Tu peux commencer quand même, puis la relancer par le menu Piston de {{ ordi.barre }} : « Démarrer la machine virtuelle ».</p></div></div>
     {% endif %}
   </section>
   {% elif avancement and avancement.fini %}

@@ -17,7 +17,7 @@ pub struct Chemins {
 
 impl Chemins {
     pub fn lire(app: &AppHandle) -> Self {
-        let ressources = app.path().resource_dir().unwrap_or_default();
+        let ressources = sans_prefixe_win(app.path().resource_dir().unwrap_or_default());
         let python = std::env::var_os("PISTON_PYTHON").map(PathBuf::from).unwrap_or_else(|| {
             if cfg!(windows) {
                 ressources.join("python").join("python.exe")
@@ -49,5 +49,39 @@ fn dossier_des_donnees() -> PathBuf {
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".local").join("share"))
             .join("recherche-emploi")
+    }
+}
+
+/// Sous Windows, `resource_dir()` renvoie un chemin étendu (`\\?\C:\…`) : Python s'y lance, mais
+/// Jinja2 (`FileSystemLoader`) refuse de charger les gabarits depuis un chemin `\\?\`.
+fn sans_prefixe_win(chemin: PathBuf) -> PathBuf {
+    let Some(s) = chemin.to_str() else { return chemin };
+    if let Some(unc) = s.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{unc}"))
+    } else if let Some(local) = s.strip_prefix(r"\\?\") {
+        PathBuf::from(local)
+    } else {
+        chemin
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retire_le_prefixe_etendu_windows() {
+        assert_eq!(
+            sans_prefixe_win(PathBuf::from(r"\\?\C:\Users\user\AppData\Local\Piston")),
+            PathBuf::from(r"C:\Users\user\AppData\Local\Piston"),
+        );
+        assert_eq!(
+            sans_prefixe_win(PathBuf::from(r"\\?\UNC\serveur\partage\Piston")),
+            PathBuf::from(r"\\serveur\partage\Piston"),
+        );
+        assert_eq!(
+            sans_prefixe_win(PathBuf::from("/Applications/Piston.app/Contents/Resources")),
+            PathBuf::from("/Applications/Piston.app/Contents/Resources"),
+        );
     }
 }

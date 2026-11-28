@@ -9,7 +9,7 @@
   <iframe class="ecran-vm" src="{{ adresse }}" title="Écran de la machine virtuelle" allow="clipboard-read; clipboard-write"></iframe>
   {% else %}
   <div class="carte"><p>{{ erreur or "La machine virtuelle n'est pas démarrée." }}</p>
-    <p class="petit muet">Démarre-la depuis la barre des menus de l'application (« Démarrer la machine virtuelle »).</p></div>
+    <p class="petit muet">Démarre-la depuis {{ ordi.barre }} de l'application (« Démarrer la machine virtuelle »).</p></div>
   {% endif %}
 </div>
 {% endblock %}

@@ -16,6 +16,7 @@ LIBELLES = {
     "sur": "sur ton ordinateur", "coffre": "trousseau de clés", "reglages": "Paramètres",
     "gestionnaire": "Moniteur système", "systeme": "Linux", "en": "your computer", "de": "Ihrem Computer",
     "de_gen": "Ihres Computers", "dictee": "", "cmd": "Ctrl", "courrier": "",
+    "barre": "la zone de notification",
 }
 
 APPLICATION = "app.rechercheemploi.piston"

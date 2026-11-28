@@ -47,7 +47,7 @@ LIBELLES = _impl.LIBELLES
 le (« le Mac »), du (« du Mac »), sur (« sur ton Mac »), coffre (« trousseau »), reglages (« Réglages
 Système »), gestionnaire (« Moniteur d'activité »), systeme (« macOS »), en (« your Mac »), de (« Ihrem Mac »),
 de_gen (« Ihres Macs »), dictee (l'indice de la dictée du système), cmd (« ⌘ » ou « Ctrl »), courrier (le courrier
-local : « Apple Mail », « Outlook », ou vide)."""
+local : « Apple Mail », « Outlook », ou vide), barre (« la barre des menus » ou « la zone de notification »)."""
 
 
 def libelle(cle):

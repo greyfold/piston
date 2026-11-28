@@ -15,6 +15,7 @@ LIBELLES = {
     "coffre": "trousseau", "reglages": "Réglages Système", "gestionnaire": "Moniteur d'activité",
     "systeme": "macOS", "en": "your Mac", "de": "Ihrem Mac", "de_gen": "Ihres Macs",
     "dictee": "Dictée du Mac : Fn deux fois", "cmd": "⌘", "courrier": "Apple Mail",
+    "barre": "la barre des menus",
 }
 
 APPLICATION = "app.rechercheemploi.mac"     # CFBundleIdentifier (plateformes/macos/construire.sh)

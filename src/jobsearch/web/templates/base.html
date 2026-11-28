@@ -106,7 +106,7 @@ document.querySelectorAll("[data-avancement-vm]").forEach(function (el) {
           if (el.dataset.fin !== "bandeau") { location.reload(); return; }
           el.className = "bandeau " + (a.fini ? "ok" : "attention");
           poser("texte", a.fini ? "La machine virtuelle est prête : l'IA et le navigateur répondent."
-            : "La machine virtuelle n'a pas démarré (" + a.erreur + ") : relance-la par le menu Piston de la barre des menus.");
+            : "La machine virtuelle n'a pas démarré (" + a.erreur + ") : relance-la par le menu Piston de " + {{ ordi.barre | tojson }} + ".");
           return;
         }
         if (el.dataset.fin !== "bandeau" && String(faites) !== el.dataset.faites) { location.reload(); return; }

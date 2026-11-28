@@ -135,6 +135,24 @@ def test_wsl_absent_dit_comment_l_installer(monkeypatch, tmp_path):
         vm.instance()
 
 
+def test_wsl_non_installe_utf16le_avant_telechargement(monkeypatch, tmp_path):
+    """Avant installation, le wsl.exe système de Windows 11 ignore WSL_UTF8=1 et écrit en UTF-16LE."""
+    msg = ("Le Sous-système Windows pour Linux n\u2019est pas installé. Vous pouvez effectuer "
+           "l\u2019installation en exécutant « wsl.exe --install ».\r\n").encode("utf-16-le")
+    telecharge = []
+
+    def stub(cmd, **kw):
+        return subprocess.CompletedProcess(cmd, 1, stdout=b"", stderr=msg)
+    monkeypatch.setattr(vm, "EXECUTER", stub)
+    monkeypatch.setattr(vm, "HYPERVISEUR", "wsl")
+    monkeypatch.setattr(wsl, "_image", lambda dossier: telecharge.append(1))
+    with pytest.raises(vm.VMImpossible, match="wsl --install --no-distribution"):
+        vm.instance()
+    with pytest.raises(vm.VMImpossible, match="wsl --install --no-distribution"):
+        wsl.creer()
+    assert not telecharge
+
+
 def test_copie_du_code_par_tar_sur_l_entree(faux, tmp_path):
     vm.creer()
     d = tmp_path / "code"
