@@ -622,8 +622,53 @@
     verifier();
   });
 
+  /* ------------------------------------------------- Aperçu d'un document (_dossier.html) */
+
+  // PDF : une page à la fois ; « Page précédente / suivante » (et les flèches du clavier sur les boutons) changent la
+  // page montrée, puis ramènent le haut de l'aperçu à l'écran.
+  function apercuPages(apercu) {
+    var pages = apercu.querySelectorAll("img");
+    var barre = apercu.nextElementSibling;
+    if (!barre || !barre.hasAttribute("data-pagination-apercu")) return;
+    var boutons = barre.querySelectorAll("[data-page]");
+    var numero = barre.querySelector("[data-numero-page]");
+    var courante = 0;
+    function montrer(n) {
+      if (n < 0 || n >= pages.length || n === courante) return;
+      pages[courante].hidden = true;
+      pages[n].hidden = false;
+      courante = n;
+      numero.textContent = "Page " + (n + 1) + " sur " + pages.length;
+      boutons[0].disabled = n === 0;
+      boutons[1].disabled = n === pages.length - 1;
+      if (apercu.getBoundingClientRect().top < 0) apercu.scrollIntoView({block: "start"});
+    }
+    boutons.forEach(function (b) {
+      b.addEventListener("click", function () { montrer(courante + Number(b.dataset.page)); });
+    });
+    barre.addEventListener("keydown", function (ev) {
+      if (ev.key === "ArrowLeft") montrer(courante - 1);
+      else if (ev.key === "ArrowRight") montrer(courante + 1);
+    });
+  }
+
+  // Word converti en page HTML : le cadre prend la hauteur de son contenu, il ne défile pas lui-même.
+  function hauteurContenu(cadre) {
+    function ajuster() {
+      var doc = cadre.contentDocument;
+      if (doc && doc.documentElement) cadre.style.height = doc.documentElement.scrollHeight + "px";
+    }
+    cadre.addEventListener("load", function () {
+      ajuster();
+      var doc = cadre.contentDocument;
+      if (doc && doc.body && window.ResizeObserver) new ResizeObserver(ajuster).observe(doc.body);
+    });
+  }
+
   document.querySelectorAll("[data-telephone]").forEach(telephone);
   document.querySelectorAll("[data-date]").forEach(date);
   document.querySelectorAll("select[data-liste-recherche]").forEach(listeRecherche);
   document.querySelectorAll("[data-champ-lignes]").forEach(lignes);
+  document.querySelectorAll("[data-apercu-pages]").forEach(apercuPages);
+  document.querySelectorAll("iframe[data-hauteur-contenu]").forEach(hauteurContenu);
 })();

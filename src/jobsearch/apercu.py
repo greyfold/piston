@@ -1,6 +1,7 @@
 """Aperçu des documents d'un dossier dans le tableau de bord.
 
-Un PDF s'affiche tel quel dans le navigateur. Un Word est converti en HTML
+Un PDF s'affiche une page à la fois, rendue en image (pdfium) : rien ne défile dans l'aperçu, des boutons
+passent d'une page à l'autre. Un Word est converti en HTML
 (mammoth) avec les styles des modèles livrés (Title, Body Text, Compact) et
 présenté comme une page A4 aux couleurs sobres de l'application : c'est un aperçu
 fidèle au contenu et à la structure, pas au pixel près. Le PDF est imprimé par le
@@ -9,6 +10,9 @@ Chrome de la machine virtuelle à partir de ce même HTML.
 
 import html
 import re
+import struct
+import zlib
+from functools import lru_cache
 from pathlib import Path
 
 CORRESPONDANCE_STYLES = """
@@ -81,3 +85,54 @@ def en_pdf(docx, langue="fr"):
         return en_pdf_chrome(docx, langue)
     except Exception:
         return None
+
+
+# --- Pages d'un PDF, en images -------------------------------------------------------------------------
+
+LARGEUR_PAGE = 1600     # en pixels : nette sur un écran Retina à la largeur du volet de détail
+
+
+def pages_pdf(chemin):
+    """Les pages d'un PDF, chacune par sa taille en points (largeur, hauteur)."""
+    return _pages(str(chemin), Path(chemin).stat().st_mtime_ns)
+
+
+def page_png(chemin, n):
+    """La page `n` (à partir de 0) d'un PDF, en PNG ; None si elle n'existe pas."""
+    return _page_png(str(chemin), Path(chemin).stat().st_mtime_ns, n)
+
+
+@lru_cache(maxsize=32)
+def _pages(chemin, _version):
+    import pypdfium2 as pdfium
+    pdf = pdfium.PdfDocument(chemin)
+    try:
+        return tuple(tuple(round(x) for x in pdf[i].get_size()) for i in range(len(pdf)))
+    finally:
+        pdf.close()
+
+
+@lru_cache(maxsize=16)
+def _page_png(chemin, _version, n):
+    import pypdfium2 as pdfium
+    pdf = pdfium.PdfDocument(chemin)
+    try:
+        if not 0 <= n < len(pdf):
+            return None
+        page = pdf[n]
+        image = page.render(scale=LARGEUR_PAGE / page.get_size()[0], rev_byteorder=True)   # RVB, fond blanc
+        return _png(image.width, image.height, image.stride, image.n_channels, bytes(image.buffer))
+    finally:
+        pdf.close()
+
+
+def _png(largeur, hauteur, pas, canaux, pixels):
+    """Encode des pixels RVB (ou RVBA) en PNG, sans bibliothèque d'images."""
+    def bloc(genre, donnees):
+        return (struct.pack(">I", len(donnees)) + genre + donnees
+                + struct.pack(">I", zlib.crc32(genre + donnees) & 0xFFFFFFFF))
+    utile = largeur * canaux
+    lignes = b"".join(b"\x00" + pixels[y * pas:y * pas + utile] for y in range(hauteur))
+    entete = struct.pack(">IIBBBBB", largeur, hauteur, 8, 6 if canaux == 4 else 2, 0, 0, 0)
+    return (b"\x89PNG\r\n\x1a\n" + bloc(b"IHDR", entete) + bloc(b"IDAT", zlib.compress(lignes, 6))
+            + bloc(b"IEND", b""))

@@ -298,6 +298,11 @@ select { max-width: 100%; text-overflow: ellipsis; }
 .apercu { border: 1px solid var(--bord); border-radius: var(--rayon); overflow: hidden; background: #e9ecea; }
 .apercu iframe { display: block; width: 100%; height: min(85vh, 1150px); border: 0; }
 @media (max-width: 640px) { .apercu iframe { height: 75vh; } }
+/* Aperçu page par page (Nexus Pagination) : un PDF montre une page entière à la fois, sans défilement à lui ; deux
+   boutons et « Page n sur m » passent d'une page à l'autre. Un Word converti prend toute sa hauteur. */
+.apercu-pages img { display: block; width: 100%; height: auto; }
+.pagination-apercu { display: flex; align-items: center; justify-content: center; gap: .75rem; margin-top: .6rem; }
+.pagination-apercu [data-numero-page] { font-variant-numeric: tabular-nums; }
 
 .jauge { height: .55rem; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
 .jauge-barre { height: 100%; border-radius: 999px; background: var(--alerte); }
@@ -1291,7 +1296,9 @@ main:has(> .liste-detail) > .bandeau { margin: .75rem 1.5rem; }
   main:has(> .liste-detail) > .bandeau + .bandeau { margin-top: 0; }
   .liste-detail { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(20rem, 25rem) minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr); }
-  .volet-liste, .volet-detail { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  /* Positionnés : ce qui s'y place en absolu (textes `.cache` pour le lecteur d'écran, menus) reste dans le volet et
+     défile avec lui, au lieu d'allonger la page, qui avait alors sa propre barre de défilement en plus. */
+  .volet-liste, .volet-detail { position: relative; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   /* Fenêtre Mac : chaque volet monte jusqu'en haut avec sa couleur, la bande de la barre de titre comprise (sa
      bordure du haut, qui ne défile pas), au lieu d'une bande de la couleur du fond au-dessus des deux. */
   body.fenetre-mac:has(> main > .liste-detail)::before { display: none; }
