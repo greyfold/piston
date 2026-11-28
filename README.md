@@ -35,7 +35,7 @@ Trois couches, chacune avec un rôle et des droits précis :
 
 ```
 ┌──────────────────────── Mac ─────────────────────────────────────────────┐
-│  Piston.app (SwiftUI, app/)                                              │
+│  Piston.app (SwiftUI, plateformes/macos/app/)                                            │
 │   fenêtre WebKit · barre des menus · dictée · minuteries                 │
 │        │ lance                                                           │
 │        ▼                                                                 │
@@ -58,7 +58,7 @@ Trois couches, chacune avec un rôle et des droits précis :
 
 ### Les processus
 
-L'enveloppe SwiftUI (`app/Sources/RechercheEmploi/Etat.swift`) ne contient aucune logique métier :
+L'enveloppe SwiftUI (`plateformes/macos/app/Sources/RechercheEmploi/Etat.swift`) ne contient aucune logique métier :
 elle lance des processus Python embarqués (`python3 -m jobsearch <commande>`) avec les variables
 `JOBSEARCH_HOME` (le code), `JOBSEARCH_DATA` (les données), `JOBSEARCH_PORT` et `JOBSEARCH_LIMACTL`.
 
@@ -190,12 +190,12 @@ relu en arrière-plan (`web/etat_distant.py`) : aucune page n'attend la VM.
 ## Construire et lancer
 
 ```bash
-scripts/construire-app.sh --ouvrir
+plateformes/macos/construire.sh --ouvrir
 ```
 
 Le script construit `dist/Piston.app` :
 
-- l'enveloppe SwiftUI (`app/`) : une fenêtre sur le tableau de bord, une icône dans la barre
+- l'enveloppe SwiftUI (`plateformes/macos/app/`) : une fenêtre sur le tableau de bord, une icône dans la barre
   des menus (état du passage, annonces à trancher, connexion à l'IA, machine virtuelle) ;
 - un Python autonome (python-build-standalone, installé par uv) dans `Contents/Resources/python`,
   avec les dépendances aux versions de `uv.lock` ;
@@ -209,7 +209,7 @@ Sans option, la signature est locale : de quoi lancer l'application sur ce Mac. 
 ## Publier une version
 
 ```bash
-scripts/construire-app.sh --publier
+plateformes/macos/construire.sh --publier
 ```
 
 construit la même application, puis :
@@ -239,7 +239,7 @@ version de la page produit suivent. Le déploiement du site ne touche jamais `/d
 
 Avant la première publication, une fois pour toutes :
 
-- **Clé des mises à jour** : `app/.build/artifacts/sparkle/Sparkle/bin/generate_keys` crée la clé EdDSA
+- **Clé des mises à jour** : `plateformes/macos/app/.build/artifacts/sparkle/Sparkle/bin/generate_keys` crée la clé EdDSA
   dans le trousseau et affiche la clé publique, à poser dans `CLE_PUBLIQUE_MAJ` du script. La clé
   privée ne quitte pas le trousseau ; l'exporter (`generate_keys -x <fichier>`) et ranger ce fichier en lieu sûr : sans elle,
   plus aucune mise à jour n'atteint les installations existantes.
@@ -252,7 +252,7 @@ que Sparkle compare) et sa section `## <version> — <date>` dans `CHANGELOG.md`
 
 ## Mises à jour
 
-Sparkle (`app/Sources/RechercheEmploi/MisesAJour.swift`) interroge `appcast.xml` une fois par jour et, si
+Sparkle (`plateformes/macos/app/Sources/RechercheEmploi/MisesAJour.swift`) interroge `appcast.xml` une fois par jour et, si
 une version plus récente existe, montre ses nouveautés et propose de l'installer. Il n'accepte qu'une image
 signée par la clé de publication et une application de la même équipe Developer ID. L'installation quitte
 Piston par le chemin habituel (la machine virtuelle s'éteint d'abord), remplace l'application et la
@@ -410,8 +410,8 @@ d'exemple (`tests/fixtures/config`, valeurs fictives), jamais sur `config/` ni s
 
 | Où | Quoi |
 |---|---|
-| `app/` | L'enveloppe SwiftUI (`Etat.swift` : Python embarqué, tableau de bord, échéances). |
-| `scripts/construire-app.sh` | Construit l'application autoportante. |
+| `plateformes/macos/` | L'enveloppe SwiftUI (`Etat.swift` : Python embarqué, tableau de bord, échéances). |
+| `plateformes/macos/construire.sh` | Construit l'application autoportante. |
 | `config/` | Valeurs par défaut, neutres (vérifié par `tests/test_echeances.py`). |
 | `src/jobsearch/echeances.py` | Ce qui est dû maintenant : passage, alerte, surveillance, date des lettres. |
 | `src/jobsearch/cli.py` | La commande `jobsearch` : tout ce que l'enveloppe et le développement lancent. |

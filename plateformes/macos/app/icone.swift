@@ -2,7 +2,8 @@
 // petit rond sauge qui se chevauchent, la zone commune en produit) centré sur un carré arrondi couleur lin.
 // Règles de la charte : le symbole seul, sans mot, ombre, dégradé ni contour ; il occupe 62 % de la largeur ;
 // coins arrondis à 22 % du côté. Le carré garde la marge des icônes macOS (10 % de chaque côté).
-// Usage : swift app/icone.swift <dossier.iconset>
+// Usage : swift plateformes/macos/app/icone.swift <dossier.iconset>
+// ressources/icone.png (1024 px, la source des icônes des autres systèmes) est la plus grande de ces images.
 
 import AppKit
 

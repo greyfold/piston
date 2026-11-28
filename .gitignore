@@ -5,7 +5,10 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 dist/
-app/.build/
+plateformes/*/app/.build/
+plateformes/*/app/target/
+plateformes/*/app/node_modules/
+plateformes/*/app/gen/
 .cache/
 .ruff_cache/
 .impeccable/hook.cache.json

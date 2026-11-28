@@ -150,6 +150,6 @@ interface qui ne les respecte pas est à refaire, même si elle « marche ».
    couleur en dur, jeton inconnu ou sans valeur sombre, `!important`, SVG ou glyphe hors `icone()`, icône
    absente d'`ICONES`, ressource externe, vouvoiement. Les écarts anciens y sont comptés comme une dette :
    en corriger un oblige à baisser le chiffre ; ne jamais monter un chiffre pour faire passer un test.
-2. `scripts/construire-app.sh --ouvrir`, puis regarder la page en **mode clair et en mode sombre**, et à
+2. `plateformes/macos/construire.sh --ouvrir`, puis regarder la page en **mode clair et en mode sombre**, et à
    une largeur étroite (≤ 640px).
 3. Relire le diff : aucune couleur en dur, aucun `style=`, aucun nouveau composant qui double un existant.
