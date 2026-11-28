@@ -195,6 +195,7 @@ def test_arret_force_si_la_vm_ne_s_eteint_pas(lima, monkeypatch):
 def test_agents_orphelins_termines(monkeypatch, tmp_path):
     """Des agents Lima restés derrière (le 25.11 : quatre pour une VM) sont terminés, SIGKILL s'il le faut."""
     monkeypatch.setattr(vm, "DATA", tmp_path)
+    monkeypatch.setattr(vm, "HYPERVISEUR", "lima")
     prise = str(tmp_path / "lima" / vm.nom() / "ha.sock")
     vivants = {101, 102}
     ps = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stderr="", stdout="".join(
