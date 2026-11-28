@@ -27,6 +27,7 @@ def lima(monkeypatch, tmp_path):
             etat["instance"]["status"] = "Stopped"
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
     monkeypatch.setattr(vm, "EXECUTER", executer)
+    monkeypatch.setattr(vm, "HYPERVISEUR", "lima")
     monkeypatch.setattr(vm, "limactl", lambda: "/opt/homebrew/bin/limactl")
     monkeypatch.setattr(vm, "DATA", tmp_path)
     monkeypatch.setattr("jobsearch.travailleur.jeton.DATA", tmp_path)
@@ -44,14 +45,14 @@ def test_la_vm_ne_voit_que_le_dossier_partage(tmp_path, monkeypatch):
     assert c["portForwards"][2]["ignore"] is True and c["portForwards"][3]["ignore"] is True   # aucun autre port
     assert "claude.ai/install.sh" in c["provision"][1]["script"] and "astral.sh/uv" in c["provision"][1]["script"]
     systeme = c["provision"][0]["script"]
-    assert "dl.google.com/linux/direct/google-chrome-stable_current_arm64.deb" in systeme
+    assert "dl.google.com/linux/direct/google-chrome-stable_current_${ARCH}.deb" in systeme
+    assert "dpkg --print-architecture" in systeme and "linux-${NODE_ARCH}.tar.xz" in systeme
     assert "sha256sum -c" in systeme and vm.MCP_CHROME in systeme
 
 
 def test_lancer_ecran_et_chrome_sur_la_seule_boucle_locale():
-    s = vm.LANCER % {"donnees": "/donnees", "code": "c", "port": 8776, "ecran": 8777, "vnc": 5901, "devtools": 9222,
-                     "politique": __import__("json").dumps(vm.POLITIQUE_CHROME)}
-    assert '"PasswordManagerEnabled": false' in s and '"BrowserSignin": 0' in s
+    s = vm.LANCER % {"donnees": "/donnees", "code": "c", "port": 8776, "ecran": 8777, "vnc": 5901, "devtools": 9222}
+    assert '"PasswordManagerEnabled": false' in vm.POSER_POLITIQUE and '"BrowserSignin": 0' in vm.POSER_POLITIQUE
     assert "-localhost yes" in s and "-rfbauth" in s                  # VNC : boucle locale de la VM, mot de passe
     assert "--remote-debugging-address=127.0.0.1" in s               # DevTools jamais exposé
     assert "JOBSEARCH_VM=1" in s
@@ -88,7 +89,7 @@ def test_demarrer_cree_installe_et_lance(lima, monkeypatch, tmp_path):
 
 def test_copie_du_code_sans_donnees(tmp_path):
     vm.copie_du_code(tmp_path)
-    assert (tmp_path / "pyproject.toml").exists() and (tmp_path / "src" / "jobsearch" / "vm.py").exists()
+    assert (tmp_path / "pyproject.toml").exists() and (tmp_path / "src" / "jobsearch" / "vm" / "__init__.py").exists()
     assert (tmp_path / "config" / "settings.yaml").exists()
     assert not (tmp_path / "data").exists() and not list(tmp_path.rglob("__pycache__"))
 

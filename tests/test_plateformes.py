@@ -15,14 +15,13 @@ SRC = Path(__file__).resolve().parents[1] / "src" / "jobsearch"
 RACINE = SRC.parents[1]
 
 # Ce qui peut dépendre d'un système : l'hôte, chaque hyperviseur, et le code de l'invité Linux.
-PERMIS = ("hote/", "vm/lima.py", "vm/wsl.py", "travailleur/", "session_vm.py", "mcp_vm.py", "preremplir_vm.py",
-          "vm.py")       # vm.py : jusqu'à son découpage en vm/ (un hyperviseur par système)
+PERMIS = ("hote/", "vm/lima.py", "vm/wsl.py", "travailleur/", "session_vm.py", "mcp_vm.py", "preremplir_vm.py")
 
 MOTIFS = [
     r"\bimport fcntl\b", r"\bimport msvcrt\b", r"\bwinreg\b", r"\bwindll\b", r"\bosascript\b",
     r"[\"']security[\"']", r"\bsys\.platform\b", r"Library/Application Support", r"\bLOCALAPPDATA\b",
-    r"\bkillpg\b", r"\bstart_new_session\b", r"\bscutil\b", r"[\"']defaults[\"']", r"\blimactl[\"' ]",
-    r"[\"']wsl(\.exe)?[\"']", r"\bpowershell\b",
+    r"\bkillpg\b", r"\bstart_new_session\b", r"\bscutil\b", r"[\"']defaults[\"']", r"[\"']limactl[\"']",
+    r"[\"']wsl\.exe[\"']", r"\bpowershell\b", r"\bO_DIRECTORY\b", r"\bO_NOFOLLOW\b", r"\bdir_fd\b",
 ]
 
 

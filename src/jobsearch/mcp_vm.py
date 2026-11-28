@@ -71,7 +71,8 @@ def refus(message):
 def chrome(entree=None, sortie=None, commande=None):
     """Relaie les messages entre la session et le serveur MCP de Chrome, en filtrant."""
     entree, sortie = entree or sys.stdin, sortie or sys.stdout
-    serveur = subprocess.Popen(commande or [CHROME_MCP, "--browserUrl", "http://127.0.0.1:%d" % PORT_DEVTOOLS],
+    from .vm.invite import adresse_devtools
+    serveur = subprocess.Popen(commande or [CHROME_MCP, "--browserUrl", adresse_devtools()],
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
     verrou, listes = threading.Lock(), set()
 
@@ -253,7 +254,8 @@ def rendre_isole(url, attente_ms=4000, delai_ms=30000):
     url = verifier_url_publique(url, resoudre=True)
     p = sync_playwright().start()
     try:
-        b = p.chromium.connect_over_cdp("http://127.0.0.1:%d" % PORT_DEVTOOLS)
+        from .vm.invite import adresse_devtools
+        b = p.chromium.connect_over_cdp(adresse_devtools())
         ctx = b.new_context()
         try:
             def filtrer_requete(route):

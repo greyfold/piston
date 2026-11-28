@@ -215,7 +215,8 @@ class Onglets:
 
 def _ouvrir(p):
     """Le contexte du profil de Chrome de la VM (ses connexions aux sites), par DevTools."""
-    b = p.chromium.connect_over_cdp("http://127.0.0.1:%d" % PORT_DEVTOOLS)
+    from .vm.invite import adresse_devtools
+    b = p.chromium.connect_over_cdp(adresse_devtools())
     return Onglets(b.contexts[0] if b.contexts else b.new_context())
 
 

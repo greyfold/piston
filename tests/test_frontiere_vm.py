@@ -188,9 +188,9 @@ def test_noter_n_ouvre_ni_chrome_ni_adresse(reg, monkeypatch):
 
 def test_politique_chrome_sans_pages_locales():
     assert "file://*" in vm.POLITIQUE_CHROME["URLBlocklist"]
-    s = vm.LANCER % {"donnees": "/donnees", "code": "c", "port": 8776, "ecran": 8777, "vnc": 5901, "devtools": 9222,
-                     "politique": json.dumps(vm.POLITIQUE_CHROME)}
-    assert '"URLBlocklist": ["file://*"' in s                          # reposée à chaque démarrage
+    assert '"URLBlocklist": ["file://*"' in vm.POSER_POLITIQUE        # reposée à chaque démarrage, comme root
+    s = vm.LANCER % {"donnees": "/donnees", "code": "c", "port": 8776, "ecran": 8777, "vnc": 5901, "devtools": 9222}
+    assert "sudo" not in s                                             # le compte de la VM n'en a pas besoin
 
 
 def test_limactl_de_l_application_sans_repli(monkeypatch, tmp_path):

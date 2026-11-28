@@ -246,7 +246,8 @@ def _chrome():
     from playwright.sync_api import sync_playwright
     p = sync_playwright().start()
     try:
-        return p, p.chromium.connect_over_cdp("http://127.0.0.1:%d" % PORT_DEVTOOLS)
+        from ..vm.invite import adresse_devtools
+        return p, p.chromium.connect_over_cdp(adresse_devtools())
     except Exception:
         p.stop()
         raise

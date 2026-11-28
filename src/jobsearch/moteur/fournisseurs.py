@@ -37,12 +37,16 @@ DOSSIER_MOTEURS = "~/moteurs"          # un dossier personnel par moteur, dans l
 # Versions figées, relues avant chaque changement (comme le serveur MCP de Chrome).
 CODEX = "@openai/codex@0.171.0"
 GROK = "1.0.92"
-# Antigravity CLI : le binaire de Google pour Linux arm64 (la VM), avec l'empreinte de son manifeste.
+# Antigravity CLI : le binaire de Google pour Linux (la VM), arm64 (Mac Apple silicon, PC ARM) et x86_64 (PC),
+# avec l'empreinte SHA-512 de chaque archive (x86_64 relevée le 28.11.2026, MD5 conforme à celui de Google).
+_AGY = "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.16-5250855658717184/"
 ANTIGRAVITY = {"version": "1.5.16",
-               "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.16-5250855658717184/"
-                      "linux-arm/cli_linux_arm64.tar.gz",
+               "url": _AGY + "linux-arm/cli_linux_arm64.tar.gz",
                "sha512": "23c193151499a4986fd5fa0d8132665cc8ffbad6cc0b3ff4fd53a2cb68abb76b149a992b836d53063443cd89"
-                         "add335f14d8134fb02abdcecbf6e1eaef6c53d33"}
+                         "add335f14d8134fb02abdcecbf6e1eaef6c53d33",
+               "x86_64": {"url": _AGY + "linux-x64/cli_linux_x64.tar.gz",
+                          "sha512": "3dee9f26e298156db673f6ce2a0f5dfed5b30006e04ceb9809c68070e7b717587b33a3da0f8bc2"
+                                    "eda45af81a50bc8b14c82b28ae5832bcfe3e7fd49397117b31"}}
 
 OUTILS_WEB = ("WebSearch", "WebFetch")
 
@@ -643,7 +647,12 @@ def installer_vm():
 export PATH="/opt/node/bin:$PATH"
 P="%(p)s"
 mkdir -p "$P" "$HOME/moteurs"
-command -v bwrap >/dev/null || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends bubblewrap
+# bubblewrap est installé avec le système (PROVISION_SYSTEME) : rien ici n'exige sudo.
+# L'archive d'Antigravity selon l'architecture de la VM.
+case "$(uname -m)" in
+  x86_64) UAGY="%(uagy64)s"; SAGY="%(sagy64)s" ;;
+  *) UAGY="%(uagy)s"; SAGY="%(sagy)s" ;;
+esac
 # --version peut écrire dans le dossier personnel : celui du moteur, jamais le vrai.
 v() { mkdir -p "$HOME/moteurs/$1"; HOME="$HOME/moteurs/$1" "$P/bin/$1" --version 2>/dev/null | grep -q "$2"; }
 v codex %(vcodex)s || npm install -g --no-fund --no-audit --prefix "$P" %(codex)s
@@ -653,8 +662,8 @@ mkdir -p "$HOME/moteurs/antigravity"
 if ! HOME="$HOME/moteurs/antigravity" "$P/antigravity/agy" --version 2>/dev/null | grep -qx %(vagy)s; then
   chmod -R u+w "$P/antigravity" 2>/dev/null || true
   rm -rf "$P/antigravity" && mkdir -p "$P/antigravity"
-  curl -fsSL -o "$P/antigravity/agy.tar.gz" "%(uagy)s"
-  echo "%(sagy)s  $P/antigravity/agy.tar.gz" | sha512sum -c -
+  curl -fsSL -o "$P/antigravity/agy.tar.gz" "$UAGY"
+  echo "$SAGY  $P/antigravity/agy.tar.gz" | sha512sum -c -
   tar -xzf "$P/antigravity/agy.tar.gz" -C "$P/antigravity" antigravity
   mv "$P/antigravity/antigravity" "$P/antigravity/agy" && rm -f "$P/antigravity/agy.tar.gz"
 fi
@@ -669,4 +678,5 @@ if ! HOME="$HOME/moteurs/grok" "$P/grok/bin/grok" --version 2>/dev/null | grep -
   rm -f "$P/grok-install.sh"
 fi
 """ % {"p": prefixe, "codex": CODEX, "grok": GROK, "vcodex": CODEX.rsplit("@", 1)[1],
-       "vagy": ANTIGRAVITY["version"], "uagy": ANTIGRAVITY["url"], "sagy": ANTIGRAVITY["sha512"]}
+       "vagy": ANTIGRAVITY["version"], "uagy": ANTIGRAVITY["url"], "sagy": ANTIGRAVITY["sha512"],
+       "uagy64": ANTIGRAVITY["x86_64"]["url"], "sagy64": ANTIGRAVITY["x86_64"]["sha512"]}
