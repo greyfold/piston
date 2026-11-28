@@ -375,7 +375,12 @@ def demarrer(attente_s=60, annoncer=None):
 def _demarrer(attente_s, annoncer):
     from ..travailleur import jeton
     jeton.lire()                                  # créé côté Mac, lu par la VM dans /donnees
-    i = instance()
+    try:
+        i = instance()
+    except BaseException as ex:
+        Avancement(["creation", "systeme", "installation", "lancement"], True, annoncer).finir(
+            erreur=str(ex) or type(ex).__name__)
+        raise
     if i and i.get("status") == "Running":
         # VM déjà allumée (l'application a été quittée sans l'éteindre) : rien à refaire si son
         # travailleur tourne sur le code de ce Mac ; aucun avancement à montrer.

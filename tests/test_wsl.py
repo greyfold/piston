@@ -145,11 +145,16 @@ def test_wsl_non_installe_utf16le_avant_telechargement(monkeypatch, tmp_path):
         return subprocess.CompletedProcess(cmd, 1, stdout=b"", stderr=msg)
     monkeypatch.setattr(vm, "EXECUTER", stub)
     monkeypatch.setattr(vm, "HYPERVISEUR", "wsl")
+    monkeypatch.setattr(vm, "DATA", tmp_path)
+    monkeypatch.setattr("jobsearch.travailleur.jeton.DATA", tmp_path)
     monkeypatch.setattr(wsl, "_image", lambda dossier: telecharge.append(1))
     with pytest.raises(vm.VMImpossible, match="wsl --install --no-distribution"):
         vm.instance()
     with pytest.raises(vm.VMImpossible, match="wsl --install --no-distribution"):
         wsl.creer()
+    with pytest.raises(vm.VMImpossible, match="wsl --install --no-distribution"):
+        vm.demarrer(attente_s=1)
+    assert "wsl --install --no-distribution" in (vm.avancement() or {}).get("erreur", "")
     assert not telecharge
 
 
