@@ -36,7 +36,6 @@ from pathlib import Path
 from . import invite
 
 COMPTE = "piston"
-UID = 1000
 NETNS = "piston-isole"
 ADRESSE_HOTE, ADRESSE_ISOLEE = "10.200.0.1", "10.200.0.2"
 MARQUE_SYSTEME = "/var/lib/piston/systeme-installe"
@@ -46,7 +45,8 @@ DETACHED_PROCESS = 0x00000008
 CREATE_NEW_PROCESS_GROUP = 0x00000200
 
 CONFIGURER = """set -e
-id -u %(compte)s >/dev/null 2>&1 || useradd -m -s /bin/bash -u %(uid)d %(compte)s
+# Sans UID imposé : l'image d'Ubuntu a déjà un compte « ubuntu » (UID 1000).
+id -u %(compte)s >/dev/null 2>&1 || useradd -m -s /bin/bash %(compte)s
 # Le compte de la VM n'a pas sudo : ce qui demande root vient de Windows (wsl -u root).
 gpasswd -d %(compte)s sudo >/dev/null 2>&1 || true
 rm -f /etc/sudoers.d/%(compte)s
@@ -73,7 +73,8 @@ mkdir -p %(donnees)s /var/lib/piston /etc/piston
 # Le dossier partagé, seul dossier de Windows que voit la VM ; fichiers du seul compte de la VM.
 MONTER = """set -e
 mkdir -p %(donnees)s
-mountpoint -q %(donnees)s || mount -t drvfs '%(source)s' %(donnees)s -o metadata,uid=%(uid)d,gid=%(uid)d,umask=077,fmask=077
+U=$(id -u %(compte)s); G=$(id -g %(compte)s)
+mountpoint -q %(donnees)s || mount -t drvfs '%(source)s' %(donnees)s -o metadata,uid=$U,gid=$G,umask=077,fmask=077
 """
 
 # L'espace de noms réseau de Chrome et de l'écran : une paire veth vers la distribution, la sortie vers
@@ -231,7 +232,7 @@ def creer(timeout=1800):
 def _durcir():
     """Le compte sans sudo et /etc/wsl.conf ; s'il a changé, la distribution est arrêtée pour qu'il s'applique."""
     v = _vm()
-    r = shell(CONFIGURER % {"compte": COMPTE, "uid": UID, "donnees": invite.DONNEES}, root=True, timeout=120)
+    r = shell(CONFIGURER % {"compte": COMPTE, "donnees": invite.DONNEES}, root=True, timeout=120)
     if r.returncode != 0:
         raise v.VMImpossible("configuration de la VM refusée : %s" % ((r.stderr or "").strip()[-300:]))
     if "change" in (r.stdout or ""):
@@ -244,7 +245,7 @@ def allumer():
     v = _vm()
     _durcir()                                        # reposé à chaque démarrage (une VM modifiée est remise)
     source = str(Path(jeton_vm.partage()).resolve()).replace("'", "'\\''")
-    v._shell(MONTER % {"donnees": invite.DONNEES, "source": source, "uid": UID}, root=True, timeout=120)
+    v._shell(MONTER % {"donnees": invite.DONNEES, "source": source, "compte": COMPTE}, root=True, timeout=120)
     if shell("test -e %s" % MARQUE_SYSTEME, root=True, timeout=60).returncode != 0:
         v._shell(invite.PROVISION_SYSTEME + "\napt-get install -y --no-install-recommends socat nftables\n",
                  root=True, timeout=3600)

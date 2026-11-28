@@ -32,7 +32,7 @@ jobs:
           open("invite/systeme.sh", "w").write(invite.PROVISION_SYSTEME + "\napt-get install -y --no-install-recommends socat nftables\n")
           open("invite/utilisateur.sh", "w").write(invite.PROVISION_UTILISATEUR)
           open("invite/moteurs.sh", "w").write(fournisseurs.installer_vm())
-          open("invite/configurer.sh", "w").write(wsl.CONFIGURER % {"compte": "piston", "uid": 1000, "donnees": "/donnees"})
+          open("invite/configurer.sh", "w").write(wsl.CONFIGURER % {"compte": "piston", "donnees": "/donnees"})
           open("invite/isoler.sh", "w").write(wsl.ISOLER % {"netns": wsl.NETNS, "hote": wsl.ADRESSE_HOTE,
               "isolee": wsl.ADRESSE_ISOLEE, "compte": "piston", "donnees": "/donnees", "vnc": invite.PORT_VNC,
               "devtools": invite.PORT_DEVTOOLS})
