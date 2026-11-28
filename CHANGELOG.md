@@ -3,6 +3,24 @@
 Les versions suivent [SemVer](https://semver.org/lang/fr/) : tant que la version commence par 0,
 l'application est en essai et peut changer d'une version à l'autre.
 
+## Prochaine version (en préparation)
+
+### Ajouté
+
+- **Piston pour Windows** (en essai, à éprouver sur un PC) : la même application, avec une enveloppe à elle
+  (fenêtre, icône de la zone de notification et son menu, ouverture à la connexion, mises à jour), une machine
+  virtuelle WSL2 dédiée et durcie (ni disques de Windows, ni programmes Windows, compte sans sudo, Chrome isolé
+  du réseau de Windows), la dictée sur l'ordinateur (whisper.cpp), Outlook classique pour les réponses des
+  employeurs et le gestionnaire d'identification pour le jeton Apify. Voir `plateformes/windows/README.md`.
+
+### Modifié
+
+- **Un seul dépôt pour tous les systèmes** : l'enveloppe Mac est dans `plateformes/macos/`, le code commun
+  ne dépend plus d'aucun système, et l'application Mac passe par le même superviseur que Windows (tableau de
+  bord, échéances, machine virtuelle, fermeture). Rien ne change à l'usage.
+- La machine virtuelle s'installe aussi en amd64 (PC) ; les stratégies de Chrome se posent comme root, à part
+  du lancement du travailleur.
+
 ## 0.5.1 — 2026-11-26 (version d'essai)
 
 ### Corrigé

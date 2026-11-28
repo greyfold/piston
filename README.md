@@ -1,22 +1,44 @@
-# Piston — application Mac de recherche d'emploi
+# Piston — application de recherche d'emploi (Mac, Windows)
 
-Une application Mac autoportante qui aide une personne, quelle qu'elle soit, à chercher un
+Une application autoportante, pour Mac et pour Windows (Linux ensuite), qui aide une personne, quelle qu'elle soit, à chercher un
 emploi en Suisse : sourcing quotidien (Job-Room, jobup, jobs.ch, pages carrière, Indeed,
 LinkedIn par Apify), registre local, pré-tri, note d'adéquation et dossiers de candidature
 écrits avec l'IA de la personne (Claude, Codex, Antigravity ou Grok), suivi des relances.
 Les preuves Job-Room sont hors de cette version (`profil.HORS_VERSION`) : le code reste, l'option
 est éteinte. Les changements de chaque version sont dans `CHANGELOG.md`.
 
-Tout tourne dans l'application. Elle embarque son Python, ses dépendances, son code et Lima ;
-le moteur d'IA et Google Chrome tournent dans sa machine virtuelle, jamais sur le Mac. Ses données
-vivent dans `~/Library/Application Support/Recherche emploi` (dossier réservé au compte). Rien
-n'est installé à côté : pas d'agent launchd, pas de dossier de projet, pas de coffre externe.
+Tout tourne dans l'application. Elle embarque son Python, ses dépendances et son code ; le moteur
+d'IA et Google Chrome tournent dans sa machine virtuelle (Lima sur Mac, une distribution WSL2 dédiée
+sous Windows), jamais sur l'ordinateur lui-même. Ses données vivent dans un dossier réservé au compte :
+`~/Library/Application Support/Recherche emploi` sur Mac, `%LOCALAPPDATA%\Recherche emploi` sous
+Windows. Rien n'est installé à côté : pas d'agent launchd ni de tâche planifiée, pas de dossier de
+projet, pas de coffre externe.
+
+## Le dépôt : un monorepo
+
+Un seul dépôt pour tous les systèmes. Le code commun est à la racine ; ce qui est propre à un système
+est dans `plateformes/<os>/` et, côté Python, dans `src/jobsearch/hote/<os>.py` et
+`src/jobsearch/vm/<hyperviseur>.py` seulement (`tests/test_plateformes.py` le vérifie).
+
+| Où | Quoi |
+|---|---|
+| `src/jobsearch/` | Le commun : métier, base, sources, IA, tableau de bord, CLI, superviseur. |
+| `src/jobsearch/hote/` | Ce qui touche l'ordinateur hôte, par système : dossier des données, verrous, coffre à clés, notifications, région, processus, courrier local (Outlook). |
+| `src/jobsearch/superviseur.py` | Ce que l'enveloppe native lance : tableau de bord unique, échéances, VM, fermeture (lignes JSON). |
+| `src/jobsearch/vm/` | La machine virtuelle : le commun, l'invité Ubuntu (`invite.py`), Lima (`lima.py`), WSL (`wsl.py`). |
+| `plateformes/macos/` | L'enveloppe SwiftUI et `construire.sh` (signature, notarisation, Sparkle). |
+| `plateformes/windows/` | L'enveloppe Tauri, `construire.ps1`, la recette de parité (`RECETTE.md`). |
+| `plateformes/linux/` | À venir : Lima sur QEMU/KVM et l'enveloppe Tauri de Windows sont déjà prêts. |
+| `ressources/` | L'icône maîtresse, d'où chaque système tire la sienne. |
+| `.github/workflows/` | Tests sur Mac, Windows et Linux ; l'invité éprouvé en amd64 et arm64 ; l'installateur Windows. |
 
 ## Télécharger
 
 Piston se télécharge gratuitement sur [greyfold.ch](https://greyfold.ch/product/piston/).
 
 - **Mac** : Apple silicon (M1 ou plus récent) et macOS 14 ou plus.
+- **Windows** : Windows 11 (x64 d'abord), WSL activé une fois (`wsl --install --no-distribution`, droits
+  d'administrateur, puis redémarrage) ; voir `plateformes/windows/README.md`.
 - **IA** : un abonnement de la personne à l'un des moteurs proposés (Claude Pro ou Max, ChatGPT,
   Google AI Pro ou Ultra, SuperGrok). Aucune clé API, aucun compte chez Greyfold.
 - **Installer** : ouvrir l'image disque et glisser Piston dans Applications. Une version publiée est
@@ -58,9 +80,13 @@ Trois couches, chacune avec un rôle et des droits précis :
 
 ### Les processus
 
-L'enveloppe SwiftUI (`plateformes/macos/app/Sources/RechercheEmploi/Etat.swift`) ne contient aucune logique métier :
-elle lance des processus Python embarqués (`python3 -m jobsearch <commande>`) avec les variables
-`JOBSEARCH_HOME` (le code), `JOBSEARCH_DATA` (les données), `JOBSEARCH_PORT` et `JOBSEARCH_LIMACTL`.
+L'enveloppe native (SwiftUI sur Mac, `plateformes/macos/app/Sources/RechercheEmploi/Etat.swift` ; Tauri
+sous Windows, `plateformes/windows/app/src/`) ne contient aucune logique métier : elle ne lance qu'un
+processus Python embarqué, le **superviseur** (`python -m jobsearch superviseur`, `superviseur.py`), avec
+les variables `JOBSEARCH_HOME` (le code), `JOBSEARCH_DATA` (les données), `JOBSEARCH_PORT` (et
+`JOBSEARCH_LIMACTL` sur Mac). Il lui parle par lignes JSON : ses événements (tableau de bord prêt, état,
+étapes de la VM, arrêt, fin) sur sa sortie, les ordres du menu (passage, VM, quitter) sur son entrée. La
+vue web reçoit le cookie du jeton par une adresse à usage unique (`/entree`). Le superviseur lance :
 
 | Quand | Commande | Rôle |
 |---|---|---|
@@ -70,9 +96,10 @@ elle lance des processus Python embarqués (`python3 -m jobsearch <commande>`) a
 | Toutes les 5 min | `jobsearch echeances` | Ce qui est dû : passage, alerte, rattrapage de l'IA, surveillance. |
 | Fermeture | `jobsearch vm arreter` | Éteint la VM avant de quitter. |
 
-Un seul tableau de bord par port : au lancement, l'enveloppe vérifie qui écoute sur 8775 et refuse
-celui d'une autre installation. Un seul passage à la fois : il tient un verrou `flock` sur
-`passage.lock` ; un passage resté « démarré » sans verrou est clos « interrompu ».
+Un seul tableau de bord par port : au lancement, le superviseur vérifie qui écoute sur 8775, adopte
+celui de cette installation, remplace un ancien et refuse celui d'une autre. Un seul passage à la fois :
+il tient un verrou (`hote.prendre` : `flock`, ou `msvcrt.locking` sous Windows) sur `passage.lock` ;
+un passage resté « démarré » sans verrou est clos « interrompu ».
 
 ### La frontière Mac / VM
 
@@ -188,6 +215,8 @@ servies par l'application. L'état de la VM et des moteurs, coûteux à lire, es
 relu en arrière-plan (`web/etat_distant.py`) : aucune page n'attend la VM.
 
 ## Construire et lancer
+
+Windows : `plateformes\windows\construire.ps1` (voir `plateformes/windows/README.md`). Mac :
 
 ```bash
 plateformes/macos/construire.sh --ouvrir
@@ -429,6 +458,7 @@ d'exemple (`tests/fixtures/config`, valeurs fictives), jamais sur `config/` ni s
 | `src/jobsearch/evaluation.py`, `adequation.py` | La note d'adéquation et son analyse par catégorie. |
 | `src/jobsearch/profil.py` | Le profil, qui prime sur `config/`. |
 | `src/jobsearch/parcours.py` | La base d'expérience et ses entretiens. |
-| `src/jobsearch/vm.py`, `travailleur/` | La machine virtuelle (Lima embarqué), son écran et son travailleur. |
+| `src/jobsearch/vm/`, `travailleur/` | La machine virtuelle (Lima sur Mac, WSL sous Windows), son écran et son travailleur. |
+| `src/jobsearch/hote/`, `superviseur.py` | Ce qui dépend du système hôte ; ce que l'enveloppe native lance. |
 | `src/jobsearch/agent_claude.py`, `session_vm.py`, `preremplir_vm.py` | Les tâches dans le Chrome de la VM et leur relève. |
 | `src/jobsearch/web/` | Le tableau de bord (FastAPI, Jinja). |
