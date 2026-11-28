@@ -1,0 +1,64 @@
+# L'invité de la machine virtuelle (src/jobsearch/vm/invite.py), éprouvé pour de vrai sur Ubuntu 24.04,
+# en amd64 (PC Windows) et en arm64 (Mac Apple silicon, PC ARM) : installation du système, de Chrome, de
+# Node.js et du serveur MCP de Chrome, puis des moteurs d'IA (versions et empreintes figées), puis
+# l'espace de noms réseau où Chrome tourne sous WSL (vm/wsl.py) : DevTools joignable sur 10.200.0.2 et
+# nulle part ailleurs. Dans un conteneur privilégié : rien du runner (Chrome, Node déjà installés) ne compte.
+name: invite
+
+on:
+  push:
+    paths:
+      - "src/jobsearch/vm/**"
+      - "src/jobsearch/moteur/fournisseurs.py"
+      - ".github/workflows/invite.yml"
+  workflow_dispatch:
+
+jobs:
+  invite:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Scripts de l'invité
+        run: |
+          mkdir -p invite
+          uv run --frozen python - <<'PY'
+          from jobsearch.vm import invite, wsl
+          from jobsearch.moteur import fournisseurs
+          open("invite/systeme.sh", "w").write(invite.PROVISION_SYSTEME + "\napt-get install -y --no-install-recommends socat nftables\n")
+          open("invite/utilisateur.sh", "w").write(invite.PROVISION_UTILISATEUR)
+          open("invite/moteurs.sh", "w").write(fournisseurs.installer_vm())
+          open("invite/configurer.sh", "w").write(wsl.CONFIGURER % {"compte": "piston", "uid": 1000, "donnees": "/donnees"})
+          open("invite/isoler.sh", "w").write(wsl.ISOLER % {"netns": wsl.NETNS, "hote": wsl.ADRESSE_HOTE,
+              "isolee": wsl.ADRESSE_ISOLEE, "compte": "piston", "donnees": "/donnees", "vnc": invite.PORT_VNC,
+              "devtools": invite.PORT_DEVTOOLS})
+          open("invite/politique.sh", "w").write(invite.POSER_POLITIQUE)
+          PY
+      - name: Installation et isolation, dans un Ubuntu 24.04 neuf
+        run: |
+          docker run --rm --privileged -v "$PWD/invite:/invite:ro" ubuntu:24.04 bash -euxc '
+            bash /invite/systeme.sh
+            bash /invite/configurer.sh
+            ! id -nG piston | grep -qw sudo                       # le compte de la VM n a pas sudo
+            grep -q "enabled=false" /etc/wsl.conf
+            su - piston -c "bash /invite/utilisateur.sh"
+            su - piston -c "bash /invite/moteurs.sh"
+            su - piston -c "~/outils-ia/antigravity/agy --version; ~/outils-ia/bin/codex --version; ~/outils-ia/grok/bin/grok --version" || true
+            test -x /home/piston/outils-ia/antigravity/agy
+            bash /invite/politique.sh
+            google-chrome --version && /opt/node/bin/node --version
+            test -x /opt/node/bin/chrome-devtools-mcp
+            mkdir -p /donnees/logs && echo motdepas > /donnees/ecran.motdepasse && chown -R piston /donnees
+            bash /invite/isoler.sh
+            for i in $(seq 1 30); do curl -sf http://10.200.0.2:9222/json/version && break; sleep 1; done
+            curl -sf http://10.200.0.2:9222/json/version | grep -q Browser    # joignable depuis la distribution
+            ! curl -sf --max-time 3 http://127.0.0.1:9222/json/version       # mais pas sur sa boucle locale
+            ! (exec 3<>/dev/tcp/127.0.0.1/5901) 2>/dev/null                   # ni l écran
+            (exec 3<>/dev/tcp/10.200.0.2/5901)                                # joignable par l espace isolé
+            ip netns exec piston-isole curl -sf --max-time 20 -o /dev/null https://www.google.com   # Internet depuis l espace isolé
+            cat /etc/piston/chrome-hote
+          '

@@ -23,7 +23,7 @@ export DEBIAN_FRONTEND=noninteractive
 ARCH=$(dpkg --print-architecture)              # arm64 ou amd64
 apt-get update
 apt-get install -y --no-install-recommends python3 python3-venv curl ca-certificates git xz-utils bubblewrap \\
-  tigervnc-standalone-server tigervnc-tools openbox novnc websockify iproute2 \\
+  tigervnc-standalone-server tigervnc-tools openbox novnc websockify iproute2 procps \\
   fonts-dejavu fonts-liberation fonts-noto-color-emoji
 # Google Chrome pour Linux, depuis Google (le paquet ajoute aussi le dépôt de mises à jour).
 if ! command -v google-chrome >/dev/null; then
