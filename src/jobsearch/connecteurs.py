@@ -57,14 +57,20 @@ ROLES = {"courrier": "Courrier", "navigateur": "Navigateur"}     # ceux de la pa
 LIEUX = {"mac": hote.libelle("sur"), "vm": "machine virtuelle", "compte": "compte Claude"}
 
 
+def _systeme():
+    """Le système de l'ordinateur (hote.SYSTEME) ; les tests le fixent à celui de leur installation d'exemple."""
+    return hote.SYSTEME
+
+
 def courrier_local():
     """Le connecteur du courrier de l'ordinateur : Apple Mail sur Mac, Outlook sous Windows, aucun sous Linux."""
-    return {"macos": "apple-mail", "windows": "outlook"}.get(hote.SYSTEME)
+    return {"macos": "apple-mail", "windows": "outlook"}.get(_systeme())
 
 
 def disponible(nom):
     """Le connecteur existe sur ce système (Apple Mail sur Mac, Outlook sous Windows ; les autres partout)."""
-    return hote.SYSTEME in CATALOGUE[nom].get("systemes", [hote.SYSTEME])
+    s = _systeme()
+    return s in CATALOGUE[nom].get("systemes", [s])
 
 
 def _defauts():

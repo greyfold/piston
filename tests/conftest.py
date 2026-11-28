@@ -128,6 +128,13 @@ def tableau_de_bord_avec_jeton(monkeypatch, tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def connecteurs_de_l_installation_d_exemple(monkeypatch):
+    """L'installation d'exemple (fixtures/profil.yaml, comptes de Mail) est celle d'un Mac : ses connecteurs
+    (Apple Mail par défaut) sont les mêmes sous Windows et Linux. Le catalogue de chaque système a ses tests."""
+    monkeypatch.setattr("jobsearch.connecteurs._systeme", lambda: "macos")
+
+
+@pytest.fixture(autouse=True)
 def jamais_le_vrai_trousseau(monkeypatch):
     """Aucun test ne lit ni n'écrit le coffre à clés de Camille (trousseau, gestionnaire
     d'identification) : celui du système est un coffre vide, en mémoire."""

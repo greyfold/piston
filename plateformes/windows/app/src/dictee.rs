@@ -180,11 +180,12 @@ fn transcrire(ctx: &WhisperContext, audio: &[f32], langue: &str) -> Result<Strin
     p.set_suppress_blank(true);
     p.set_n_threads(std::thread::available_parallelism().map(|n| n.get().min(8)).unwrap_or(4) as i32);
     etat.full(p, audio).map_err(|e| e.to_string())?;
-    let n = etat.full_n_segments().map_err(|e| e.to_string())?;
     let mut texte = String::new();
-    for i in 0..n {
-        if let Ok(s) = etat.full_get_segment_text(i) {
-            texte.push_str(&s);
+    for i in 0..etat.full_n_segments() {
+        if let Some(segment) = etat.get_segment(i) {
+            if let Ok(s) = segment.to_str_lossy() {
+                texte.push_str(&s);
+            }
         }
     }
     Ok(texte.trim().to_string())

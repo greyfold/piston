@@ -4,7 +4,7 @@ import datetime as dt
 
 import pytest
 
-from jobsearch import connecteurs, courrier, hote
+from jobsearch import connecteurs, courrier
 from jobsearch.hote import outlook
 
 
@@ -125,11 +125,11 @@ def test_releve_par_outlook(reg, monkeypatch):
 
 
 def test_catalogue_selon_le_systeme(monkeypatch):
-    monkeypatch.setattr(hote, "SYSTEME", "windows")
+    monkeypatch.setattr(connecteurs, "_systeme", lambda: "windows")
     ids = [c["id"] for c in connecteurs.liste()]
     assert "outlook" in ids and "apple-mail" not in ids and connecteurs.courrier_local() == "outlook"
-    monkeypatch.setattr(hote, "SYSTEME", "macos")
+    monkeypatch.setattr(connecteurs, "_systeme", lambda: "macos")
     ids = [c["id"] for c in connecteurs.liste()]
     assert "apple-mail" in ids and "outlook" not in ids
-    monkeypatch.setattr(hote, "SYSTEME", "linux")
+    monkeypatch.setattr(connecteurs, "_systeme", lambda: "linux")
     assert connecteurs.courrier_local() is None
