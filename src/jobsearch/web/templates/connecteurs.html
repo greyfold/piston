@@ -25,11 +25,11 @@
     {% else %}
     <div class="petit muet ligne-carte">Pour l'activer : {{ c.activer }}</div>
     {% endif %}
-    {% if c.id == "apple-mail" %}
-    <form method="post" action="/connecteurs/apple-mail/comptes" class="ligne-carte">
+    {% if c.id in ("apple-mail", "outlook") %}
+    <form method="post" action="/connecteurs/{{ c.id }}/comptes" class="ligne-carte">
       {% set lignes = [] %}{% for x in comptes_mail %}{% set _ = lignes.append([x]) %}{% endfor %}
-      {{ champ_lignes("comptes", "Comptes où chercher les réponses", [("", "Nom du compte", "Nom du compte dans Mail")], lignes, "comptes-mail",
-           aide="Le nom de chaque compte tel qu'il figure dans Mail.", ajout="Ajouter un compte") }}
+      {{ champ_lignes("comptes", "Comptes où chercher les réponses", [("", "Nom du compte", "Nom du compte dans " ~ c.nom)], lignes, "comptes-mail",
+           aide=("Le nom de chaque compte tel qu'il figure dans " ~ c.nom ~ "." ~ (" Sans compte choisi, la boîte de réception par défaut." if c.id == "outlook" else "")), ajout="Ajouter un compte") }}
       <div class="boutons"><button>Enregistrer les comptes</button></div>
     </form>
     {% endif %}

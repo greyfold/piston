@@ -490,10 +490,21 @@ def lire_gmail(mots, debut, longueur=1500):
     return gmail.lire(mots, debut, longueur=longueur)
 
 
+def lire_outlook(mots, debut, comptes, erreurs=None):
+    """Outlook (classique) sous Windows, en lecture seule (hote/outlook.py)."""
+    from .hote import outlook
+    try:
+        return outlook.lire(mots, debut, comptes, erreurs=erreurs)
+    except outlook.OutlookImpossible as e:
+        raise CourrierImpossible("Outlook : %s" % e) from e
+    except Exception as e:                         # Outlook fermé, profil en cours d'ouverture, COM refusé…
+        raise CourrierImpossible("Outlook injoignable : %s: %s" % (type(e).__name__, e)) from e
+
+
 def relever(reg, lire=None, lire_gmail_=None):
     """Relève le courrier lié aux postes et l'applique, dans chaque connecteur de courrier
-    actif (Apple Mail, Gmail). Un connecteur en panne n'empêche pas de lire l'autre.
-    `lire` et `lire_gmail_` sont remplaçables pour les tests."""
+    actif (Apple Mail sur Mac, Outlook sous Windows, Gmail). Un connecteur en panne n'empêche pas
+    de lire l'autre. `lire` (le courrier de l'ordinateur) et `lire_gmail_` sont remplaçables pour les tests."""
     from . import connecteurs
     r = reglages().get("courrier") or {}
     comptes = r.get("comptes") or []                 # choisis dans le profil ; aucun par défaut
@@ -508,6 +519,12 @@ def relever(reg, lire=None, lire_gmail_=None):
             lus.append("Apple Mail")
         except CourrierNonConfigure as e:
             ignores.append(str(e))                   # pas une panne : Apple Mail n'est pas installé côté réglages
+        except CourrierImpossible as e:
+            pannes.append(str(e))
+    if connecteurs.actif("outlook"):
+        try:
+            messages += (lire or lire_outlook)(mots, debut, comptes)      # sans compte choisi : la boîte par défaut
+            lus.append("Outlook")
         except CourrierImpossible as e:
             pannes.append(str(e))
     if connecteurs.actif("gmail"):

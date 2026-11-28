@@ -36,12 +36,13 @@ FIL = {"id": "t1", "viewUrl": "https://mail.google.com/fil/t1", "messages": [
 
 
 def test_activation_par_defaut_puis_dans_le_profil():
-    assert {"apple-mail", "chrome"} <= connecteurs.actifs() and "gmail" not in connecteurs.actifs()
+    local = connecteurs.courrier_local()                       # Apple Mail sur Mac, Outlook sous Windows
+    assert {"chrome"} | ({local} if local else set()) <= connecteurs.actifs() and "gmail" not in connecteurs.actifs()
     connecteurs.activer("gmail")
     connecteurs.activer("apple-mail", False)
     assert connecteurs.actif("gmail") and not connecteurs.actif("apple-mail")
     with pytest.raises(KeyError):
-        connecteurs.activer("outlook")
+        connecteurs.activer("inconnu")
 
 
 def test_seuls_les_outils_de_lecture():

@@ -24,9 +24,15 @@ from .config import reglages
 
 CATALOGUE = {
     "apple-mail": {
-        "nom": "Apple Mail", "role": "courrier", "lieu": "mac",
+        "nom": "Apple Mail", "role": "courrier", "lieu": "mac", "systemes": ["macos"],
         "usage": "Réponses des employeurs (refus, entretiens), lues dans les comptes de Mail.",
         "activer": "Autoriser l'application à piloter Mail (Réglages Système › Confidentialité › Automatisation).",
+    },
+    "outlook": {
+        "nom": "Outlook", "role": "courrier", "lieu": "mac", "systemes": ["windows"],
+        "usage": "Réponses des employeurs (refus, entretiens), lues dans Outlook sur ce PC, en lecture seule.",
+        "activer": "Outlook classique, configuré avec ton compte (le nouvel Outlook ne laisse pas les autres "
+                   "applications lire le courrier : utilise alors Gmail).",
     },
     "gmail": {
         "nom": "Gmail", "role": "courrier", "lieu": "compte", "prefixe": "mcp__claude_ai_Gmail",
@@ -51,8 +57,18 @@ ROLES = {"courrier": "Courrier", "navigateur": "Navigateur"}     # ceux de la pa
 LIEUX = {"mac": hote.libelle("sur"), "vm": "machine virtuelle", "compte": "compte Claude"}
 
 
+def courrier_local():
+    """Le connecteur du courrier de l'ordinateur : Apple Mail sur Mac, Outlook sous Windows, aucun sous Linux."""
+    return {"macos": "apple-mail", "windows": "outlook"}.get(hote.SYSTEME)
+
+
+def disponible(nom):
+    """Le connecteur existe sur ce système (Apple Mail sur Mac, Outlook sous Windows ; les autres partout)."""
+    return hote.SYSTEME in CATALOGUE[nom].get("systemes", [hote.SYSTEME])
+
+
 def _defauts():
-    out = {"apple-mail", "chrome"}
+    out = {"chrome"} | ({courrier_local()} if courrier_local() else set())
     if (reglages().get("indeed") or {}).get("actif"):
         out.add("indeed")
     return out
@@ -95,7 +111,7 @@ def liste(p=None):
     """Les connecteurs de la page Connecteurs : les sources d'annonces (Indeed) sont sur la page Sources."""
     a = actifs(p)
     return [dict(c, id=n, actif=n in a, role_libelle=ROLES[c["role"]], lieu_libelle=LIEUX[c["lieu"]])
-            for n, c in CATALOGUE.items() if c["role"] in ROLES]
+            for n, c in CATALOGUE.items() if c["role"] in ROLES and disponible(n)]
 
 
 # --- Test --------------------------------------------------------------------------------
@@ -112,6 +128,13 @@ def tester(nom):
         except CourrierImpossible as e:
             return False, str(e)
         return True, "serveur MCP Apple Mail présent ; Mail doit être ouvert au moment du passage"
+    if nom == "outlook":
+        from .hote import outlook
+        try:
+            noms = outlook.comptes()
+        except outlook.OutlookImpossible as e:
+            return False, str(e)
+        return True, "Outlook répond ; comptes : %s" % (", ".join(noms) or "aucun")
     if nom == "chrome":
         # Pas de test ici : Chrome ne tourne que dans la machine virtuelle (serveur MCP
         # chrome-devtools-mcp, voir vm.py), pas d'extension dans un Chrome du Mac.

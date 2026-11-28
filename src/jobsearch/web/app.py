@@ -1232,6 +1232,7 @@ def connecteurs_page(request: Request):
 
 
 @app.post("/connecteurs/apple-mail/comptes")
+@app.post("/connecteurs/outlook/comptes")
 async def connecteurs_comptes_mail(request: Request):
     form = await request.form()
     return await run_in_threadpool(_connecteurs_comptes_mail, request, form)
@@ -1241,7 +1242,8 @@ def _connecteurs_comptes_mail(request, form):
     """Les comptes de Mail où chercher les réponses des employeurs."""
     comptes = profil_mod.poser_comptes_courrier("\n".join(form.getlist("comptes")))
     msg = "%s : %s." % (hote.libelle("courrier") or "Courrier", "comptes enregistrés" if comptes else "aucun compte choisi")
-    return RedirectResponse("/connecteurs?msg=%s&ok=1#apple-mail" % quote(msg), status_code=303)
+    ancre = "outlook" if request.url.path.startswith("/connecteurs/outlook") else "apple-mail"
+    return RedirectResponse("/connecteurs?msg=%s&ok=1#%s" % (quote(msg), ancre), status_code=303)
 
 
 _ETAT_IA = {"t": 0.0, "v": None}
