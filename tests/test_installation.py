@@ -445,7 +445,8 @@ def test_connexion_ratee_journalisee_sans_adresse(monkeypatch, tmp_path):
             break
         time.sleep(.01)
     e = connexion_ia.etat()
-    assert e["etat"] == "echec" and "disque de ton Mac est presque plein" in e["message"]
+    from jobsearch import hote
+    assert e["etat"] == "echec" and "disque de %s est presque plein" % hote.libelle("ton") in e["message"]
     journal = (tmp_path / "logs" / "connexion.log").read_text(encoding="utf-8")
     assert "Input/output error" in journal and "[adresse]" in journal and "state=secret" not in journal
     connexion_ia.annuler()

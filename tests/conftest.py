@@ -157,6 +157,14 @@ def profil_de_test(monkeypatch, tmp_path):
 
 
 @pytest.fixture
+def claude_dans_la_vm(monkeypatch):
+    """Côté VM, avec une commande `claude` trouvée (un faux chemin : rien ne la lance, les tests donnent
+    leur propre exécutant). Sans cela, ces tests dépendraient de Claude Code installé sur la machine."""
+    monkeypatch.setenv("JOBSEARCH_VM", "1")
+    monkeypatch.setattr("jobsearch.moteur.executable", lambda: "/faux/bin/claude")
+
+
+@pytest.fixture
 def reg(tmp_path, monkeypatch):
     monkeypatch.setattr("jobsearch.pipeline.DATA", tmp_path)
     r = Registre(tmp_path / "test.db")

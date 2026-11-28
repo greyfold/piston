@@ -69,7 +69,8 @@ def test_chaque_systeme_a_son_dossier():
 def test_chaque_hote_fournit_la_meme_interface():
     from jobsearch.hote import linux, macos, windows
     attendu = {"dossier_application", "prendre", "lacher", "Coffre", "notifier", "alerte_action", "region",
-               "nom_reseau", "options_groupe", "terminer_groupe", "LIBELLES", "APPLICATION"}
+               "nom_reseau", "options_groupe", "terminer_groupe", "LIBELLES", "APPLICATION",
+               "partage_deposer", "partage_purger", "partage_lire", "partage_lister"}
     cles = set(macos.LIBELLES)
     for m in (macos, windows, linux):
         assert attendu <= set(dir(m)), m.__name__

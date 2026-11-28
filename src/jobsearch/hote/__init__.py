@@ -132,5 +132,32 @@ def terminer_groupe(proc):
     _impl.terminer_groupe(proc)
 
 
+def partage_deposer(racine, sous, source, nom):
+    """Déplace d'un coup le dossier `source` vers `racine/sous/nom` du dossier partagé avec la VM, sans
+    suivre aucun lien ; FileExistsError si `nom` (ou un lien) y est déjà : la VM aurait pu le poser."""
+    return _impl.partage_deposer(racine, sous, source, nom)
+
+
+def partage_purger(racine, sous, nom):
+    """Efface `racine/sous/nom` du dossier partagé sans suivre aucun lien ; vrai s'il existait."""
+    return _impl.partage_purger(racine, sous, nom)
+
+
+def partage_lire(racine, sous, nom, fichier, maximum):
+    """Les octets (au plus `maximum`) de `racine/sous/nom/fichier`, fichier ordinaire atteint sans suivre
+    aucun lien ; sinon None."""
+    return _impl.partage_lire(racine, sous, nom, fichier, maximum)
+
+
+def partage_lister(racine, sous):
+    """Les noms de `racine/sous` du dossier partagé, atteint sans suivre aucun lien ; None s'il manque."""
+    return _impl.partage_lister(racine, sous)
+
+
+def options_sans_console():
+    """Les arguments de `subprocess.Popen` d'un processus sans fenêtre de console (Windows) ; rien ailleurs."""
+    return getattr(_impl, "options_sans_console", dict)()
+
+
 APPLICATION = _impl.APPLICATION
 """L'identifiant de l'application (CFBundleIdentifier sur Mac, AppUserModelID sous Windows)."""

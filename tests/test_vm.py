@@ -268,7 +268,8 @@ def test_disque_plein_avant_la_creation(lima, monkeypatch):
     (sinon la VM ne rend que des « Input/output error »)."""
     etat, commandes = lima
     monkeypatch.setattr(vm, "espace_libre_go", lambda: 0.2)
-    with pytest.raises(vm.VMImpossible, match="disque de ton Mac est presque plein \\(204 Mo libres\\).*15 Go"):
+    from jobsearch import hote
+    with pytest.raises(vm.VMImpossible, match="disque de %s est presque plein \\(204 Mo libres\\).*15 Go" % hote.libelle("ton")):
         vm.demarrer(attente_s=1)
     assert not any(c[0] in ("create", "start") for c in commandes)
 

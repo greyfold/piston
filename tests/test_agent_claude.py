@@ -82,9 +82,8 @@ def test_formulaire_consigne_ne_pas_envoyer(reg, sans_preparation):
     assert "upload_file" in consigne
 
 
-def test_connecte_lit_auth_status(monkeypatch):
+def test_connecte_lit_auth_status(monkeypatch, claude_dans_la_vm):
     import subprocess
-    monkeypatch.setenv("JOBSEARCH_VM", "1")                           # côté VM : c'est là que `claude` se lance
     oui = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout='{"loggedIn": true}', stderr="")
     non = lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, stdout='{"loggedIn": false}', stderr="")
     assert agent_claude.connecte(oui) and not agent_claude.connecte(non)

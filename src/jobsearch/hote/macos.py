@@ -130,3 +130,23 @@ def nom_reseau():
         return r.stdout.strip() + ".local" if r.returncode == 0 and r.stdout.strip() else None
     except (OSError, subprocess.SubprocessError):
         return None
+
+
+def partage_deposer(racine, sous, source, nom):
+    from .posix import partage_deposer as f
+    return f(racine, sous, source, nom)
+
+
+def partage_purger(racine, sous, nom):
+    from .posix import partage_purger as f
+    return f(racine, sous, nom)
+
+
+def partage_lire(racine, sous, nom, fichier, maximum):
+    from .posix import partage_lire as f
+    return f(racine, sous, nom, fichier, maximum)
+
+
+def partage_lister(racine, sous):
+    from .posix import partage_lister as f
+    return f(racine, sous)

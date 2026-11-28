@@ -30,11 +30,10 @@ import datetime as dt
 import json
 import os
 import shutil
-import stat
 import tempfile
 from pathlib import Path
 
-from . import profil
+from . import hote, profil
 from .config import DATA, reglages
 from .db import maintenant
 from .moteur import LancementImpossible, connecte, environnement, executable  # noqa: F401 (repris par cli et web)
@@ -99,86 +98,26 @@ class PreparationRefusee(Exception):
     pass
 
 
-_REP = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-
-
-def _taches_fd(creer=False):
-    """Le dossier `taches/` du partage, ouvert sans suivre de lien (la VM pourrait en poser un)."""
-    racine = partage()
-    if creer:
-        racine.mkdir(parents=True, exist_ok=True)
-    fr = os.open(racine, os.O_RDONLY | os.O_DIRECTORY)          # le partage lui-même : côté Mac
-    try:
-        if creer:
-            try:
-                os.mkdir("taches", 0o755, dir_fd=fr)
-            except FileExistsError:
-                pass
-        return os.open("taches", _REP, dir_fd=fr)
-    finally:
-        os.close(fr)
-
-
 def _deposer(source, tache):
     """Déplace d'un coup le dossier préparé hors du partage vers `taches/<id>`. Refuse un dossier
     (ou un lien) déjà là : la VM aurait pu le poser pour détourner les écritures."""
-    ft = _taches_fd(creer=True)
     try:
-        try:
-            os.lstat(str(tache), dir_fd=ft)
-        except FileNotFoundError:
-            pass
-        else:
-            raise PreparationRefusee("le dossier de la tâche %s existe déjà dans le dossier partagé" % tache)
-        os.rename(source, str(tache), dst_dir_fd=ft)
-    finally:
-        os.close(ft)
+        hote.partage_deposer(partage(), "taches", source, str(tache))
+    except FileExistsError:
+        raise PreparationRefusee("le dossier de la tâche %s existe déjà dans le dossier partagé" % tache)
 
 
 def purger(tache):
     """Efface `taches/<id>/` du partage (CV, lettre, coordonnées), sans suivre aucun lien."""
-    try:
-        ft = _taches_fd()
-    except OSError:
-        return False
-    try:
-        nom = str(tache)
-        try:
-            st = os.lstat(nom, dir_fd=ft)
-        except FileNotFoundError:
-            return False
-        if stat.S_ISDIR(st.st_mode):
-            shutil.rmtree(nom, dir_fd=ft)
-        else:
-            os.unlink(nom, dir_fd=ft)
-        return True
-    finally:
-        os.close(ft)
+    return hote.partage_purger(partage(), "taches", str(tache))
 
 
 def _lire_evenements(tache):
     """Les lignes complètes de `taches/<id>/evenements.jsonl`, ou None. Ni lien symbolique, ni
     autre chose qu'un fichier ordinaire ; une ligne pas encore terminée attend la relève suivante."""
-    try:
-        ft = _taches_fd()
-    except OSError:
+    brut = hote.partage_lire(partage(), "taches", str(tache), "evenements.jsonl", EVENEMENTS_MAX)
+    if brut is None:
         return None
-    try:
-        fd = os.open(str(tache), _REP, dir_fd=ft)
-    except OSError:
-        return None
-    finally:
-        os.close(ft)
-    try:
-        fe = os.open("evenements.jsonl", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
-    except OSError:
-        return None
-    finally:
-        os.close(fd)
-    with os.fdopen(fe, "rb") as fh:
-        if not stat.S_ISREG(os.fstat(fh.fileno()).st_mode):
-            return None
-        brut = fh.read(EVENEMENTS_MAX)
     return brut.decode("utf-8", errors="replace").split("\n")[:-1]
 
 
@@ -408,14 +347,9 @@ def _balayer(reg, heures=12):
     installation précédente…). Une tâche encore active mais sans nouvelle depuis `heures` est d'abord
     notée « arret » (chemin normal : notification, file suivante), puis purgée ; une tâche active
     plus récente garde son dossier, la session l'attend peut-être encore."""
-    try:
-        ft = _taches_fd()
-    except OSError:
+    noms = hote.partage_lister(partage(), "taches")
+    if noms is None:
         return
-    try:
-        noms = os.listdir(ft)
-    finally:
-        os.close(ft)
     for nom in noms:
         if not nom.isdigit():
             continue

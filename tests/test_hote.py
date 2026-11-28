@@ -144,3 +144,32 @@ def test_libelles_dans_les_pages(monkeypatch):
 @pytest.mark.parametrize("module", [macos, windows, linux])
 def test_le_courrier_local_est_nomme_ou_vide(module):
     assert isinstance(module.LIBELLES["courrier"], str)
+
+
+@pytest.mark.parametrize("module", [windows] + ([] if hote.SYSTEME == "windows" else [hote._impl]))
+def test_partage_sans_lien(module, tmp_path):
+    """Le dossier partagé avec la VM : dépôt, lecture, liste, purge ; un lien posé par la VM est refusé."""
+    import os
+    racine = tmp_path / "partage"
+    prepare = tmp_path / "prepare"
+    prepare.mkdir()
+    (prepare / "evenements.jsonl").write_text('{"a": 1}\n', encoding="utf-8")
+    module.partage_deposer(racine, "taches", prepare, "7")
+    with pytest.raises(FileExistsError):
+        autre = tmp_path / "autre"
+        autre.mkdir()
+        module.partage_deposer(racine, "taches", autre, "7")
+    assert module.partage_lire(racine, "taches", "7", "evenements.jsonl", 100) == b'{"a": 1}\n'
+    assert module.partage_lister(racine, "taches") == ["7"]
+    secret = tmp_path / "secret.txt"
+    secret.write_text("coordonnées", encoding="utf-8")
+    try:
+        os.symlink(secret, racine / "taches" / "7" / "lien.jsonl")
+        os.symlink(tmp_path, racine / "taches" / "8")
+    except (OSError, NotImplementedError):
+        pytest.skip("liens symboliques indisponibles")
+    assert module.partage_lire(racine, "taches", "7", "lien.jsonl", 100) is None
+    assert module.partage_lire(racine, "taches", "8", "secret.txt", 100) is None
+    assert module.partage_purger(racine, "taches", "8") and secret.exists()       # le lien seul est retiré
+    assert module.partage_purger(racine, "taches", "7") and not (racine / "taches" / "7").exists()
+    assert secret.exists() and module.partage_lister(racine, "taches") == []

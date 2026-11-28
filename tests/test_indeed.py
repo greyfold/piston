@@ -161,8 +161,7 @@ def test_details_par_paquets():
     assert len(s.messages) == 1 + 3          # neuf annonces, trois par tour
 
 
-def test_tester_signale_claude_deconnecte(monkeypatch):
-    monkeypatch.setenv("JOBSEARCH_VM", "1")                           # côté VM
+def test_tester_signale_claude_deconnecte(monkeypatch, claude_dans_la_vm):
     src = indeed.Indeed(REGLAGES, [], [], connecte=lambda: False)
     with pytest.raises(RouteCassee, match="pas connecté"):
         src.tester()
@@ -210,10 +209,9 @@ def test_passage_indeed_en_panne_n_emporte_pas_les_autres(reg, monkeypatch):
     assert reg.stats()["par_statut"].get("nouvelle", 0) + reg.stats()["par_statut"].get("A", 0) >= 1
 
 
-def test_passage_ingere_indeed_sans_relire_le_detail(reg, monkeypatch):
+def test_passage_ingere_indeed_sans_relire_le_detail(reg, monkeypatch, claude_dans_la_vm):
     from jobsearch import courrier, evaluation, pipeline
     from test_pipeline_web import FausseSource
-    monkeypatch.setenv("JOBSEARCH_VM", "1")                           # côté VM
     monkeypatch.setattr(courrier, "lire_boite", lambda *a, **k: [])
     monkeypatch.setattr(pipeline, "notifier", lambda *a, **k: None)
     monkeypatch.setattr("jobsearch.moteur.ouvrir", lambda: (_ for _ in ()).throw(evaluation.EvaluationImpossible("test")))

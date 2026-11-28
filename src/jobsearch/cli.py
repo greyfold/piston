@@ -421,6 +421,11 @@ def cmd_jeton(a):
     print(jeton())
 
 
+def cmd_superviseur(a):
+    from . import superviseur
+    return superviseur.commande(port=a.port, hote_web=a.hote)
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(prog="jobsearch", description="Plateforme locale de recherche d'emploi.")
     sp = p.add_subparsers(dest="cmd", required=True)
@@ -447,6 +452,11 @@ def main(argv=None):
     s.add_argument("--port", type=int)
     s.set_defaults(f=cmd_web)
     sp.add_parser("jeton", help="affiche le jeton d'accès du tableau de bord").set_defaults(f=cmd_jeton)
+    s = sp.add_parser("superviseur", help="ce que l'enveloppe native lance : tableau de bord, échéances, VM "
+                                          "(dialogue en lignes JSON sur l'entrée et la sortie)")
+    s.add_argument("--hote", default="127.0.0.1")
+    s.add_argument("--port", type=int, default=8775)
+    s.set_defaults(f=cmd_superviseur)
     s = sp.add_parser("moteur-essais", help="banc d'essai du moteur d'IA connecté (structure, refus, évaluation, "
                                             "web, dossier) ; rien n'est écrit dans la base")
     s.add_argument("--fournisseur", help="claude, codex, antigravity ou grok (par défaut : celui choisi)")

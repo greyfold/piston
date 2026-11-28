@@ -5,7 +5,9 @@ l'API Windows (ctypes) ne sont faits qu'à l'appel.
 """
 
 import os
+import shutil
 import socket
+import stat
 import subprocess
 import time
 from pathlib import Path
@@ -62,6 +64,10 @@ def lacher(fichier):
 
 
 # --- Processus -------------------------------------------------------------------------------
+
+
+def options_sans_console():
+    return {"creationflags": CREATE_NO_WINDOW}
 
 
 def options_groupe():
@@ -243,3 +249,83 @@ def nom_reseau():
     except OSError:
         return None
     return (nom + ".local") if nom else None
+
+
+# --- Le dossier partagé avec la VM, sans suivre aucun lien ----------------------------------
+#
+# La VM écrit dans `partage-vm/` (monté par drvfs) : elle pourrait y poser un lien (un lien symbolique de
+# WSL est un point d'analyse NTFS) pour détourner une écriture ou une lecture du PC. Windows n'a pas les
+# descripteurs de dossier de POSIX : chaque élément du chemin est vérifié (ni lien, ni jonction, ni point
+# d'analyse) juste avant l'opération. La fenêtre entre la vérification et l'opération est courte ; la VM n'a
+# pas de compte root qui puisse l'élargir (vm/wsl.py : moteurs et Chrome sans sudo).
+
+
+def _sans_lien(chemin, dossier=None):
+    st = os.lstat(chemin)
+    if _est_lien(st):
+        raise OSError("lien refusé dans le dossier partagé : %s" % chemin)
+    if dossier is True and not stat.S_ISDIR(st.st_mode):
+        raise OSError("pas un dossier : %s" % chemin)
+    if dossier is False and not stat.S_ISREG(st.st_mode):
+        raise OSError("pas un fichier ordinaire : %s" % chemin)
+    return st
+
+
+def partage_deposer(racine, sous, source, nom):
+    racine = Path(racine)
+    racine.mkdir(parents=True, exist_ok=True)
+    d = racine / sous
+    try:
+        d.mkdir()
+    except FileExistsError:
+        pass
+    _sans_lien(d, dossier=True)
+    cible = d / nom
+    if os.path.lexists(cible):
+        raise FileExistsError(nom)
+    os.rename(source, cible)
+
+
+def _est_lien(st):
+    return stat.S_ISLNK(st.st_mode) or bool(getattr(st, "st_file_attributes", 0)
+                                             & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400))
+
+
+def partage_purger(racine, sous, nom):
+    d = Path(racine) / sous
+    try:
+        _sans_lien(d, dossier=True)
+        st = os.lstat(d / nom)
+    except OSError:
+        return False
+    if _est_lien(st):                     # le lien seul, jamais ce vers quoi il pointe
+        try:
+            os.unlink(d / nom)
+        except OSError:
+            os.rmdir(d / nom)             # lien de dossier ou jonction
+    elif stat.S_ISDIR(st.st_mode):
+        shutil.rmtree(d / nom)            # rmtree ne traverse ni lien ni jonction (Python 3.12 et plus)
+    else:
+        os.unlink(d / nom)
+    return True
+
+
+def partage_lire(racine, sous, nom, fichier, maximum):
+    d = Path(racine) / sous
+    try:
+        _sans_lien(d, dossier=True)
+        _sans_lien(d / nom, dossier=True)
+        _sans_lien(d / nom / fichier, dossier=False)
+        with open(d / nom / fichier, "rb") as fh:
+            return fh.read(maximum)
+    except OSError:
+        return None
+
+
+def partage_lister(racine, sous):
+    d = Path(racine) / sous
+    try:
+        _sans_lien(d, dossier=True)
+        return os.listdir(d)
+    except OSError:
+        return None

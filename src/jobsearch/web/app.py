@@ -208,7 +208,7 @@ async def garde(request: Request, call_next):
         if reponse.status_code == 200 and ("v" in request.query_params or request.url.path.startswith("/static/polices/")):
             reponse.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         return reponse
-    if request.url.path == "/connexion":
+    if request.url.path in ("/connexion", "/entree"):
         return await call_next(request)
     if not autorise(request):
         if request.url.path.startswith("/api/") or "x-jobsearch-jeton" in request.headers:
@@ -2394,4 +2394,35 @@ def connexion_post(request: Request, jeton_saisi: str = Form("")):
         return page_connexion(request, erreur=True)
     r = RedirectResponse("/", status_code=303)
     r.set_cookie(COOKIE, jeton(), max_age=90 * 86400, httponly=True, samesite="strict")
+    return r
+
+
+# L'entrée de l'enveloppe (superviseur.py) : elle demande, avec le jeton, un code à usage unique valable deux
+# minutes, puis ouvre /entree?code=… dans sa vue web, qui reçoit le cookie du jeton sans que l'enveloppe ait à
+# poser de cookie elle-même (WebView2, WebKitGTK). Le code ne sert qu'une fois ; il ne vaut jamais le jeton.
+_CODES_ENTREE = {}
+DUREE_CODE_ENTREE = 120
+
+
+@app.post("/api/entree")
+def api_entree():
+    import secrets
+    import time
+    maintenant_s = time.monotonic()
+    for c, fin in list(_CODES_ENTREE.items()):
+        if fin < maintenant_s:
+            _CODES_ENTREE.pop(c, None)
+    code = secrets.token_urlsafe(24)
+    _CODES_ENTREE[code] = maintenant_s + DUREE_CODE_ENTREE
+    return {"code": code}
+
+
+@app.get("/entree")
+def entree(request: Request, code: str = "", suivant: str = "/"):
+    import time
+    fin = _CODES_ENTREE.pop(code, None) if code else None
+    if fin is None or fin < time.monotonic():
+        return RedirectResponse("/connexion", status_code=303)
+    r = RedirectResponse(retour_sur(suivant), status_code=303)
+    r.set_cookie(COOKIE, jeton(), httponly=True, samesite="strict")     # le temps de la session de la vue web
     return r
