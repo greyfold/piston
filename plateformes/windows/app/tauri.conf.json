@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Piston",
+  "version": "0.5.1",
+  "identifier": "app.rechercheemploi.piston",
+  "build": {
+    "frontendDist": "ecran"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "category": "Productivity",
+    "shortDescription": "Recherche d'emploi assistée par ton IA",
+    "publisher": "Piston",
+    "resources": {
+      "ressources/python/": "python/",
+      "ressources/racine/": "racine/"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["French"],
+        "displayLanguageSelector": false
+      }
+    },
+    "createUpdaterArtifacts": false
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["piston"]
+      }
+    }
+  }
+}

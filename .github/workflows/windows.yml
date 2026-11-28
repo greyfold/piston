@@ -1,0 +1,51 @@
+# L'application Windows, construite sur une vraie machine Windows : les tests de l'enveloppe (Rust), puis
+# l'installateur complet (Python embarqué, dépendances, enveloppe Tauri avec la dictée whisper.cpp).
+# L'installateur est gardé comme artefact de l'exécution : à essayer sur un PC ou dans une VM Windows.
+# Rien n'est signé ni publié ici (plateformes/windows/README.md, « Publier »).
+name: windows
+
+on:
+  push:
+    paths:
+      - "plateformes/windows/**"
+      - "src/**"
+      - "config/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "ressources/**"
+      - ".github/workflows/windows.yml"
+  workflow_dispatch:
+
+jobs:
+  installateur:
+    runs-on: windows-latest
+    env:
+      LIBCLANG_PATH: C:\Program Files\LLVM\bin
+      PISTON_CLE_MAJ: ${{ vars.PISTON_CLE_MAJ }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: plateformes/windows/app
+      - name: Icônes et ressources minimales (pour les tests de l'enveloppe)
+        shell: pwsh
+        working-directory: plateformes/windows/app
+        run: |
+          New-Item -ItemType Directory -Force ressources\python, ressources\racine | Out-Null
+          npx --yes @tauri-apps/cli@2 icon ..\..\..\ressources\icone.png -o icons
+      - name: Tests de l'enveloppe
+        working-directory: plateformes/windows/app
+        run: cargo test --release
+      - name: Installateur
+        shell: pwsh
+        run: plateformes\windows\construire.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: piston-windows
+          path: dist/windows/
+          if-no-files-found: error

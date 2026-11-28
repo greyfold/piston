@@ -1,0 +1,41 @@
+# L'enveloppe de Piston pour Windows (et, plus tard, Linux) : une fenêtre WebView2 sur le tableau de bord,
+# une icône dans la zone de notification, la dictée sur l'ordinateur, les mises à jour, l'ouverture à la
+# connexion. Tout le reste est dans le superviseur Python (src/jobsearch/superviseur.py), qu'elle lance.
+[package]
+name = "piston"
+version = "0.5.1"
+description = "Piston, recherche d'emploi"
+edition = "2021"
+rust-version = "1.80"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+tauri-plugin-deep-link = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"
+# La dictée : le micro (cpal) et la reconnaissance sur l'ordinateur (whisper.cpp) ; la voix ne sort jamais.
+cpal = { version = "0.15", optional = true }
+whisper-rs = { version = "0.15", optional = true }
+sha2 = { version = "0.10", optional = true }
+ureq = { version = "2", optional = true }
+
+[features]
+default = ["dictee"]
+dictee = ["dep:cpal", "dep:whisper-rs", "dep:sha2", "dep:ureq"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

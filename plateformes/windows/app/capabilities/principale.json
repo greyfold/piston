@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "principale",
+  "description": "La fenêtre de Piston : la dictée depuis le tableau de bord (localhost:8775), « Réessayer » depuis l'écran d'attente. Rien d'autre : ni fichiers, ni shell, ni réseau.",
+  "windows": ["principale"],
+  "remote": {
+    "urls": ["http://localhost:8775/*"]
+  },
+  "permissions": ["allow-dictee", "allow-reessayer"]
+}

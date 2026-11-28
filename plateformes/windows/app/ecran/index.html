@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Piston</title>
+<meta name="color-scheme" content="light dark">
+<style>
+  /* Les écrans de l'enveloppe, avant le tableau de bord (ouverture, panne, fermeture) : sobres, aux
+     couleurs du système (clair et sombre), comme les écrans natifs de l'application Mac. */
+  html, body { height: 100%; margin: 0; background: Canvas; color: CanvasText; font: 15px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  main { height: 100%; display: grid; place-items: center; text-align: center; padding: 2rem; box-sizing: border-box; }
+  .boite { max-width: 28rem; display: grid; gap: .75rem; justify-items: center; }
+  h1 { font-size: 1.25rem; font-weight: 600; margin: 0; }
+  p { margin: 0; color: GrayText; }
+  .roue { width: 2rem; height: 2rem; border-radius: 50%; border: 3px solid GrayText; border-top-color: CanvasText; animation: tour 1s linear infinite; }
+  @keyframes tour { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .roue { animation: none; } }
+  button { font: inherit; padding: .4rem 1rem; border-radius: .3rem; border: 1px solid GrayText; background: ButtonFace; color: ButtonText; cursor: pointer; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="boite" role="status" aria-live="polite">
+    <div class="roue" id="roue" aria-hidden="true"></div>
+    <h1 id="titre">Ouverture de l'application</h1>
+    <p id="detail">Démarrage du tableau de bord…</p>
+    <p id="note" hidden></p>
+    <button id="reessayer" type="button" hidden>Réessayer</button>
+  </div>
+</main>
+<script>
+  // L'enveloppe (src/main.rs) appelle window.montrer({ecran, texte, note}) : attente, erreur ou arret.
+  window.montrer = function (m) {
+    var erreur = m.ecran === "erreur";
+    document.getElementById("roue").hidden = erreur;
+    document.getElementById("reessayer").hidden = !erreur;
+    document.getElementById("titre").textContent = erreur ? "Le tableau de bord ne s'affiche pas"
+      : m.ecran === "arret" ? "Fermeture de l'application" : "Ouverture de l'application";
+    document.getElementById("detail").textContent = m.texte || "";
+    var note = document.getElementById("note");
+    note.hidden = !m.note;
+    note.textContent = m.note || "";
+  };
+  // Ou par l'adresse (?m={…}), quand la fenêtre revient du tableau de bord.
+  try {
+    var m = new URLSearchParams(location.search).get("m");
+    if (m) window.montrer(JSON.parse(m));
+  } catch (e) {}
+  document.getElementById("reessayer").addEventListener("click", function () {
+    window.__TAURI_INTERNALS__.invoke("reessayer");
+    window.montrer({ ecran: "attente", texte: "Démarrage du tableau de bord…" });
+  });
+</script>
+</body>
+</html>
