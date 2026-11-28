@@ -43,7 +43,8 @@ def test_le_jeton_existe_des_le_demarrage():
     auth.chemin_jeton().unlink()                               # (le client de test l'a lu pour son cookie)
     with c:                                            # lifespan : le démarrage du serveur
         assert auth.chemin_jeton().exists()
-        assert oct(auth.chemin_jeton().stat().st_mode & 0o777) == "0o600"
+        from conftest import POSIX
+        assert not POSIX or oct(auth.chemin_jeton().stat().st_mode & 0o777) == "0o600"
 
 
 def test_post_sans_origine_accepte_avec_jeton_refuse_sans():

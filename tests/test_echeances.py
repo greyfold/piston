@@ -147,7 +147,8 @@ def test_fichiers_crees_lisibles_par_le_seul_compte(tmp_path):
     from jobsearch.db import Registre
     r = Registre(tmp_path / "base.db")
     r.fermer()
-    assert (tmp_path / "base.db").stat().st_mode & 0o077 == 0
+    from conftest import POSIX
+    assert not POSIX or (tmp_path / "base.db").stat().st_mode & 0o077 == 0
 
 
 def _verrou_tenu(tmp_path):

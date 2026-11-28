@@ -150,3 +150,9 @@ def partage_lire(racine, sous, nom, fichier, maximum):
 def partage_lister(racine, sous):
     from .posix import partage_lister as f
     return f(racine, sous)
+
+
+def proteger_dossier(chemin):
+    os.makedirs(chemin, exist_ok=True)
+    os.chmod(chemin, 0o700)
+    return True

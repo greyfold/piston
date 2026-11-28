@@ -154,6 +154,12 @@ def partage_lister(racine, sous):
     return _impl.partage_lister(racine, sous)
 
 
+def proteger_dossier(chemin):
+    """Le dossier (et ce qu'il contient) réservé au compte de la personne : 0700 sous POSIX ; sous Windows,
+    des ACL sans héritage, pour le compte, SYSTEM et les administrateurs seulement."""
+    return _impl.proteger_dossier(chemin)
+
+
 def options_sans_console():
     """Les arguments de `subprocess.Popen` d'un processus sans fenêtre de console (Windows) ; rien ailleurs."""
     return getattr(_impl, "options_sans_console", dict)()

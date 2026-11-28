@@ -153,7 +153,7 @@ def test_partage_sans_lien(module, tmp_path):
     racine = tmp_path / "partage"
     prepare = tmp_path / "prepare"
     prepare.mkdir()
-    (prepare / "evenements.jsonl").write_text('{"a": 1}\n', encoding="utf-8")
+    (prepare / "evenements.jsonl").write_bytes(b'{"a": 1}\n')
     module.partage_deposer(racine, "taches", prepare, "7")
     with pytest.raises(FileExistsError):
         autre = tmp_path / "autre"
@@ -173,3 +173,14 @@ def test_partage_sans_lien(module, tmp_path):
     assert module.partage_purger(racine, "taches", "8") and secret.exists()       # le lien seul est retiré
     assert module.partage_purger(racine, "taches", "7") and not (racine / "taches" / "7").exists()
     assert secret.exists() and module.partage_lister(racine, "taches") == []
+
+
+def test_dossier_protege_sous_windows(tmp_path, monkeypatch):
+    vus = []
+    monkeypatch.setenv("USERDOMAIN", "PC")
+    monkeypatch.setattr("getpass.getuser", lambda: "camille")
+    assert windows.proteger_dossier(tmp_path / "d", executer=lambda cmd, **kw: vus.append(cmd)
+                                    or subprocess.CompletedProcess(cmd, 0))
+    cmd = vus[0]
+    assert cmd[:4] == ["icacls", str(tmp_path / "d"), "/inheritance:r", "/grant:r"]
+    assert "PC\\camille:(OI)(CI)F" in cmd and "*S-1-5-18:(OI)(CI)F" in cmd and not any("Everyone" in c for c in cmd)

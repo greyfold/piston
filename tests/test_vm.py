@@ -39,7 +39,8 @@ def test_la_vm_ne_voit_que_le_dossier_partage(tmp_path, monkeypatch):
     c = vm.configuration()
     assert c["vmType"] == "vz" and c["mounts"] == [
         {"location": str(tmp_path / "partage-vm"), "mountPoint": "/donnees", "writable": True}]
-    assert (tmp_path / "partage-vm").stat().st_mode & 0o777 == 0o700
+    from conftest import POSIX
+    assert not POSIX or (tmp_path / "partage-vm").stat().st_mode & 0o777 == 0o700
     assert c["portForwards"][0] == {"guestPort": 8776, "hostIP": "127.0.0.1", "hostPort": 8776}
     assert c["portForwards"][1] == {"guestPort": 8777, "hostIP": "127.0.0.1", "hostPort": 8777}   # l'écran
     assert c["portForwards"][2]["ignore"] is True and c["portForwards"][3]["ignore"] is True   # aucun autre port
@@ -70,7 +71,8 @@ def test_mot_de_passe_de_l_ecran(monkeypatch, tmp_path):
     monkeypatch.setattr("jobsearch.travailleur.jeton.DATA", tmp_path)
     m = vm.ecran_motdepasse()
     f = tmp_path / "partage-vm" / "ecran.motdepasse"
-    assert len(m) == 8 and f.stat().st_mode & 0o777 == 0o600 and vm.ecran_motdepasse() == m
+    from conftest import POSIX
+    assert len(m) == 8 and (not POSIX or f.stat().st_mode & 0o777 == 0o600) and vm.ecran_motdepasse() == m
     assert vm.adresse_ecran().startswith("http://127.0.0.1:8777/vnc.html?") and "password=" + m in vm.adresse_ecran()
 
 
@@ -254,12 +256,12 @@ def test_avancement_plafonne_dans_une_etape(tmp_path, monkeypatch):
 
 
 def test_en_demarrage_suit_le_verrou(tmp_path, monkeypatch):
-    import fcntl
+    from jobsearch import hote
     monkeypatch.setattr(vm, "DATA", tmp_path)
     assert not vm.en_demarrage()
     (tmp_path / "vm").mkdir()
-    with open(tmp_path / "vm" / "demarrer.lock", "w") as v:
-        fcntl.flock(v, fcntl.LOCK_EX)
+    with open(tmp_path / "vm" / "demarrer.lock", "a+") as v:
+        assert hote.prendre(v)
         assert vm.en_demarrage()
     assert not vm.en_demarrage()
 

@@ -8,6 +8,14 @@ from jobsearch.db import Registre
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
+# Les droits POSIX (0600, 0700) n'existent pas sous Windows : le dossier des données y est protégé par ses
+# ACL (hote.proteger_dossier). Les tests de droits ne valent que sur Mac et Linux.
+from jobsearch import hote as _hote  # noqa: E402
+POSIX = _hote.SYSTEME != "windows"
+# Le code de l'invité (moteurs, sessions) ne tourne que dans la VM Linux : ses tests ne courent pas sous Windows,
+# où chemins et processus diffèrent.
+invite_linux = pytest.mark.skipif(not POSIX, reason="code de l'invité Linux (machine virtuelle)")
+
 
 def fixture(nom):
     return json.loads((FIXTURES / nom).read_text(encoding="utf-8"))
@@ -66,7 +74,7 @@ def jamais_le_vrai_moteur(monkeypatch):
 
 COMMANDES_INTERDITES = ("claude", "codex", "agy", "gemini", "grok", "limactl", "security", "open", "osascript", "script",
                         "wsl", "wsl.exe", "powershell", "powershell.exe", "taskkill", "taskkill.exe", "secret-tool",
-                        "notify-send")
+                        "notify-send", "icacls", "icacls.exe")
 
 
 @pytest.fixture(autouse=True)

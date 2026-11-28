@@ -415,6 +415,8 @@ class Superviseur:
 
     def demarrer(self):
         """Le lancement de l'application : tableau de bord, état, VM, puis échéances ; et les minuteries."""
+        hote.proteger_dossier(self.donnees)          # coordonnées, recherche, dossiers : au seul compte
+
         def suite():
             self.assurer_tableau()
             self.rafraichir()

@@ -381,7 +381,8 @@ def test_etapes_enregistrees_dans_l_ordre(web, profil_de_test):
     assert r.status_code == 303 and r.headers["location"].startswith("/profil/identite?msg=")   # l'onglet reste ouvert
     p = _lire(profil_de_test)
     assert p["identite"]["telephone"] == "+41 79 111 11 11" and p["identite"]["site"] == "https://www.exemple.ch"
-    assert stat.S_IMODE(profil_de_test.stat().st_mode) == 0o600
+    from conftest import POSIX
+    assert not POSIX or stat.S_IMODE(profil_de_test.stat().st_mode) == 0o600
     assert "par défaut" in web.get("/profil/recherche").text       # listes encore celles de criteres.yaml
 
 

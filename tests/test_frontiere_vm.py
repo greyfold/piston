@@ -4,6 +4,7 @@ en efface, et ce qu'il ne croit pas sur parole."""
 import json
 import os
 import subprocess
+import sys
 
 import pytest
 
@@ -193,6 +194,7 @@ def test_politique_chrome_sans_pages_locales():
     assert "sudo" not in s                                             # le compte de la VM n'en a pas besoin
 
 
+@pytest.mark.skipif(sys.platform.startswith("win"), reason="Lima : Mac et Linux")
 def test_limactl_de_l_application_sans_repli(monkeypatch, tmp_path):
     ailleurs = tmp_path / "bin"
     ailleurs.mkdir()

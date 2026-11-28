@@ -190,7 +190,7 @@ def agents():
 def nettoyer():
     """Termine les agents restés après l'arrêt de la VM. Ils ignorent parfois SIGTERM : SIGKILL ensuite."""
     v = _vm()
-    for sig in (signal.SIGTERM, signal.SIGKILL):
+    for sig in (signal.SIGTERM, getattr(signal, "SIGKILL", signal.SIGTERM)):
         pids = v._agents()
         if not pids:
             return

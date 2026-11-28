@@ -76,6 +76,9 @@ def options_groupe():
 
 def terminer_groupe(proc, executer=None):
     """Le processus et tout ce qu'il a lancé (`taskkill /T`)."""
+    if not getattr(proc, "pid", None):
+        proc.terminate()
+        return
     try:
         (executer or subprocess.run)(["taskkill", "/PID", str(proc.pid), "/T", "/F"], capture_output=True,
                                      timeout=15, creationflags=CREATE_NO_WINDOW)
@@ -329,3 +332,20 @@ def partage_lister(racine, sous):
         return os.listdir(d)
     except OSError:
         return None
+
+
+def proteger_dossier(chemin, executer=None):
+    """ACL du dossier : plus d'héritage du dossier parent ; contrôle total au compte, à SYSTEM et aux
+    administrateurs (comme %LOCALAPPDATA% lui-même), rien pour les autres comptes du PC. Par SID : ni le
+    nom du compte ni la langue de Windows n'interviennent."""
+    os.makedirs(chemin, exist_ok=True)
+    try:
+        import getpass
+        compte = os.environ.get("USERDOMAIN", "") + "\\" + getpass.getuser() if os.environ.get("USERDOMAIN") else getpass.getuser()
+        r = (executer or subprocess.run)(
+            ["icacls", str(chemin), "/inheritance:r", "/grant:r", "%s:(OI)(CI)F" % compte,
+             "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F"],
+            capture_output=True, text=True, timeout=60, creationflags=CREATE_NO_WINDOW)
+        return r.returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False

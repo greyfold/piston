@@ -5,6 +5,7 @@ import os
 import subprocess
 
 import pytest
+from conftest import invite_linux
 from pydantic import BaseModel
 
 from jobsearch import moteur
@@ -41,6 +42,7 @@ def succes(**k):
                  "usage": {"input_tokens": 3, "output_tokens": 5, "cache_read_input_tokens": 1500}}, **k)
 
 
+@invite_linux
 def test_tache_cadree_sans_outils_ni_reglages(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-ne-doit-pas-servir")
     vus = {}

@@ -7,6 +7,7 @@ import json
 import subprocess
 
 import pytest
+from conftest import invite_linux
 from pydantic import BaseModel
 
 from jobsearch import connexion_ia, mcp_vm, moteur
@@ -79,6 +80,7 @@ CODEX_OK = "\n".join(json.dumps(e) for e in [
 ])
 
 
+@invite_linux
 def test_codex_tache_sans_outil_ni_cle(dans_la_vm):
     vus = []
     r = moteur.executer(tache(fournisseur="codex"), "Annonce.", faux(CODEX_OK, vus))
@@ -129,6 +131,7 @@ def resultat_agy(**r):
                                            **r)}])
 
 
+@invite_linux
 def test_antigravity_consigne_en_regle_demande_sur_l_entree(dans_la_vm):
     vus = []
     r = moteur.executer(tache(fournisseur="antigravity"), "Annonce.",
@@ -148,6 +151,7 @@ def test_antigravity_consigne_en_regle_demande_sur_l_entree(dans_la_vm):
     assert "GEMINI_API_KEY" not in env
 
 
+@invite_linux
 def test_antigravity_contexte_trop_long_pour_une_regle(dans_la_vm, monkeypatch):
     monkeypatch.setattr(fr.Antigravity, "REGLE_MAX", 20)
     vus = []
@@ -157,6 +161,7 @@ def test_antigravity_contexte_trop_long_pour_une_regle(dans_la_vm, monkeypatch):
     assert json.loads(kw["input"])["message"]["content"].startswith("Profil.") and "Annonce." in kw["input"]
 
 
+@invite_linux
 def test_antigravity_recherche_web_seulement_si_demandee(dans_la_vm):
     vus = []
     t = moteur.Tache("examen", "C.", outils=["WebSearch", "WebFetch"], fournisseur="antigravity")
@@ -256,6 +261,7 @@ def test_antigravity_etat_par_agy_models(dans_la_vm):
 
 # --- Grok --------------------------------------------------------------------------------
 
+@invite_linux
 def test_grok_lit_la_ligne_result(dans_la_vm):
     vus = []
     sortie = "\n".join(json.dumps(e) for e in [
