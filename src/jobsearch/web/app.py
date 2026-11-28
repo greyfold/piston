@@ -552,7 +552,15 @@ def contexte_dossier(reg, f, d, choix=""):
         from ..motscles import analyser         # mesure absente : faite à la volée, rien n'est écrit
         motscles = analyser((chemin / "CV.md").read_text(encoding="utf-8"),
                             (chemin / "Annonce.md").read_text(encoding="utf-8"), f.get("entreprise"))
-    return {"pieces": pieces, "fichiers": fichiers, "apercu": choix, "motscles": motscles,
+    # Un PDF s'affiche une page à la fois (_dossier.html) : la taille de chacune, pour réserver sa place.
+    pages = None
+    if choix and choix.endswith(".pdf"):
+        from .. import apercu
+        try:
+            pages = apercu.pages_pdf(chemin / choix)
+        except Exception:                       # PDF illisible : l'aperçu du navigateur, tel quel
+            pages = None
+    return {"pieces": pieces, "fichiers": fichiers, "apercu": choix, "apercu_pages": pages, "motscles": motscles,
             "date_lettre": date_cible(f)}
 
 
@@ -713,6 +721,23 @@ def dossier_apercu(emp: str, nom: str):
         return HTMLResponse(apercu.docx_en_html(chemin, f.get("langue")))
     except Exception as e:
         return HTMLResponse("Aperçu impossible : %s" % type(e).__name__, status_code=500)
+
+
+@app.get("/dossier/{emp}/page/{nom}/{n}")
+def dossier_page(emp: str, nom: str, n: int):
+    """Une page d'un PDF du dossier, en image (l'aperçu page par page de _dossier.html) ; `n` compte depuis 1."""
+    from .. import apercu
+    reg = _reg()
+    try:
+        f = reg.get(emp)
+        d = infos_dossier(reg, f) if f else None
+    finally:
+        reg.fermer()
+    chemin = _document(f, d, nom) if d and "/" not in nom and not nom.startswith(".") and nom.endswith(".pdf") else None
+    png = apercu.page_png(chemin, n - 1) if chemin else None
+    if not png:
+        return HTMLResponse("Page introuvable.", status_code=404)
+    return Response(png, media_type="image/png", headers={"Cache-Control": "no-cache"})
 
 
 @app.post("/dossier/{emp}/mots-cles")

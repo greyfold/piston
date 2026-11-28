@@ -25,9 +25,27 @@
     {% endfor %}
   </nav>
   {% if apercu %}
-  <div class="apercu" id="apercu">
-    <iframe src="/dossier/{{ f.empreinte }}/apercu/{{ apercu | urlencode }}" title="Aperçu de {{ apercu }}" loading="lazy"></iframe>
+  {# Rien ne défile dans l'aperçu : le volet ou la page défile seul. Un PDF montre une page à la fois, en image, et
+     des boutons passent de l'une à l'autre ; un Word converti prend toute sa hauteur (champs.js). #}
+  {% if apercu_pages %}{% set nb_pages = apercu_pages | length %}
+  <div class="apercu apercu-pages" id="apercu" data-apercu-pages>
+    {% for largeur, hauteur in apercu_pages %}
+    <img src="/dossier/{{ f.empreinte }}/page/{{ apercu | urlencode }}/{{ loop.index }}" width="{{ largeur }}" height="{{ hauteur }}"
+         alt="{{ apercu }}, page {{ loop.index }} sur {{ nb_pages }}"{% if not loop.first %} hidden{% endif %}>
+    {% endfor %}
   </div>
+  {% if nb_pages > 1 %}
+  <div class="pagination-apercu" data-pagination-apercu>
+    <button type="button" class="discret petit avec-icone" data-page="-1" disabled>{{ icone("precedent") }}<span>Page précédente</span></button>
+    <span class="petit muet" aria-live="polite" data-numero-page>Page 1 sur {{ nb_pages }}</span>
+    <button type="button" class="discret petit avec-icone" data-page="1"><span>Page suivante</span>{{ icone("suivant") }}</button>
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="apercu" id="apercu">
+    <iframe src="/dossier/{{ f.empreinte }}/apercu/{{ apercu | urlencode }}" title="Aperçu de {{ apercu }}" loading="lazy"{% if apercu.endswith(".docx") %} scrolling="no" data-hauteur-contenu{% endif %}></iframe>
+  </div>
+  {% endif %}
   <div class="boutons">
     <a class="bouton avec-icone" href="/dossier/{{ f.empreinte }}/fichier/{{ apercu | urlencode }}">{{ icone("exporter") }}<span>Télécharger {{ apercu }}</span></a>
     <a class="bouton discret avec-icone" href="/dossier/{{ f.empreinte }}/apercu/{{ apercu | urlencode }}" target="_blank" rel="noopener">{{ icone("externe") }}<span>Plein écran</span></a>

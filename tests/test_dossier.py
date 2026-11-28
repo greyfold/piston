@@ -215,6 +215,24 @@ def test_apercu_word_en_page_a4(isole):
     assert '<html lang="en">' in h
 
 
+def test_apercu_pdf_page_par_page(isole):
+    """Un PDF s'affiche une page à la fois, en image : la taille de chaque page, puis chacune en PNG."""
+    import pypdf
+    from jobsearch import apercu
+    w = pypdf.PdfWriter()
+    w.add_blank_page(595, 842)
+    w.add_blank_page(595, 842)
+    cible = isole / "cv.pdf"
+    with open(cible, "wb") as fh:
+        w.write(fh)
+    assert apercu.pages_pdf(cible) == ((595, 842), (595, 842))
+    png = apercu.page_png(cible, 1)
+    assert png.startswith(b"\x89PNG\r\n\x1a\n") and b"IEND" in png[-12:]
+    largeur, hauteur = int.from_bytes(png[16:20], "big"), int.from_bytes(png[20:24], "big")
+    assert abs(largeur - apercu.LARGEUR_PAGE) <= 1 and abs(hauteur / largeur - 842 / 595) < .01
+    assert apercu.page_png(cible, 2) is None
+
+
 def test_motscles_ignore_marque_et_pronoms():
     from jobsearch.motscles import a_ignorer
     ig = a_ignorer("Banque Cantonale de Fribourg (BCF)")
