@@ -5,12 +5,13 @@ import httpx
 import pytest
 
 from jobsearch import cles
+from jobsearch.hote import macos
 
 CLE = "apify_api_" + "x" * 40 + "abcd"
 
 
-class FauxTrousseau:
-    """Le trousseau en mémoire, par la même ligne de commande que `security`."""
+class FauxSecurity:
+    """Le trousseau en mémoire, par la même ligne de commande que `security` (macOS)."""
 
     def __init__(self, **entrees):
         self.entrees = [(s, v) for s, v in entrees.items()]
@@ -41,13 +42,13 @@ def service(code):
 
 
 def test_enregistrer_remplace_les_anciennes_entrees():
-    t = FauxTrousseau(**{"jobsearch-apify": "apify_api_ancienne-cle-creee-a-la-main"})
-    msg = cles.enregistrer("apify", "  %s  " % CLE, executer=t, client=service(200))
+    t = FauxSecurity(**{"jobsearch-apify": "apify_api_ancienne-cle-creee-a-la-main"})
+    msg = cles.enregistrer("apify", "  %s  " % CLE, coffre=macos.Coffre(t), client=service(200))
     assert "…abcd" in msg and "acceptée" in msg
     assert t.entrees == [("jobsearch-apify", CLE)]
     # La clé passe par l'entrée standard, jamais par les arguments de la commande.
     assert all(CLE not in " ".join(cmd) for cmd, _ in t.commandes)
-    assert cles.etat("apify", t) == dict(cles.SERVICES["apify"], id="apify", presente=True, fin="abcd")
+    assert cles.etat("apify", macos.Coffre(t)) == dict(cles.SERVICES["apify"], id="apify", presente=True, fin="abcd")
 
 
 @pytest.mark.parametrize("valeur, motif", [
@@ -56,32 +57,32 @@ def test_enregistrer_remplace_les_anciennes_entrees():
     ("apify_api_court", "caractères"),
 ])
 def test_forme_refusee(valeur, motif):
-    t = FauxTrousseau()
+    t = FauxSecurity()
     with pytest.raises(cles.CleRefusee, match=motif):
-        cles.enregistrer("apify", valeur, executer=t, client=service(200))
+        cles.enregistrer("apify", valeur, coffre=macos.Coffre(t), client=service(200))
     assert t.entrees == []
 
 
 def test_cle_refusee_par_le_service_pas_rangee():
-    t = FauxTrousseau(**{"jobsearch-apify": "apify_api_" + "a" * 30})
+    t = FauxSecurity(**{"jobsearch-apify": "apify_api_" + "a" * 30})
     with pytest.raises(cles.CleRefusee, match="refusée"):
-        cles.enregistrer("apify", "apify_api_" + "b" * 30, executer=t, client=service(401))
+        cles.enregistrer("apify", "apify_api_" + "b" * 30, coffre=macos.Coffre(t), client=service(401))
     assert t.entrees == [("jobsearch-apify", "apify_api_" + "a" * 30)]      # l'ancienne reste
 
 
 def test_service_injoignable_cle_rangee_quand_meme():
     def panne(req):
         raise httpx.ConnectError("hors ligne")
-    t = FauxTrousseau()
-    msg = cles.enregistrer("apify", "apify_api_" + "b" * 30, executer=t,
+    t = FauxSecurity()
+    msg = cles.enregistrer("apify", "apify_api_" + "b" * 30, coffre=macos.Coffre(t),
                            client=httpx.Client(transport=httpx.MockTransport(panne)))
     assert "injoignable" in msg and t.entrees
 
 
 def test_retirer():
-    t = FauxTrousseau(**{"jobsearch-apify": "apify_api_" + "a" * 30})
-    cles.retirer("apify", t)
-    assert t.entrees == [] and cles.lire("apify", t) is None
+    t = FauxSecurity(**{"jobsearch-apify": "apify_api_" + "a" * 30})
+    cles.retirer("apify", macos.Coffre(t))
+    assert t.entrees == [] and cles.lire("apify", macos.Coffre(t)) is None
 
 
 def test_page_sante_et_saisie_sur_le_mac(monkeypatch, reg):

@@ -5,7 +5,8 @@ qui est propre à la personne vient de son profil. Ses données (base, profil, d
 journaux) vivent dans un dossier à elle :
 - JOBSEARCH_DATA s'il est donné (l'application et la machine virtuelle le fixent) ;
 - sinon data/ à la racine du dépôt, pour le développement ;
-- sinon ~/Library/Application Support/Recherche emploi.
+- sinon le dossier que le système réserve aux applications (hote.dossier_application : Application
+  Support sur Mac, %LOCALAPPDATA% sous Windows, ~/.local/share sous Linux).
 """
 
 import os
@@ -14,9 +15,11 @@ from pathlib import Path
 
 import yaml
 
+from . import hote
+
 RACINE = Path(os.environ.get("JOBSEARCH_HOME") or Path(__file__).resolve().parents[2])
 CONFIG = RACINE / "config"
-APPLICATION = Path.home() / "Library" / "Application Support" / "Recherche emploi"
+APPLICATION = hote.dossier_application()
 
 
 def dossier_donnees(env=None, racine=None):
@@ -43,7 +46,7 @@ def lire_yaml(nom):
 def reglages():
     from .profil import appliquer        # le profil (data/profil.yaml) prime sur les valeurs par défaut
     s = appliquer(lire_yaml("settings.yaml"), "reglages")
-    if os.environ.get("JOBSEARCH_PORT"):  # le tableau de bord de l'application Mac a son propre port
+    if os.environ.get("JOBSEARCH_PORT"):  # le tableau de bord de l'application a son propre port
         s.setdefault("web", {})["port"] = int(os.environ["JOBSEARCH_PORT"])
     return s
 

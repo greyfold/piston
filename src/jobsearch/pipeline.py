@@ -7,7 +7,6 @@ que lit la surveillance (piste A2).
 """
 
 import datetime as dt
-import fcntl
 import json
 import sqlite3
 import time
@@ -15,7 +14,7 @@ import traceback
 from contextlib import contextmanager
 from dataclasses import asdict
 
-from . import courrier, dossier, doublons, evaluation, followups, ingest, moteur, originaux, prefilter, profil
+from . import courrier, dossier, doublons, evaluation, followups, hote, ingest, moteur, originaux, prefilter, profil
 from .config import DATA, criteres, reglages
 from .connecteurs import A_CONFIGURER, CATALOGUE
 from .db import maintenant
@@ -30,47 +29,32 @@ class Delai(Exception):
 def clore_interrompus(reg):
     """Clôt en « interrompu » les passages restés « démarré » dont le processus est mort.
 
-    Tout passage tient un verrou `flock` sur `passage.lock` pendant qu'il travaille ; le système le
+    Tout passage tient un verrou (`hote.prendre`) sur `passage.lock` pendant qu'il travaille ; le système le
     libère à la mort du processus. Verrou libre + passage « démarré » = passage tué. On garde le
     verrou pendant la clôture, pour qu'un passage qui démarre à cet instant ne soit pas clos.
     Renvoie les identifiants clos."""
-    DATA.mkdir(parents=True, exist_ok=True)
-    with open(DATA / "passage.lock", "w") as verrou:
-        try:
-            fcntl.flock(verrou, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+    with hote.verrou(DATA / "passage.lock") as pris:
+        if not pris:
             return []                                  # un passage tourne vraiment
-        try:
-            ids = [r[0] for r in reg.cx.execute("SELECT id FROM runs WHERE statut='demarre'")]
-            for i in ids:
-                reg.cx.execute("UPDATE runs SET fin=?, statut='interrompu', "
-                               "resume=COALESCE(resume, '') || ? WHERE id=?",
-                               (maintenant(), "Passage interrompu avant la fin (Mac en veille ou "
-                                              "application fermée).", i))
-                reg.cx.execute("UPDATE run_etapes SET fin=?, statut='interrompu' WHERE run_id=? AND fin IS NULL",
-                               (maintenant(), i))
-            if ids:
-                reg.commit()
-            return ids
-        finally:
-            fcntl.flock(verrou, fcntl.LOCK_UN)
+        ids = [r[0] for r in reg.cx.execute("SELECT id FROM runs WHERE statut='demarre'")]
+        for i in ids:
+            reg.cx.execute("UPDATE runs SET fin=?, statut='interrompu', "
+                           "resume=COALESCE(resume, '') || ? WHERE id=?",
+                           (maintenant(), "Passage interrompu avant la fin (%s en veille ou "
+                                          "application fermée)." % hote.libelle("ordinateur"), i))
+            reg.cx.execute("UPDATE run_etapes SET fin=?, statut='interrompu' WHERE run_id=? AND fin IS NULL",
+                           (maintenant(), i))
+        if ids:
+            reg.commit()
+        return ids
 
 
 @contextmanager
 def verrou_sans_attendre():
     """Prend `passage.lock` sans attendre : rend True (verrou tenu le temps du bloc) ou False si un
     passage tourne déjà (le bloc s'exécute alors sans verrou : à celui qui l'appelle de passer son tour)."""
-    DATA.mkdir(parents=True, exist_ok=True)
-    with open(DATA / "passage.lock", "w") as verrou:
-        try:
-            fcntl.flock(verrou, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            yield False
-            return
-        try:
-            yield True
-        finally:
-            fcntl.flock(verrou, fcntl.LOCK_UN)
+    with hote.verrou(DATA / "passage.lock") as pris:
+        yield pris
 
 
 def _libelle(nom):
@@ -173,16 +157,10 @@ class Passage:
         # Un passage resté « démarré » alors que personne ne tient plus le verrou est mort
         # (veille, fermeture, exception) : on le clôt avant d'en ouvrir un autre.
         clore_interrompus(self.reg)
-        verrou = open(DATA / "passage.lock", "w")
-        try:
-            fcntl.flock(verrou, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise RuntimeError("Un passage est déjà en cours.")
-        try:
+        with hote.verrou(DATA / "passage.lock") as pris:
+            if not pris:
+                raise RuntimeError("Un passage est déjà en cours.")
             return self._lancer()
-        finally:
-            fcntl.flock(verrou, fcntl.LOCK_UN)
-            verrou.close()
 
     def _lancer(self):
         self._ouvrir()
@@ -518,9 +496,10 @@ def surveiller(reg, maintenant_dt=None):
     derniere_alerte = reg.meta("derniere_alerte_surveillance")
     if derniere_alerte and (now - dt.datetime.fromisoformat(derniere_alerte)).total_seconds() < rappel * 3600:
         return {"alerte": True, "envoyee": False, "age_heures": age and round(age, 1)}
-    texte = ("Aucun passage terminé depuis %d h. Le Mac était-il éteint, en veille, ou l'application "
-             "fermée ? Voir la page Santé du tableau de bord." % age) if age else \
-        "Aucun passage n'a encore eu lieu. Lance un passage depuis l'application (barre des menus)."
+    texte = ("Aucun passage terminé depuis %d h. %s était-il éteint, en veille, ou l'application "
+             "fermée ? Voir la page Santé du tableau de bord." % (age, hote.libelle("le").capitalize())) if age else \
+        "Aucun passage n'a encore eu lieu. Lance un passage depuis l'application (%s)." % (
+            "barre des menus" if hote.SYSTEME == "macos" else "icône près de l'horloge")
     notifier("Piston · passage manquant", texte, urgent=True)
     reg.poser_meta("derniere_alerte_surveillance", now.isoformat(sep=" ", timespec="minutes"))
     reg.commit()

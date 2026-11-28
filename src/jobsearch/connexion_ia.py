@@ -13,10 +13,11 @@ sur l'entrée du processus. Connecté : ce moteur devient celui de l'application
 
 import os
 import re
-import signal
 import subprocess
 import sys
 import threading
+
+from . import hote
 
 ADRESSE = re.compile(r"https://[^\s\"'<>│|]+")
 CODE_APPAREIL = re.compile(r"\b[A-Z0-9]{4,5}-[A-Z0-9]{4,5}\b")
@@ -59,7 +60,7 @@ def demarrer(fournisseur="claude", popen=subprocess.Popen):
         _etat.update(etat="preparation", fournisseur=f.id, nom=f.nom, mode=f.connexion_mode, pty=f.pty)
         _proc = popen(commande(f.id), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                       stderr=subprocess.STDOUT, env=dict(os.environ), cwd=os.path.expanduser("~"),
-                      start_new_session=True)      # son propre groupe : Annuler arrête aussi le moteur
+                      **hote.options_groupe())      # son propre groupe : Annuler arrête aussi le moteur
         proc = _proc
     threading.Thread(target=_lire, args=(proc, list(f.invites)), daemon=True).start()
     return etat()
@@ -166,7 +167,4 @@ def annuler():
         _etat.clear()
         _etat["etat"] = "annulee"
     if proc is not None and proc.poll() is None:
-        try:
-            os.killpg(proc.pid, signal.SIGTERM)    # jobsearch connexion et la connexion qu'il a lancée
-        except (ProcessLookupError, PermissionError, AttributeError, TypeError):
-            proc.terminate()
+        hote.terminer_groupe(proc)                 # jobsearch connexion et la connexion qu'il a lancée

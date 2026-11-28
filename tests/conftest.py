@@ -64,12 +64,15 @@ def jamais_le_vrai_moteur(monkeypatch):
     monkeypatch.setattr(moteur, "etats", lambda executer=None: {"claude": dict(etat)})
 
 
-COMMANDES_INTERDITES = ("claude", "codex", "agy", "gemini", "grok", "limactl", "security", "open", "osascript", "script")
+COMMANDES_INTERDITES = ("claude", "codex", "agy", "gemini", "grok", "limactl", "security", "open", "osascript", "script",
+                        "wsl", "wsl.exe", "powershell", "powershell.exe", "taskkill", "taskkill.exe", "secret-tool",
+                        "notify-send")
 
 
 @pytest.fixture(autouse=True)
 def jamais_de_commande_systeme(monkeypatch):
-    """Aucun test ne lance un moteur (`claude`, `codex`, `agy`, `grok`), `limactl`, `security` (trousseau), `open`, `osascript` ni Chrome :
+    """Aucun test ne lance un moteur (`claude`, `codex`, `agy`, `grok`), `limactl` ni `wsl` (la VM), `security` ou
+    `secret-tool` (coffre à clés), `open`, `osascript`, `powershell` ou `notify-send` (notifications) ni Chrome :
     le démarrage d'un processus (`subprocess.Popen`, donc aussi `subprocess.run`) vers l'une de ces
     commandes lève une erreur explicite. Un test qui les simule remplace `subprocess.run` / `Popen`
     lui-même : son faux passe avant cette garde."""
@@ -118,9 +121,10 @@ def tableau_de_bord_avec_jeton(monkeypatch, tmp_path):
 
 @pytest.fixture(autouse=True)
 def jamais_le_vrai_trousseau(monkeypatch):
-    """Aucun test ne lit ni n'écrit le trousseau de Camille : il paraît vide."""
-    import subprocess
-    monkeypatch.setattr("jobsearch.cles._run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 44, stdout="", stderr=""))
+    """Aucun test ne lit ni n'écrit le coffre à clés de Camille (trousseau, gestionnaire
+    d'identification) : celui du système est un coffre vide, en mémoire."""
+    from jobsearch.hote.commun import CoffreMemoire
+    monkeypatch.setattr("jobsearch.hote.coffre", lambda: CoffreMemoire())
 
 
 @pytest.fixture(autouse=True)

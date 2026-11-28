@@ -545,11 +545,11 @@
 {%- endmacro %}
 
 {# Compositeur (Nexus AIComposer) : un seul contour autour de la saisie et de son pied ; Entrée va à la
-   ligne, ⌘ Entrée envoie ; la dictée se fait sur l'ordinateur (compositeur.js) ; l'avertissement
+   ligne, ⌘ (Ctrl) Entrée envoie ; la dictée se fait sur l'ordinateur (compositeur.js) ; l'avertissement
    « L'IA peut se tromper » dessous. L'attente (Nexus AIStatus) montre le temps écoulé après 10 s. #}
 {% macro compositeur(placeholder, attente, attente_detail="", envoyer="Répondre", desactive=false, rows=4, id="reponse",
                     avert="L'IA peut se tromper. Vérifie les informations importantes.") -%}
-<div class="compositeur" data-compositeur>
+<div class="compositeur" data-compositeur data-indice-dictee="{{ ordi.dictee }}" data-reglages="{{ ordi.reglages }}">
   <label for="{{ id }}" class="cache">Ta réponse</label>
   <textarea id="{{ id }}" name="reponse" rows="{{ rows }}" required {% if desactive %}disabled{% endif %}
             placeholder="{{ placeholder }}" aria-describedby="{{ id }}-raccourci {{ id }}-avert"></textarea>
@@ -559,7 +559,7 @@
     </div>
     {# La dictée à droite de l'envoi : les deux façons de répondre côte à côte, l'état de la dictée à gauche. #}
     <div class="droite">
-      <span class="raccourci" id="{{ id }}-raccourci"><kbd>⌘</kbd><kbd>↵</kbd> pour envoyer</span>
+      <span class="raccourci" id="{{ id }}-raccourci"><kbd>{{ ordi.cmd }}</kbd><kbd>↵</kbd> pour envoyer</span>
       <button class="go envoyer" {% if desactive %}disabled{% endif %}>{{ envoyer }} {{ icone("envoyer") }}</button>
       {# Icône seule (Nexus AIComposer) : nommée « Dicter », aria-pressed dit si elle écoute. #}
       <button type="button" class="bouton-dictee" data-dictee hidden aria-pressed="false" aria-label="Dicter" title="Dicter"

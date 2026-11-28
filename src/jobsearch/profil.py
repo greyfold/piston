@@ -24,7 +24,7 @@ from functools import lru_cache
 
 import yaml
 
-from . import config, pays, telephone
+from . import config, hote, pays, telephone
 
 
 # Les niveaux de poste que la recherche peut viser : la liste du champ et ce que l'import du CV peut en déduire.
@@ -95,7 +95,7 @@ ETAPES = [
     {"id": "identite", "titre": "Identité",
      "resume": "Nom, adresse, téléphone, e-mail et liens.",
      "intro": "Ce qui figure en tête du CV et des lettres, et sert à pré-remplir les formulaires des employeurs. "
-              "L'IA ne le voit jamais : elle écrit avec des balises, remplacées sur ton Mac.",
+              "L'IA ne le voit jamais : elle écrit avec des balises, remplacées %s." % hote.libelle("sur"),
      "champs": [
          champ("identite.civilite", "Civilité", type="choix", choix=["Madame", "Monsieur", "Mx"],
                vide="Ne pas préciser",
@@ -106,7 +106,7 @@ ETAPES = [
          champ("identite.npa", "NPA"),
          champ("identite.ville", "Localité", requis=True, aide="Aussi la ville en tête des lettres."),
          champ("identite.pays", "Pays", type="choix", choix=list(pays.PAYS_DE_RECHERCHE.values()),
-               aide="Proposé d'après les réglages de région de ton Mac."),
+               aide="Proposé d'après les réglages de région de %s." % hote.libelle("ton")),
          champ("identite.telephone", "Téléphone", type="tel",
                aide="Choisis l'indicatif, puis tape le numéro : il se met en forme tout seul."),
          champ("identite.email", "E-mail", type="email", requis=True),
@@ -500,7 +500,7 @@ TACHES = {
     "identite": {"titre": "Tes coordonnées", "etapes": ["identite"], "icone": "identite",
                  "intro": "Elles figurent en tête de tes CV et de tes lettres, et servent à pré-remplir "
                           "les formulaires des employeurs. Rien n'est envoyé sans toi, et l'IA ne les voit "
-                          "jamais : elle écrit avec des balises, remplacées sur ton Mac."},
+                          "jamais : elle écrit avec des balises, remplacées %s." % hote.libelle("sur")},
     "criteres": {"titre": "Ce qui compte pour toi", "etapes": ["criteres"], "icone": "criteres", "entretien": True,
                  "intro": "L'IA note chaque annonce d'après ces critères, comme tu le ferais. "
                           "Tu pourras les ajuster quand tu veux."},

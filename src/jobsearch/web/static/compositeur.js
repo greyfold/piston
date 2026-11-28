@@ -2,16 +2,19 @@
 //
 // La dictée ne passe par aucun service en ligne : elle n'apparaît que si la reconnaissance se fait
 // sur cette machine.
-//  - Dans l'application Mac : le pont « dictee » (PageWeb.swift), micro de l'ordinateur et
-//    reconnaissance vocale d'Apple en mode « sur l'appareil » uniquement.
+//  - Dans l'application : le pont « dictee » de l'enveloppe, micro de l'ordinateur et reconnaissance
+//    sur l'appareil uniquement. Mac : `window.webkit.messageHandlers.dictee` (Dictee.swift, reconnaissance
+//    d'Apple) ; Windows : `window.piston.dictee`, posé par l'enveloppe (plateformes/windows, whisper.cpp).
+//    Même protocole : {action: demarrer|arreter|reglages} vers l'enveloppe, window.dicteeRetour(m) en retour.
 //  - Dans un navigateur : la reconnaissance vocale du navigateur seulement s'il sait la faire en
-//    local (processLocally, Chrome récent) ; sinon le bouton reste caché et la dictée du Mac
-//    (deux fois Fn) est proposée.
+//    local (processLocally, Chrome récent) ; sinon le bouton reste caché et la dictée du système
+//    est proposée (data-indice-dictee : « Fn deux fois » sur Mac).
 (function () {
   "use strict";
 
   var LANGUE = { fr: "fr-FR", de: "de-CH", it: "it-IT", en: "en-US" }[(document.documentElement.lang || "fr").slice(0, 2)] || "fr-FR";
-  var pont = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dictee;
+  var pont = (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.dictee) ||
+             (window.piston && window.piston.dictee) || null;
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   // --- Moteurs de dictée : même interface, demarrer(rappels) / arreter() ---------------------
@@ -113,7 +116,7 @@
     }
 
     if (!moteur) {
-      etat.textContent = "Dictée du Mac : Fn deux fois";
+      etat.textContent = boite.getAttribute("data-indice-dictee") || "";
       etat.classList.add("indice");
       return;
     }
@@ -129,10 +132,10 @@
       etat.textContent = message && !err ? message.texte : "";
       erreurDictee.hidden = !err;
       erreurDictee.textContent = err ? message.texte : "";
-      // Dans l'application Mac, l'erreur qui se corrige dans les Réglages Système y mène d'un clic.
+      // Dans l'application, l'erreur qui se corrige dans les réglages du système y mène d'un clic.
       if (err && message.reglages && pont) {
         var lien = document.createElement("a");
-        lien.href = "#"; lien.textContent = "Ouvrir les Réglages Système";
+        lien.href = "#"; lien.textContent = "Ouvrir les " + (boite.getAttribute("data-reglages") || "réglages");
         lien.addEventListener("click", function (ev) {
           ev.preventDefault();
           pont.postMessage({ action: "reglages", page: message.reglages });

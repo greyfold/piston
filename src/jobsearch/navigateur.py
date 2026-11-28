@@ -17,12 +17,12 @@ bouton cliqué est le refus des cookies non essentiels.
 """
 
 import datetime as dt
-import fcntl
 import re
 import time
 import unicodedata
 from pathlib import Path
 
+from . import hote
 from .config import DATA
 
 PORT_DEVTOOLS = 9222                # le Chrome de la VM (vm.py), sur 127.0.0.1 de la VM
@@ -166,10 +166,8 @@ class NavigateurOccupe(Exception):
 
 def _verrou():
     DATA.mkdir(parents=True, exist_ok=True)
-    v = open(DATA / "navigateur.lock", "w")
-    try:
-        fcntl.flock(v, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
+    v = open(DATA / "navigateur.lock", "a+")
+    if not hote.prendre(v):                       # libéré par close(), ou à la mort du processus
         v.close()
         raise NavigateurOccupe("une fenêtre de pré-remplissage est déjà ouverte : ferme-la d'abord")
     return v

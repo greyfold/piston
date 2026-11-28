@@ -3,7 +3,7 @@
 {% block contenu %}
 <div class="carte" style="max-width:420px;margin:3rem auto">
   <h1>Connexion</h1>
-  <p class="muet">Depuis un autre appareil que le Mac, saisis le jeton d'accès. Sur le Mac : <code>uv run jobsearch jeton</code>.</p>
+  <p class="muet">Depuis un autre appareil que {{ ordi.le }}, saisis le jeton d'accès. Sur {{ ordi.le }} : <code>uv run jobsearch jeton</code>.</p>
   {% if erreur %}<div class="flash ko">Jeton incorrect.</div>{% endif %}
   <form method="post" action="/connexion" class="boutons">
     <input type="password" name="jeton_saisi" autocomplete="current-password" aria-label="Jeton" required style="flex:1">

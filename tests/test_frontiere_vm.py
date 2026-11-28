@@ -135,16 +135,46 @@ def test_balayage_des_dossiers_restes(reg, monkeypatch):
 
 
 def test_alertes_ouvrent_l_application_jamais_chrome(monkeypatch):
-    from jobsearch import notify
+    """Sur Mac : osascript seulement, et le bouton active l'application (jamais Chrome, jamais une adresse)."""
+    from jobsearch import hote
+    from jobsearch.hote import macos
     scripts, commandes = [], []
-    monkeypatch.setattr(notify.subprocess, "Popen", lambda cmd, **kw: scripts.append(cmd[-1]))
-    monkeypatch.setattr(notify.subprocess, "run",
+    monkeypatch.setattr(macos.subprocess, "Popen", lambda cmd, **kw: scripts.append(cmd[-1]))
+    monkeypatch.setattr(macos.subprocess, "run",
                         lambda cmd, **kw: commandes.append(cmd) or subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setattr(hote, "_impl", macos)
     assert ALERTE("Titre", "Texte")
     assert 'application id "app.rechercheemploi.mac"' in scripts[0] and "Ouvrir l'application" in scripts[0]
     assert "Chrome" not in scripts[0] and "localhost" not in scripts[0] and "do shell script" not in scripts[0]
     NOTIFIER("Titre", "Texte", telephone=False)
     assert [c[0] for c in commandes] == ["osascript"]                  # rien d'extérieur à macOS
+
+
+def test_alertes_windows_ouvrent_l_application_jamais_chrome(monkeypatch):
+    """Sous Windows : une notification toast par PowerShell, script par l'entrée standard (jamais en
+    argument), texte échappé ; son bouton et un clic ramènent l'application (piston://), jamais Chrome."""
+    from jobsearch import hote
+    from jobsearch.hote import windows
+    lances = []
+
+    class Faux:
+        def __init__(self, cmd, **kw):
+            self.cmd, self.stdin = cmd, self
+            lances.append(self)
+            self.recu = ""
+
+        def write(self, s):
+            self.recu += s
+
+        def close(self):
+            pass
+    monkeypatch.setattr(windows.subprocess, "Popen", Faux)
+    monkeypatch.setattr(hote, "_impl", windows)
+    assert ALERTE("Titre", "Texte '@ <b>piège</b>")
+    p = lances[0]
+    assert p.cmd[0] == "powershell.exe" and p.cmd[-1] == "-" and "Texte" not in " ".join(p.cmd)
+    assert "piston://ouvrir" in p.recu and "Ouvrir l&apos;application" in p.recu and "app.rechercheemploi.piston" in p.recu
+    assert "&apos;@" in p.recu and "<b>" not in p.recu and "Chrome" not in p.recu and "http" not in p.recu
 
 
 def test_noter_n_ouvre_ni_chrome_ni_adresse(reg, monkeypatch):

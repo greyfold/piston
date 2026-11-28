@@ -118,7 +118,7 @@ def cmd_travailleur(a):
     import uvicorn
     from .travailleur import jeton
     if not jeton.lire(creer=False):
-        print("Jeton du travailleur absent (%s) : le Mac le crée au démarrage de la machine virtuelle." % jeton.chemin())
+        print("Jeton du travailleur absent (%s) : l'application le crée au démarrage de la machine virtuelle." % jeton.chemin())
         return 1
     uvicorn.run("jobsearch.travailleur.serveur:app", host=a.hote, port=a.port, log_level="info")
 

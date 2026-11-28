@@ -159,9 +159,10 @@ def disque_plein(besoin_go=LIBRE_MIN_GO["demarrer"]):
     libre = espace_libre_go()
     if libre is None or libre >= besoin_go:
         return None
-    return ("le disque de ton Mac est presque plein (%s libres) : la machine virtuelle a besoin d'au moins "
+    from . import hote
+    return ("le disque de %s est presque plein (%s libres) : la machine virtuelle a besoin d'au moins "
             "%d Go. Libère de la place, puis quitte et rouvre l'application"
-            % (("%.1f Go" % libre) if libre >= 1 else ("%d Mo" % (libre * 1024)), besoin_go))
+            % (hote.libelle("ton"), ("%.1f Go" % libre) if libre >= 1 else ("%d Mo" % (libre * 1024)), besoin_go))
 
 
 def exiger_espace(besoin_go):
@@ -521,17 +522,8 @@ class Avancement:
 def en_demarrage():
     """Vrai pendant que `demarrer` tourne (il tient le verrou `vm/demarrer.lock`), dans ce processus
     ou dans un autre (l'application lance `jobsearch vm demarrer`)."""
-    import fcntl
-    f = DATA / "vm" / "demarrer.lock"
-    if not f.exists():
-        return False
-    with open(f, "a") as verrou:
-        try:
-            fcntl.flock(verrou, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            return True
-        fcntl.flock(verrou, fcntl.LOCK_UN)
-    return False
+    from . import hote
+    return hote.tenu(DATA / "vm" / "demarrer.lock")
 
 
 def avancement(maintenant=None):
@@ -570,10 +562,8 @@ def demarrer(attente_s=60, annoncer=None):
     à la fois : l'ouverture de l'application et un passage peuvent le demander ensemble ; le second
     attend, puis trouve le travailleur à jour et n'a rien à refaire. `annoncer(texte)` reçoit chaque
     étape ; `vm/demarrage.json` suit l'avancement (écran de démarrage, bandeau des pages)."""
-    import fcntl
-    (DATA / "vm").mkdir(parents=True, exist_ok=True)
-    with open(DATA / "vm" / "demarrer.lock", "w") as verrou:
-        fcntl.flock(verrou, fcntl.LOCK_EX)
+    from . import hote
+    with hote.verrou(DATA / "vm" / "demarrer.lock", attendre=True):
         return _demarrer(attente_s, annoncer or (lambda texte: None))
 
 
@@ -715,7 +705,8 @@ def supprimer():
     if not instance():
         return "Aucune machine virtuelle « %s »." % nom()
     _lima("delete", "--force", nom(), timeout=300)
-    return "Machine virtuelle supprimée (les données de l'utilisateur, sur le Mac, restent)."
+    from . import hote
+    return "Machine virtuelle supprimée (les données de l'utilisateur, %s, restent)." % hote.libelle("sur")
 
 
 def commande(action, fournisseur="claude"):

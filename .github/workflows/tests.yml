@@ -1,0 +1,27 @@
+# Les tests du code commun, sur chaque système : le monorepo ne doit dépendre d'aucun
+# (tests/test_plateformes.py) et chaque hôte doit tenir sa partie (tests/test_hote.py).
+# Les tests ne lancent ni moteur d'IA, ni VM, ni coffre à clés réel (tests/conftest.py).
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Dépendances
+        run: uv sync --frozen
+      - name: Tests
+        run: uv run pytest -q
+        env:
+          PYTHONUTF8: "1"

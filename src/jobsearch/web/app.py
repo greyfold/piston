@@ -26,7 +26,7 @@ import jobsearch
 
 from .. import moteur as moteur_mod
 from .. import actions, adequation, ajout, ce_qui_compte, cles, courrier, dossier, entretiens, evaluation, followups, parcours
-from .. import postes_proposes
+from .. import hote, postes_proposes
 from .. import profil as profil_mod
 from .. import repertoire as repertoire_mod
 from ..formatage import annonce_html, nettoyer
@@ -174,8 +174,11 @@ def _date_suisse(iso):
 tpl.env.globals["decomposer_tel"] = _decomposer_tel
 # La vue web de l'application Mac se signale dans son agent utilisateur (PageWeb.swift,
 # `applicationNameForUserAgent`). Sa fenêtre n'a pas de barre de titre : la page laisse la place aux boutons
-# de la fenêtre (base.html, `fenetre-mac`). Un navigateur ordinaire n'a rien de plus.
+# de la fenêtre (base.html, `fenetre-mac`). Celle de Windows (« PistonWindows », plateformes/windows) garde
+# la barre de titre du système : rien à laisser. Un navigateur ordinaire n'a rien de plus.
 tpl.env.globals["dans_fenetre_mac"] = lambda request: "RechercheEmploi" in request.headers.get("user-agent", "")
+# Les mots qui nomment l'ordinateur où tourne l'application (« ton Mac », « ton PC »…) : hote.LIBELLES.
+tpl.env.globals["ordi"] = hote.LIBELLES
 # Le moteur d'IA choisi (Claude, Codex, Antigravity, Grok) : les textes des pages le nomment.
 tpl.env.globals["ia_active"] = lambda: moteur_mod.fournisseur().vue
 tpl.env.globals["noms_ia"] = lambda: {f["id"]: f["nom"] for f in moteur_mod.FOURNISSEURS}
@@ -1160,7 +1163,7 @@ def navigateur_vm(request: Request):
     from .. import vm
     adresse, erreur = None, None
     if not depuis_le_mac(request):           # le mot de passe de l'écran ne sort pas du Mac
-        return page(request, "navigateur.html", adresse=None, erreur="L'écran de la machine virtuelle ne s'ouvre que sur le Mac.")
+        return page(request, "navigateur.html", adresse=None, erreur="L'écran de la machine virtuelle ne s'ouvre que %s." % hote.libelle("sur"))
     from ..travailleur import client as travailleur
     try:
         if travailleur.distant():                # la copie en mémoire, sans attendre `limactl`
@@ -1237,7 +1240,7 @@ async def connecteurs_comptes_mail(request: Request):
 def _connecteurs_comptes_mail(request, form):
     """Les comptes de Mail où chercher les réponses des employeurs."""
     comptes = profil_mod.poser_comptes_courrier("\n".join(form.getlist("comptes")))
-    msg = "Apple Mail : %s." % ("comptes enregistrés" if comptes else "aucun compte choisi")
+    msg = "%s : %s." % (hote.libelle("courrier") or "Courrier", "comptes enregistrés" if comptes else "aucun compte choisi")
     return RedirectResponse("/connecteurs?msg=%s&ok=1#apple-mail" % quote(msg), status_code=303)
 
 
@@ -1509,7 +1512,7 @@ def cles_action(request: Request, nom: str, action: str, cle: str = Form("")):
     # réseau local en clair (le tableau de bord n'est pas en HTTPS).
     # La clé Apify sert à LinkedIn : elle se règle sur la page de la source.
     if not depuis_le_mac(request):
-        return _retour("/sources/linkedin#jeton", "Les clés se saisissent sur ton Mac uniquement.", False)
+        return _retour("/sources/linkedin#jeton", "Les clés se saisissent %s uniquement." % hote.libelle("sur"), False)
     try:
         if action == "enregistrer":
             msg = cles.enregistrer(nom, cle)

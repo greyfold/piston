@@ -6,8 +6,6 @@ sans accord, et celle que la plupart des formulaires d'employeurs proposent.
 """
 
 import os
-import subprocess
-import sys
 import unicodedata
 from functools import lru_cache
 
@@ -228,19 +226,13 @@ TOUS = sorted({l.strip() for l in ETATS.splitlines() if l.strip()}, key=_plier)
 
 
 def region_systeme(env=None, lire_defaults=None):
-    """Code du pays des réglages de région (« CH » pour fr_CH), ou ""."""
-    env = os.environ if env is None else env
-    valeur = ""
-    if sys.platform == "darwin" or lire_defaults:
-        try:
-            valeur = (lire_defaults or (lambda: subprocess.run(
-                ["defaults", "read", "-g", "AppleLocale"], capture_output=True, text=True, timeout=3).stdout))()
-        except (OSError, subprocess.SubprocessError):
-            valeur = ""
-    valeur = (valeur or env.get("LC_ALL") or env.get("LANG") or "").strip()
-    partie = valeur.split(".")[0].split("@")[0]
-    code = partie.split("_")[-1] if "_" in partie else ""
-    return code.upper() if len(code) == 2 and code.isalpha() else ""
+    """Code du pays des réglages de région (« CH » pour fr_CH), ou "". `lire_defaults` : la valeur
+    des réglages de macOS (tests) ; sans elle, celle du système où l'application tourne."""
+    from . import hote
+    if lire_defaults is not None:
+        from .hote import macos
+        return macos.region(os.environ if env is None else env, lire_defaults)
+    return hote.region(env)
 
 
 @lru_cache

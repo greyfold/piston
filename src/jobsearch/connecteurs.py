@@ -19,7 +19,7 @@ défaut reprend les réglages d'avant (Apple Mail et Chrome actifs, Indeed selon
 `indeed.actif`, Gmail inactif).
 """
 
-from . import profil
+from . import hote, profil
 from .config import reglages
 
 CATALOGUE = {
@@ -43,12 +43,12 @@ CATALOGUE = {
     "chrome": {
         "nom": "Chrome", "role": "navigateur", "lieu": "vm",
         "usage": "Formulaires des employeurs préremplis sans envoi, preuves Job-Room.",
-        "activer": "Rien à installer sur ton Mac : Chrome tourne dans la machine virtuelle, avec son serveur MCP. Tu te connectes toi-même aux sites dans sa fenêtre.",
+        "activer": "Rien à installer " + hote.libelle("sur") + " : Chrome tourne dans la machine virtuelle, avec son serveur MCP. Tu te connectes toi-même aux sites dans sa fenêtre.",
     },
 }
 
 ROLES = {"courrier": "Courrier", "navigateur": "Navigateur"}     # ceux de la page Connecteurs (pas les sources)
-LIEUX = {"mac": "sur ton Mac", "vm": "machine virtuelle", "compte": "compte Claude"}
+LIEUX = {"mac": hote.libelle("sur"), "vm": "machine virtuelle", "compte": "compte Claude"}
 
 
 def _defauts():

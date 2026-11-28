@@ -96,14 +96,10 @@ def test_tester_ne_lance_aucun_run():
 
 
 def test_sans_jeton(monkeypatch):
-    def absent(*a, **k):
-        class R:
-            returncode, stdout = 44, ""
-        return R()
-    monkeypatch.setattr("jobsearch.cles._run", absent)
     client, _ = faux_apify()
     src = linkedin.LinkedIn(client, {}, ["q"], "Lausanne")
-    with pytest.raises(RouteCassee, match="trousseau"):
+    from jobsearch import hote
+    with pytest.raises(RouteCassee, match=hote.libelle("coffre")):
         src.tester()
 
 

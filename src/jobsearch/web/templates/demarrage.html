@@ -31,7 +31,7 @@
     <div class="ligne-apercu">
       <span class="pastille">{{ icone("cadenas") }}</span>
       <div><p class="fort">Tes données restent chez toi</p>
-        <p>L'IA et le navigateur tournent dans une machine virtuelle, à l'écart de ton Mac. Ton nom et tes coordonnées ne partent jamais vers l'IA.</p></div>
+        <p>L'IA et le navigateur tournent dans une machine virtuelle, à l'écart de {{ ordi.ton }}. Ton nom et tes coordonnées ne partent jamais vers l'IA.</p></div>
     </div>
   </div>
 
@@ -58,7 +58,7 @@
   </div>
 {% else %}
   <h1>Démarrage de la machine virtuelle</h1>
-  <p class="intro">{{ ia }} et le navigateur tournent dans une machine virtuelle, à l'écart de ton Mac : elle redémarre à chaque ouverture de l'application.</p>
+  <p class="intro">{{ ia }} et le navigateur tournent dans une machine virtuelle, à l'écart de {{ ordi.ton }} : elle redémarre à chaque ouverture de l'application.</p>
   {{ avancement_vm(avancement, "accueil") }}
   <div class="plus-tard">
     <p class="fort">Sans attendre, tu peux déjà</p>

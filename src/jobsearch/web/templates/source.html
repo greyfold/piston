@@ -37,7 +37,7 @@
     <li class="reglage-ligne" id="jeton">
       <span class="texte"><span class="titre">Jeton Apify
           {% if apify.cle.presente %}<span class="puce B">enregistré · …{{ apify.cle.fin }}</span>{% else %}<span class="puce nouvelle">à ajouter</span>{% endif %}</span>
-        <span class="description">{% if apify.depuis_le_mac %}Rangé dans le trousseau de ton Mac : seuls ses quatre derniers caractères s'affichent.{% else %}À saisir depuis ton Mac : le réseau local n'est pas chiffré.{% endif %}</span></span>
+        <span class="description">{% if apify.depuis_le_mac %}Rangé dans le {{ ordi.coffre }} de {{ ordi.ton }} : seuls ses quatre derniers caractères s'affichent.{% else %}À saisir depuis {{ ordi.ton }} : le réseau local n'est pas chiffré.{% endif %}</span></span>
       {% if apify.depuis_le_mac %}
       {{ bouton_ajout("modale-jeton-apify", "Remplacer" if apify.cle.presente else "Ajouter le jeton", classe="petit") }}
       {% if apify.cle.presente %}<button type="button" class="lien-danger petit" form="retirer-cle-apify" data-confirmer-modale="confirmer-retirer-cle-apify">Retirer</button>{% endif %}
@@ -70,7 +70,7 @@
   <ol class="petit">
     <li>Crée un compte sur <a href="https://apify.com" target="_blank" rel="noopener noreferrer">apify.com</a>.</li>
     <li>Dans la console Apify, ouvre Settings › API &amp; Integrations et copie ton jeton personnel.</li>
-    <li>Colle-le ici : l'application l'essaie auprès d'Apify avant de le ranger dans le trousseau de ton Mac.</li>
+    <li>Colle-le ici : l'application l'essaie auprès d'Apify avant de le ranger dans le {{ ordi.coffre }} de {{ ordi.ton }}.</li>
   </ol>
   <div class="grille-champs">
     <div class="champ large">
@@ -82,7 +82,7 @@
 {% endcall %}
 {% if apify.cle.presente %}
 <form method="post" action="/cles/apify/retirer" id="retirer-cle-apify"></form>
-{{ confirmation("confirmer-retirer-cle-apify", "Retirer le jeton Apify ?", "Il sera effacé du trousseau de ton Mac, et LinkedIn ne sera plus interrogé.",
+{{ confirmation("confirmer-retirer-cle-apify", "Retirer le jeton Apify ?", "Il sera effacé du {{ ordi.coffre }} de {{ ordi.ton }}, et LinkedIn ne sera plus interrogé.",
      "Retirer le jeton", "retirer-cle-apify", "confirme", "1") }}
 {% endif %}
 {% endif %}

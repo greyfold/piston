@@ -1,23 +1,22 @@
-"""Clés d'accès des services payants, dans le trousseau macOS.
+"""Clés d'accès des services payants, dans le coffre à clés du système.
 
 Claude n'a pas de clé : le moteur IA passe par Claude Code, connecté au compte
 Claude de l'utilisateur (moteur/__init__.py). Reste la clé Apify (LinkedIn).
 
-Une clé ne vit que dans le trousseau : jamais dans un fichier, un journal, une
-adresse ni un argument de commande. On l'écrit en passant par l'entrée
-standard de `security -i` (une ligne de commande visible dans `ps` le
-temps d'un instant la montrerait à tout processus du compte), après avoir
-vérifié son alphabet, ce qui empêche aussi toute injection dans cette ligne.
+Une clé ne vit que dans le coffre à clés de l'ordinateur (`hote.coffre()` : trousseau de macOS,
+gestionnaire d'identification de Windows, Secret Service sous Linux) : jamais dans un fichier, un
+journal, une adresse ni un argument de commande. Sa forme est vérifiée avant de l'écrire, ce qui
+empêche aussi toute injection dans ce que le coffre reçoit.
 
 Le tableau de bord ne montre jamais une clé : seulement si elle est là, ses
 quatre derniers caractères, et le résultat d'un essai auprès du service.
 """
 
 import re
-import subprocess
 
 import httpx
 
+from . import hote
 
 COMPTE = "jobsearch"
 SERVICES = {
@@ -34,9 +33,9 @@ class CleRefusee(Exception):
     pass
 
 
-def _run(*a, **k):
-    """Seul passage vers `security` (les tests le remplacent : jamais le vrai trousseau)."""
-    return subprocess.run(*a, **k)
+def _coffre(coffre):
+    """Le coffre donné (tests), sinon celui du système (que conftest remplace : jamais le vrai)."""
+    return coffre if coffre is not None else hote.coffre()
 
 
 def _service(nom):
@@ -45,15 +44,13 @@ def _service(nom):
     return SERVICES[nom]
 
 
-def lire(nom, executer=None):
-    """La clé, ou None si elle n'est pas dans le trousseau."""
-    r = (executer or _run)(["security", "find-generic-password", "-s", _service(nom)["trousseau"], "-w"],
-                 capture_output=True, text=True)
-    return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else None
+def lire(nom, coffre=None):
+    """La clé, ou None si elle n'est pas dans le coffre."""
+    return _coffre(coffre).lire(_service(nom)["trousseau"])
 
 
-def etat(nom, executer=None):
-    cle = lire(nom, executer)
+def etat(nom, coffre=None):
+    cle = lire(nom, coffre)
     return dict(_service(nom), id=nom, presente=bool(cle), fin=cle[-4:] if cle else "")
 
 
@@ -74,18 +71,10 @@ def verifier(nom, cle, client=None):
     return True, "clé acceptée par le service"
 
 
-def _retirer_toutes(trousseau, executer):
-    # Une entrée par passage : on retire jusqu'à ce qu'il n'y en ait plus (anciennes
-    # entrées créées à la main avec un autre nom de compte comprises).
-    for _ in range(10):
-        if (executer or _run)(["security", "delete-generic-password", "-s", trousseau],
-                    capture_output=True, text=True).returncode != 0:
-            return
-
-
-def enregistrer(nom, cle, executer=None, client=None):
+def enregistrer(nom, cle, coffre=None, client=None):
     """Vérifie la forme, essaie la clé auprès du service, puis la range. Renvoie le message."""
     s = _service(nom)
+    c = _coffre(coffre)
     cle = (cle or "").strip()
     if not cle.startswith(s["prefixe"]):
         raise CleRefusee("une clé %s commence par « %s »" % (s["nom"], s["prefixe"]))
@@ -94,14 +83,12 @@ def enregistrer(nom, cle, executer=None, client=None):
     ok, msg = verifier(nom, cle, client)
     if ok is False:
         raise CleRefusee(msg)
-    _retirer_toutes(s["trousseau"], executer)
-    r = (executer or _run)(["security", "-i"], input='add-generic-password -U -a %s -s %s -w "%s"\n' % (COMPTE, s["trousseau"], cle),
-                 capture_output=True, text=True)
-    if r.returncode != 0 or lire(nom, executer) != cle:
-        raise CleRefusee("le trousseau a refusé l'enregistrement")
+    c.retirer(s["trousseau"])
+    if not c.ecrire(s["trousseau"], COMPTE, cle) or c.lire(s["trousseau"]) != cle:
+        raise CleRefusee("le %s a refusé l'enregistrement" % hote.libelle("coffre"))
     return "Clé %s enregistrée (…%s) : %s." % (s["nom"], cle[-4:], msg)
 
 
-def retirer(nom, executer=None):
-    _retirer_toutes(_service(nom)["trousseau"], executer)
-    return "Clé %s retirée du trousseau." % _service(nom)["nom"]
+def retirer(nom, coffre=None):
+    _coffre(coffre).retirer(_service(nom)["trousseau"])
+    return "Clé %s retirée du %s." % (_service(nom)["nom"], hote.libelle("coffre"))

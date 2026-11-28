@@ -152,9 +152,9 @@ def test_fichiers_crees_lisibles_par_le_seul_compte(tmp_path):
 
 def _verrou_tenu(tmp_path):
     """Un passage vivant : il tient le verrou `passage.lock` (le `reg` de conftest pointe DATA sur tmp_path)."""
-    import fcntl
-    f = open(tmp_path / "passage.lock", "w")
-    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    from jobsearch import hote
+    f = open(tmp_path / "passage.lock", "a+")
+    assert hote.prendre(f)
     return f
 
 

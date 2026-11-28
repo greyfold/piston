@@ -4,12 +4,12 @@
 {% set ia = ia_active() %}
 <div class="confidentialite">
 {% call entete_reglage(reglage) %}L'IA écrit tes candidatures sans connaître ton nom : elle reçoit des balises à la place de tes coordonnées,
-  et l'application remet les vraies dans le CV et la lettre, sur ton Mac.{% endcall %}
+  et l'application remet les vraies dans le CV et la lettre, {{ ordi.sur }}.{% endcall %}
 
 <h2>La preuve, avec ton profil</h2>
 <div class="cartes deux">
   <div class="carte">
-    <div class="tete"><b>Reste sur ton Mac</b>{{ icone("cadenas") }}</div>
+    <div class="tete"><b>Reste {{ ordi.sur }}</b>{{ icone("cadenas") }}</div>
     <p class="demo">{{ entete or "Complète tes coordonnées dans « Ma recherche » pour voir la démonstration." }}</p>
     <ul class="liste-confidentialite">
       <li>Ces coordonnées, aussi dans les noms de fichiers</li>
@@ -41,7 +41,7 @@
     <li><b>Sans aucun outil</b> pour noter les annonces et écrire les dossiers : ni fichiers, ni terminal, ni Internet, ni tes réglages, extensions ou connecteurs {{ ia.nom }}.</li>
     <li><b>Consigne dans un fichier temporaire</b> lisible de ton seul compte, effacé après la tâche : rien de ton profil n'apparaît dans la liste des processus.</li>
     <li><b>Ni télémétrie ni rapports d'erreur</b> : l'application les coupe chez chaque moteur ; seule ta demande part vers {{ ia.editeur }}.</li>
-    <li><b>Dans la machine virtuelle</b>, toujours : {{ ia.nom }} et son Chrome y tournent, jamais sur ton Mac. Elle ne voit qu'un dossier d'échange (jeton, journaux, ce qu'une tâche lui confie) ; ni ta base, ni ton profil, ni ton dossier personnel, ni ton trousseau, ni Mail, ni ton Chrome à toi.</li>
+    <li><b>Dans la machine virtuelle</b>, toujours : {{ ia.nom }} et son Chrome y tournent, jamais {{ ordi.sur }}. Elle ne voit qu'un dossier d'échange (jeton, journaux, ce qu'une tâche lui confie) ; ni ta base, ni ton profil, ni ton dossier personnel, ni ton {{ ordi.coffre }},{% if ordi.courrier %} ni {{ ordi.courrier }},{% endif %} ni ton Chrome à toi.</li>
     <li><b>Rien n'est envoyé à un employeur sans toi</b> : tu relis, tu envoies.</li>
   </ul>
 </div>
@@ -50,14 +50,14 @@
 <div class="carte">
   <ul class="liste-confidentialite">
     <li><b>Remplir un formulaire</b> avec {{ ia.nom }} : l'IA tape tes vraies coordonnées dans la page de l'employeur, dans le Chrome de la machine virtuelle. Elle doit les voir pour les saisir, et ne le fait que quand tu le lui demandes. Elle n'a que deux outils, fixés par l'application : piloter ce Chrome (sans exécuter de script) et lire ce que la tâche lui confie. Le pré-remplissage sans IA, lui, les saisit sans elle.</li>
-    <li><b>Gmail</b>, s'il est activé : la session Claude qui interroge ta boîte voit les messages liés à tes candidatures. Le tri des réponses se fait ensuite sur ton Mac. Apple Mail, lui, est lu sur ton Mac, sans l'IA.{% if ia.id != "claude" %} Gmail et Indeed sont des connecteurs du compte Claude : ils ne servent qu'avec Claude, pas avec {{ ia.nom }}.{% endif %}</li>
+    <li><b>Gmail</b>, s'il est activé : la session Claude qui interroge ta boîte voit les messages liés à tes candidatures. Le tri des réponses se fait ensuite {{ ordi.sur }}.{% if ordi.courrier %} {{ ordi.courrier }}, lui, est lu {{ ordi.sur }}, sans l'IA.{% endif %}{% if ia.id != "claude" %} Gmail et Indeed sont des connecteurs du compte Claude : ils ne servent qu'avec Claude, pas avec {{ ia.nom }}.{% endif %}</li>
   </ul>
 </div>
 
 <h2>Les mises à jour</h2>
 <div class="carte">
   <p>Une fois par jour, l'application demande au site de Piston s'il existe une nouvelle version. Elle n'y envoie que son
-    numéro de version, et ton Mac son adresse IP comme pour toute connexion, rien de ton profil ni de ta recherche. Tu peux
+    numéro de version, et {{ ordi.ton }} son adresse IP comme pour toute connexion, rien de ton profil ni de ta recherche. Tu peux
     couper cette vérification dans le menu de la barre des menus, « Vérifier les mises à jour chaque jour ».</p>
 </div>
 

@@ -11,14 +11,14 @@ arrêté, pour ne pas payer un run que personne ne lira. La période de
 publication suit la fenêtre du passage, arrondie aux valeurs que l'acteur
 accepte (1, 3, 7 ou 30 jours).
 
-Le jeton Apify vit dans le trousseau macOS (service « jobsearch-apify »),
+Le jeton Apify vit dans le coffre à clés de l'ordinateur (trousseau, gestionnaire d'identification) (service « jobsearch-apify »),
 jamais dans un fichier ni dans une adresse.
 """
 
 import re
 import time
 
-from .. import cles
+from .. import cles, hote
 from .base import Annonce, RouteCassee, code_canton, html_vers_texte
 from .employeurs import _relative
 
@@ -31,8 +31,8 @@ FINS = ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT")
 def jeton_trousseau():
     jeton = cles.lire("apify")
     if not jeton:
-        raise RouteCassee("linkedin : jeton Apify absent du trousseau (service %s) : à saisir sur la page Santé"
-                          % SERVICE_TROUSSEAU)
+        raise RouteCassee("linkedin : jeton Apify absent du %s (service %s) : à saisir sur la page Santé"
+                          % (hote.libelle("coffre"), SERVICE_TROUSSEAU))
     return jeton
 
 
