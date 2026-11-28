@@ -17,9 +17,13 @@ class FauxWSL:
 
     def __call__(self, cmd, input=None, **kw):
         assert cmd[0] == "wsl.exe" and kw.get("env", {}).get("WSL_UTF8") == "1"
+        assert "text" not in kw and (input is None or isinstance(input, bytes))     # jamais de CRLF ajouté
+        if isinstance(input, bytes):
+            input = input.decode("utf-8") if not input.startswith(b"\x1f") and b"\x00" not in input[:512] else input
+            assert not isinstance(input, str) or "\r" not in input
         args = cmd[1:]
         self.commandes.append(args)
-        ok = lambda out="": subprocess.CompletedProcess(cmd, 0, stdout=out, stderr="")
+        ok = lambda out="": subprocess.CompletedProcess(cmd, 0, stdout=out.encode(), stderr=b"")
         if args[:2] == ["--list", "--quiet"]:
             noms = sorted(self.allumees) if "--running" in args else self.distributions
             return ok("\x00".join("") + "\n".join(noms) + "\n")
@@ -40,7 +44,7 @@ class FauxWSL:
                 change, self.wsl_conf_change = self.wsl_conf_change, False
                 return ok("change\n" if change else "")
             if isinstance(input, str) and input.startswith("test -e " + wsl.MARQUE_SYSTEME):
-                return subprocess.CompletedProcess(cmd, 0 if self.provisionne else 1, stdout="", stderr="")
+                return subprocess.CompletedProcess(cmd, 0 if self.provisionne else 1, stdout=b"", stderr=b"")
             if isinstance(input, str) and "touch " + wsl.MARQUE_SYSTEME in input:
                 self.provisionne = True
             return ok()

@@ -133,16 +133,22 @@ def _env():
     return dict(os.environ, WSL_UTF8="1")       # wsl.exe écrit ses propres messages en UTF-8, pas UTF-16
 
 
-def _wsl(*args, **kw):
+def _wsl(*args, input=None, **kw):
+    """wsl.exe, en octets : en mode texte, Python traduirait sous Windows les fins de ligne de l'entrée en
+    CRLF, et bash refuserait le script (« $'\\r': command not found »). Les sorties reviennent en texte."""
     v = _vm()
     kw.setdefault("capture_output", True)
-    kw.setdefault("text", True)
     kw.setdefault("env", _env())
     kw.setdefault("creationflags", CREATE_NO_WINDOW)
+    kw.pop("text", None)
+    if isinstance(input, str):
+        input = input.encode("utf-8")
     try:
-        return v.EXECUTER(["wsl.exe", *args], **kw)
+        r = v.EXECUTER(["wsl.exe", *args], input=input, **kw)
     except FileNotFoundError:
         raise v.VMImpossible(PAS_DE_WSL)
+    texte = lambda b: b.decode("utf-8", "replace") if isinstance(b, (bytes, bytearray)) else (b or "")
+    return subprocess.CompletedProcess(r.args, r.returncode, stdout=texte(r.stdout), stderr=texte(r.stderr))
 
 
 PAS_DE_WSL = ("WSL n'est pas installé sur ce PC : ouvre PowerShell en administrateur, tape "
@@ -268,9 +274,9 @@ def copier(dossier, destination):
         t.add(str(dossier), arcname=".")
     r = _wsl("-d", distribution(), "-u", COMPTE, "--cd", "~", "-e", "bash", "-c",
              'rm -rf "$HOME/%s" && mkdir -p "$HOME/%s" && tar -xf - -C "$HOME/%s"' % ((destination,) * 3),
-             input=tampon.getvalue(), text=False, timeout=300)
+             input=tampon.getvalue(), timeout=300)
     if r.returncode != 0:
-        raise v.VMImpossible("copie du code refusée : %s" % ((r.stderr or b"").decode("utf-8", "replace").strip()[-300:]))
+        raise v.VMImpossible("copie du code refusée : %s" % (r.stderr or "").strip()[-300:])
 
 
 def ports_a_jour(i):
