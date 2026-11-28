@@ -109,7 +109,10 @@ class Superviseur:
     # --- Processus --------------------------------------------------------------------
 
     def _python(self, args, **kw):
+        import os
         kw.setdefault("cwd", str(self.donnees))
+        # Les lignes lues ici (« étape : … ») sont en UTF-8, quelle que soit la page de code de Windows.
+        kw.setdefault("env", dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8"))
         kw.setdefault("stdin", subprocess.DEVNULL)
         for cle, valeur in hote.options_sans_console().items():   # Windows : pas de console qui s'ouvre
             kw.setdefault(cle, valeur)
@@ -545,5 +548,10 @@ def commande(port=8775, hote_web="127.0.0.1"):
     for nom in ("SIGTERM", "SIGHUP"):
         if hasattr(signal, nom):
             signal.signal(getattr(signal, nom), termine)
+    for flux in (sys.stdout, sys.stdin):
+        try:
+            flux.reconfigure(encoding="utf-8")         # l'enveloppe lit et écrit de l'UTF-8
+        except (AttributeError, ValueError):
+            pass
     s.journal("superviseur lancé (port %d, données %s)" % (port, s.donnees))
     return s.boucle()

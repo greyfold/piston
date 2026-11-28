@@ -174,8 +174,8 @@ def _date_suisse(iso):
 tpl.env.globals["decomposer_tel"] = _decomposer_tel
 # La vue web de l'application Mac se signale dans son agent utilisateur (PageWeb.swift,
 # `applicationNameForUserAgent`). Sa fenêtre n'a pas de barre de titre : la page laisse la place aux boutons
-# de la fenêtre (base.html, `fenetre-mac`). Celle de Windows (« PistonWindows », plateformes/windows) garde
-# la barre de titre du système : rien à laisser. Un navigateur ordinaire n'a rien de plus.
+# de la fenêtre (base.html, `fenetre-mac`). Celle de Windows (plateformes/windows) garde la barre de titre du
+# système : rien à laisser. Un navigateur ordinaire n'a rien de plus.
 tpl.env.globals["dans_fenetre_mac"] = lambda request: "RechercheEmploi" in request.headers.get("user-agent", "")
 # Les mots qui nomment l'ordinateur où tourne l'application (« ton Mac », « ton PC »…) : hote.LIBELLES.
 tpl.env.globals["ordi"] = hote.LIBELLES
