@@ -532,4 +532,16 @@ def processus_sur_le_port(port):
 
 
 def commande(port=8775, hote_web="127.0.0.1"):
-    return Superviseur(port=port, hote_web=hote_web).boucle()
+    import signal
+    s = Superviseur(port=port, hote_web=hote_web)
+
+    def termine(signum, frame):
+        # L'enveloppe se termine sans avoir demandé la fermeture (macOS ferme la session…) : ce que le
+        # superviseur a lancé s'arrête avec lui ; la VM sera adoptée au prochain lancement.
+        s.quitter(eteindre_vm=False)
+        raise SystemExit(0)
+    for nom in ("SIGTERM", "SIGHUP"):
+        if hasattr(signal, nom):
+            signal.signal(getattr(signal, nom), termine)
+    s.journal("superviseur lancé (port %d, données %s)" % (port, s.donnees))
+    return s.boucle()
